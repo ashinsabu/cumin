@@ -1,0 +1,23 @@
+CLAUDE.md
+
+# Dependencies
+node_modules/
+vendor/
+
+# Build output
+dist/
+bin/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
