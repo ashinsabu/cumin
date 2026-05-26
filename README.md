@@ -22,9 +22,8 @@ A personal sprint board — like Jira, but without the enterprise bloat.
 
 ```
 cumin/
-├── frontend/    # Vite + React SPA
-├── backend/     # Go API server
-└── docs/        # Design docs, schemas, etc.
+├── server/   # Go API server
+└── ui/       # Vite + React SPA
 ```
 
 ## Status
