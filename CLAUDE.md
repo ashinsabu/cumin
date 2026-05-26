@@ -20,8 +20,8 @@ Every ticket tracks cumulative time in each status column. This is a first-class
 ## Conventions
 - Backend endpoints: REST, JSON request/response
 - Frontend state: keep drag-and-drop state local, sync optimistically
-- Database migrations: stored in `backend/migrations/`
-- Go code layout: `backend/cmd/` for entrypoints, `backend/internal/` for packages
+- Database migrations: stored in `server/migrations/`
+- Go code layout: `server/cmd/` for entrypoints, `server/internal/` for packages
 
 ## Design Principles
 - Start simple, single-user. Auth can come later.
