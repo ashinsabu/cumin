@@ -1,0 +1,26 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: cumin
+      POSTGRES_PASSWORD: cumin
+      POSTGRES_DB: cumin
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  server:
+    build: ./server
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      DATABASE_URL: postgres://cumin:cumin@db:5432/cumin?sslmode=disable
+      ENV: development
+      JWT_SECRET: local-dev-secret
+    depends_on:
+      - db
+
+volumes:
+  pgdata:
