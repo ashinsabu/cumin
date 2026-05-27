@@ -1,6 +1,6 @@
 # Cumin
 
-A personal sprint board — like Jira, but without the enterprise bloat.
+my personal jira with custom feats :)
 
 ## What it does
 
@@ -9,23 +9,8 @@ A personal sprint board — like Jira, but without the enterprise bloat.
 - Epics for grouping tickets
 - Pull tickets from backlog into sprints
 - Per-ticket time-in-status tracking (how long something has been sitting in a column)
-
-## Stack
-
-| Layer | Tech | Hosting |
-|-------|------|---------|
-| Frontend | Vite + React | Firebase (cumin.ashinsabu.com) |
-| Backend | Go | Railway |
-| Database | PostgreSQL | Railway |
-
-## Project Structure
-
-```
-cumin/
-├── server/   # Go API server
-└── ui/       # Vite + React SPA
-```
+cumin.ashinsabu.com
 
 ## Status
 
-Early development. Personal use first, multi-user later.
+Early development. Personal use 
