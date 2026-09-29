@@ -6,11 +6,19 @@ import { StatCard } from '../components/StatCard'
 
 export function DashboardView() {
   const { isDark } = useTheme()
-  const { items, statuses, epics, board } = useBoard()
+  const { items, statuses, epics, board, loading } = useBoard()
+
+  if (loading || !board) {
+    return (
+      <div className={`flex-1 flex items-center justify-center ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+        <span className="text-sm">{loading ? 'Loading…' : 'Board unavailable'}</span>
+      </div>
+    )
+  }
 
   const totalItems = items.length
   const doneItems = items.filter((i) => statuses.find((s) => s.id === i.status_id)?.is_done).length
-  const spilledItems = items.filter((i) => i.sprints.length > 1).length
+  const spilledItems = items.filter((i) => (i.sprints?.length ?? 0) > 1).length
   const totalEstimate = items.reduce((sum, i) => sum + (i.estimate_minutes || 0), 0)
   const doneEstimate = items.filter((i) => statuses.find((s) => s.id === i.status_id)?.is_done).reduce((sum, i) => sum + (i.estimate_minutes || 0), 0)
 
@@ -92,7 +100,7 @@ export function DashboardView() {
       <section>
         <h2 className={`text-sm font-semibold mb-3 ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>Stale Items (&gt;2 days in status)</h2>
         <div className="space-y-2">
-          {items.filter((i) => i.time_in_status_minutes > 2880 && !statuses.find((s) => s.id === i.status_id)?.is_done).map((item) => (
+          {items.filter((i) => (i.time_in_status_minutes ?? 0) > 2880 && !statuses.find((s) => s.id === i.status_id)?.is_done).map((item) => (
             <div key={item.id} className={`flex items-center justify-between px-4 py-3 rounded-lg ${isDark ? 'bg-[#1e1f25] border border-[#2e303a]' : 'bg-white border border-gray-200'}`}>
               <div className="flex items-center gap-3">
                 <span className={`text-[12px] font-mono font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{item.display_id}</span>

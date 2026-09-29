@@ -1,4 +1,5 @@
 import { useTheme } from '../context/ThemeContext'
+import { useAuth } from '../context/AuthContext'
 import type { NavEntry } from '../types'
 
 type SidebarProps = {
@@ -9,6 +10,14 @@ type SidebarProps = {
 
 export function Sidebar({ views, activeId, onNavigate }: SidebarProps) {
   const { isDark, toggle } = useTheme()
+  const { user } = useAuth()
+
+  const initials = user?.display_name
+    ?.split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2) ?? '??'
 
   return (
     <aside className={`hidden md:flex flex-col w-[200px] shrink-0 border-r ${isDark ? 'bg-[#16171d] border-[#2e303a]' : 'bg-white border-gray-200'}`}>
@@ -32,10 +41,21 @@ export function Sidebar({ views, activeId, onNavigate }: SidebarProps) {
           className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-[12px] font-medium transition-colors ${isDark ? 'text-gray-400 hover:bg-[#1e1f25]' : 'text-gray-600 hover:bg-gray-50'}`}>
           <span className="text-sm">{isDark ? '☀️' : '🌙'}</span>{isDark ? 'Light mode' : 'Dark mode'}
         </button>
-        <div className={`flex items-center gap-2 px-3 py-2 mt-1 rounded-lg cursor-pointer transition-colors ${isDark ? 'hover:bg-[#1e1f25]' : 'hover:bg-gray-50'}`}>
-          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white text-[10px] font-bold">AS</div>
-          <span className={`text-[12px] font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>Ashin Sabu</span>
-        </div>
+        <button
+          onClick={() => onNavigate('account')}
+          className={`w-full flex items-center gap-2 px-3 py-2 mt-1 rounded-lg transition-colors ${
+            activeId === 'account'
+              ? isDark ? 'bg-indigo-500/10' : 'bg-indigo-50'
+              : isDark ? 'hover:bg-[#1e1f25]' : 'hover:bg-gray-50'
+          }`}
+        >
+          {user?.avatar_url ? (
+            <img src={user.avatar_url} className="w-6 h-6 rounded-full" alt="" />
+          ) : (
+            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white text-[10px] font-bold">{initials}</div>
+          )}
+          <span className={`text-[12px] font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{user?.display_name ?? 'Account'}</span>
+        </button>
       </div>
     </aside>
   )
@@ -43,6 +63,14 @@ export function Sidebar({ views, activeId, onNavigate }: SidebarProps) {
 
 export function MobileNav({ views, activeId, onNavigate, onClose }: SidebarProps & { onClose: () => void }) {
   const { isDark } = useTheme()
+  const { user } = useAuth()
+
+  const initials = user?.display_name
+    ?.split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2) ?? '??'
 
   return (
     <div className="fixed inset-0 z-40 md:hidden" onClick={onClose}>
@@ -57,6 +85,17 @@ export function MobileNav({ views, activeId, onNavigate, onClose }: SidebarProps
               }`}><span>{nav.icon}</span>{nav.label}</button>
           ))}
         </nav>
+        <div className={`absolute bottom-0 left-0 right-0 px-3 py-3 border-t ${isDark ? 'border-[#2e303a]' : 'border-gray-200'}`}>
+          <button onClick={() => { onNavigate('account'); onClose() }}
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${isDark ? 'hover:bg-[#1e1f25]' : 'hover:bg-gray-50'}`}>
+            {user?.avatar_url ? (
+              <img src={user.avatar_url} className="w-6 h-6 rounded-full" alt="" />
+            ) : (
+              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white text-[10px] font-bold">{initials}</div>
+            )}
+            <span className={`text-[12px] font-medium ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>{user?.display_name ?? 'Account'}</span>
+          </button>
+        </div>
       </aside>
     </div>
   )

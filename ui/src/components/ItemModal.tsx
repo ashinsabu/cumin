@@ -1,6 +1,7 @@
 import type { Item } from '../types'
 import { useTheme } from '../context/ThemeContext'
 import { useBoard } from '../context/BoardContext'
+import { useAuth } from '../context/AuthContext'
 import { PRIORITY } from '../constants'
 import { formatEstimate } from '../hooks/useFormat'
 import { StatusDurationBar } from './StatusDurationBar'
@@ -18,9 +19,18 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 export function ItemModal({ item, onClose }: { item: Item; onClose: () => void }) {
   const { isDark } = useTheme()
   const { statuses, moveItem } = useBoard()
-  const priority = PRIORITY[item.priority]
+  const { user } = useAuth()
+  const priority = PRIORITY[item.priority] ?? PRIORITY[4]
   const isOverdue = item.deadline && new Date(item.deadline) < new Date()
-  const status = statuses.find((s) => s.id === item.status_id)
+  const sprints = item.sprints ?? []
+  const epicColor = item.epic_color ?? '#6b7280'
+
+  const initials = user?.display_name
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2) ?? '?'
 
   function handleStatusChange(newStatusId: string) {
     if (newStatusId !== item.status_id) {
@@ -69,7 +79,10 @@ export function ItemModal({ item, onClose }: { item: Item; onClose: () => void }
             </div>
           </Row>
           <Row label="Epic">
-            <span className="text-[11px] font-semibold px-2.5 py-1 rounded" style={{ backgroundColor: item.epic_color + '18', color: item.epic_color, border: `1px solid ${item.epic_color}30` }}>{item.epic_name}</span>
+            {item.epic_name
+              ? <span className="text-[11px] font-semibold px-2.5 py-1 rounded" style={{ backgroundColor: epicColor + '18', color: epicColor, border: `1px solid ${epicColor}30` }}>{item.epic_name}</span>
+              : <span className={`text-[11px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>—</span>
+            }
           </Row>
           <Row label="Estimate">
             <span className={`text-[13px] font-semibold ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{item.estimate_minutes ? formatEstimate(item.estimate_minutes) : '—'}</span>
@@ -82,20 +95,22 @@ export function ItemModal({ item, onClose }: { item: Item; onClose: () => void }
               {item.deadline ? `${item.deadline}${isOverdue ? ' (overdue)' : ''}` : '—'}
             </span>
           </Row>
-          <Row label="Sprints">
-            <div className="flex items-center gap-1 flex-wrap justify-end">
-              {item.sprints.map((s) => (
-                <span key={s} className={`text-[11px] px-2 py-0.5 rounded ${isDark ? 'bg-[#2e303a] text-gray-300' : 'bg-gray-100 text-gray-600'}`}>{s}</span>
-              ))}
-            </div>
-          </Row>
+          {sprints.length > 0 && (
+            <Row label="Sprints">
+              <div className="flex items-center gap-1 flex-wrap justify-end">
+                {sprints.map((s) => (
+                  <span key={s} className={`text-[11px] px-2 py-0.5 rounded ${isDark ? 'bg-[#2e303a] text-gray-300' : 'bg-gray-100 text-gray-600'}`}>{s}</span>
+                ))}
+              </div>
+            </Row>
+          )}
         </div>
 
         <div className={`px-6 py-3 border-t flex items-center justify-between ${isDark ? 'border-[#2e303a] bg-[#16171d]' : 'border-gray-100 bg-gray-50'}`}>
           <span className={`text-[11px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-            {item.sprints.length > 1 ? `Spilled ${item.sprints.length - 1}×` : 'No spillover'}
+            {sprints.length > 1 ? `Spilled ${sprints.length - 1}×` : 'No spillover'}
           </span>
-          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white text-[10px] font-bold">AS</div>
+          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white text-[10px] font-bold">{initials}</div>
         </div>
       </div>
     </div>

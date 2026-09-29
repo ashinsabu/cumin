@@ -1,8 +1,13 @@
 import { useTheme } from '../context/ThemeContext'
 import { formatDuration } from '../hooks/useFormat'
 
-export function StatusDurationBar({ minutes }: { minutes: number }) {
+export function StatusDurationBar({ minutes }: { minutes: number | undefined }) {
   const { isDark } = useTheme()
+
+  if (minutes == null) {
+    return <span className={`text-[11px] ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>—</span>
+  }
+
   const days = minutes / 1440
 
   let color = '#22c55e'

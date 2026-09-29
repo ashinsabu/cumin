@@ -1,0 +1,3 @@
+ALTER TABLE epics DROP COLUMN IF EXISTS project_id;
+ALTER TABLE items DROP COLUMN IF EXISTS project_id;
+DROP TABLE IF EXISTS projects;

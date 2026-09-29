@@ -20,16 +20,21 @@ export type Item = {
   display_id: string
   title: string
   description?: string
-  epic_id: string
-  epic_name: string
-  epic_color: string
+  epic_id: string | null
+  sprint_id: string | null
+  project_id: string | null
   priority: number
   estimate_minutes: number | null
   status_id: string
-  time_in_status_minutes: number
-  deadline: string | null
-  sprints: string[]
+  position: number
   created_at?: string
+  updated_at?: string
+  // Enriched fields (populated client-side from epics/sprints lookups)
+  epic_name?: string
+  epic_color?: string
+  time_in_status_minutes?: number
+  deadline?: string | null
+  sprints?: string[]
 }
 
 export type Sprint = {
@@ -55,7 +60,7 @@ export type PriorityConfig = {
 
 export type NavEntry = {
   id: string
+  path: string
   label: string
   icon: string
-  component: React.ComponentType
 }

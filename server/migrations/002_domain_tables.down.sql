@@ -1,0 +1,4 @@
+DROP TABLE IF EXISTS status_transitions;
+DROP TABLE IF EXISTS items;
+DROP TABLE IF EXISTS sprints;
+DROP TABLE IF EXISTS epics;

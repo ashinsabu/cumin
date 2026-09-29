@@ -7,8 +7,11 @@ import { StatusDurationBar } from './StatusDurationBar'
 export function ItemCard({ item }: { item: Item }) {
   const { isDark } = useTheme()
   const isOverdue = item.deadline && new Date(item.deadline) < new Date()
-  const priority = PRIORITY[item.priority]
-  const spillCount = item.sprints.length - 1
+  const priority = PRIORITY[item.priority] ?? PRIORITY[4]
+  const sprints = item.sprints ?? []
+  const spillCount = sprints.length - 1
+  const epicColor = item.epic_color ?? '#6b7280'
+  const epicName = item.epic_name ?? '—'
 
   const spillBorder = spillCount >= 3 ? 'border-l-red-500' : spillCount === 2 ? 'border-l-amber-400' : spillCount === 1 ? 'border-l-gray-400' : 'border-l-transparent'
 
@@ -28,10 +31,12 @@ export function ItemCard({ item }: { item: Item }) {
       </div>
 
       <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
-        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
-          style={{ backgroundColor: item.epic_color + '18', color: item.epic_color, border: `1px solid ${item.epic_color}30` }}>
-          {item.epic_name.toUpperCase()}
-        </span>
+        {item.epic_name && (
+          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
+            style={{ backgroundColor: epicColor + '18', color: epicColor, border: `1px solid ${epicColor}30` }}>
+            {epicName.toUpperCase()}
+          </span>
+        )}
         {isOverdue && (
           <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-red-50 text-red-600 border border-red-200">⚠ {item.deadline}</span>
         )}

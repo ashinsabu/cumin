@@ -52,11 +52,13 @@ export function AllItemsView() {
   function handleMouseDown(colId: string, e: React.MouseEvent) {
     e.preventDefault()
     const col = columns.find((c) => c.id === colId)!
-    setResizing({ id: colId, startX: e.clientX, startWidth: col.width })
+    const startX = e.clientX
+    const startWidth = col.width
+    setResizing({ id: colId, startX, startWidth })
 
     const handleMove = (ev: MouseEvent) => {
-      const diff = ev.clientX - e.clientX
-      setColumns((prev) => prev.map((c) => c.id === colId ? { ...c, width: Math.max(60, col.width + diff) } : c))
+      const diff = ev.clientX - startX
+      setColumns((prev) => prev.map((c) => c.id === colId ? { ...c, width: Math.max(60, startWidth + diff) } : c))
     }
     const handleUp = () => {
       setResizing(null)
