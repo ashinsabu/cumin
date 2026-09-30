@@ -1,17 +1,27 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import type { Item, Status, Epic, Sprint, Board } from '../types'
+import type { Item, Status, Epic, Sprint, Board, Project } from '../types'
 
 const API = ''
+
+export type CreateItemPayload = {
+  title: string
+  project_id: string
+  epic_id?: string | null
+  priority?: number
+  estimate_minutes?: number | null
+}
 
 type BoardContextValue = {
   board: Board | null
   items: Item[]
   statuses: Status[]
   epics: Epic[]
+  projects: Project[]
   activeSprint: Sprint | null
   loading: boolean
   moveItem: (itemId: string, toStatusId: string) => void
+  createItem: (payload: CreateItemPayload) => Promise<Item>
   selectedItem: Item | null
   selectItem: (item: Item | null) => void
   refresh: () => void
@@ -24,6 +34,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<Item[]>([])
   const [statuses, setStatuses] = useState<Status[]>([])
   const [epics, setEpics] = useState<Epic[]>([])
+  const [projects, setProjects] = useState<Project[]>([])
   const [activeSprint, setActiveSprint] = useState<Sprint | null>(null)
   const [loading, setLoading] = useState(true)
   const [selectedItem, setSelectedItem] = useState<Item | null>(null)
@@ -32,12 +43,13 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   const fetchAll = useCallback(async () => {
     try {
       const opts = { credentials: 'include' as const }
-      const [boardRes, statusRes, epicRes, sprintRes, itemRes] = await Promise.all([
+      const [boardRes, statusRes, epicRes, sprintRes, itemRes, projectRes] = await Promise.all([
         fetch(`${API}/api/board`, opts),
         fetch(`${API}/api/board/statuses`, opts),
         fetch(`${API}/api/epics`, opts),
         fetch(`${API}/api/sprints/active`, opts),
         fetch(`${API}/api/items`, opts),
+        fetch(`${API}/api/projects`, opts),
       ])
 
       if (boardRes.ok) setBoard(await boardRes.json())
@@ -53,6 +65,10 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       if (itemRes.ok) {
         const data = await itemRes.json()
         setItems(data.items || [])
+      }
+      if (projectRes.ok) {
+        const data = await projectRes.json()
+        setProjects(data.projects || [])
       }
     } finally {
       setLoading(false)
@@ -101,15 +117,33 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     })
   }, [])
 
+  const createItem = useCallback(async (payload: CreateItemPayload): Promise<Item> => {
+    const res = await fetch(`${API}/api/items`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.error || 'Failed to create item')
+    }
+    const item: Item = await res.json()
+    setItems((prev) => [...prev, item])
+    return item
+  }, [])
+
   return (
     <BoardContext.Provider value={{
       board,
       items,
       statuses,
       epics,
+      projects,
       activeSprint,
       loading,
       moveItem,
+      createItem,
       selectedItem,
       selectItem,
       refresh: fetchAll,

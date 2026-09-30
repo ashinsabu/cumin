@@ -52,6 +52,14 @@ export type Board = {
   available_hours_per_sprint: number
 }
 
+export type Project = {
+  id: string
+  name: string
+  prefix: string
+  color: string
+  description: string
+}
+
 export type PriorityConfig = {
   label: string
   color: string

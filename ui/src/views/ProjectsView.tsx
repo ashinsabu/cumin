@@ -70,7 +70,7 @@ export function ProjectsView() {
   }
 
   async function handleDelete(id: string, name: string) {
-    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return
+    if (!confirm(`Delete "${name}"?\n\nExisting items will NOT be deleted but will lose their project association. This cannot be undone.`)) return
     try {
       const res = await fetch(`/api/projects/${id}`, { method: 'DELETE', credentials: 'include' })
       if (res.ok) fetchProjects()

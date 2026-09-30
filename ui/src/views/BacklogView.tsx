@@ -5,11 +5,13 @@ import { formatEstimate } from '../hooks/useFormat'
 import { StatusDurationBar } from '../components/StatusDurationBar'
 import { FilterSelect } from '../components/FilterSelect'
 import { SearchInput } from '../components/SearchInput'
+import { CreateItemModal } from '../components/CreateItemModal'
 
 export function BacklogView() {
   const { items, statuses, selectItem } = useBoard()
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<{ epic: string; priority: string }>({ epic: 'all', priority: 'all' })
+  const [showCreate, setShowCreate] = useState(false)
 
   const backlogItems = items
     .filter((i) => !statuses.find((s) => s.id === i.status_id)?.is_done)
@@ -32,30 +34,38 @@ export function BacklogView() {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="shrink-0 px-4 py-3 border-b flex items-center gap-3 border-line">
-        <SearchInput value={search} onChange={setSearch} placeholder="Search backlog…" />
-        <FilterSelect
-          value={filters.epic}
-          onChange={(v) => setFilters((f) => ({ ...f, epic: v }))}
-          options={[{ value: 'all', label: 'Epic' }, ...epics.filter(Boolean).map((e) => ({ value: e!, label: e! }))]}
-        />
-        <FilterSelect
-          value={filters.priority}
-          onChange={(v) => setFilters((f) => ({ ...f, priority: v }))}
-          options={[{ value: 'all', label: 'Priority' }, { value: '0', label: 'P0' }, { value: '1', label: 'P1' }, { value: '2', label: 'P2' }, { value: '3', label: 'P3' }, { value: '4', label: 'P4' }]}
-        />
-
-        {activeFilters > 0 && (
-          <button onClick={() => setFilters({ epic: 'all', priority: 'all' })}
-            className="text-xs px-2 py-1 rounded-[var(--c-radius-card)] text-accent hover:bg-accent/10">
-            Clear ({activeFilters})
-          </button>
-        )}
-
+      {showCreate && <CreateItemModal onClose={() => setShowCreate(false)} />}
+      <div className="shrink-0 px-4 py-3 border-b flex flex-wrap items-center gap-2 border-line">
+        <SearchInput value={search} onChange={setSearch} placeholder="Search backlog…" className="min-w-[140px] flex-1 sm:flex-none sm:w-48" />
+        <div className="flex items-center gap-2 flex-wrap">
+          <FilterSelect
+            value={filters.epic}
+            onChange={(v) => setFilters((f) => ({ ...f, epic: v }))}
+            options={[{ value: 'all', label: 'Epic' }, ...epics.filter(Boolean).map((e) => ({ value: e!, label: e! }))]}
+          />
+          <FilterSelect
+            value={filters.priority}
+            onChange={(v) => setFilters((f) => ({ ...f, priority: v }))}
+            options={[{ value: 'all', label: 'Priority' }, { value: '0', label: 'P0' }, { value: '1', label: 'P1' }, { value: '2', label: 'P2' }, { value: '3', label: 'P3' }, { value: '4', label: 'P4' }]}
+          />
+          {activeFilters > 0 && (
+            <button onClick={() => setFilters({ epic: 'all', priority: 'all' })}
+              className="text-xs px-2 py-1 rounded-[var(--c-radius-card)] text-accent hover:bg-accent/10">
+              Clear ({activeFilters})
+            </button>
+          )}
+        </div>
         <div className="ml-auto flex items-center gap-3">
-          <span className="text-xs text-ghost">
+          <span className="text-xs text-ghost hidden sm:inline">
             {filtered.length} items · {formatEstimate(totalEstimate)}
           </span>
+          <button
+            onClick={() => setShowCreate(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-[var(--c-radius-card)] bg-accent text-white hover:opacity-90"
+          >
+            <span>+</span>
+            <span className="hidden sm:inline">New item</span>
+          </button>
         </div>
       </div>
 
@@ -67,6 +77,7 @@ export function BacklogView() {
               <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-2 border-b text-dim border-line">Work</th>
               <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-2 border-b text-dim border-line" style={{ width: 130 }}>Epic</th>
               <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-2 border-b text-dim border-line" style={{ width: 80 }}>Estimate</th>
+              <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-2 border-b text-dim border-line" style={{ width: 120 }}>Status</th>
               <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-2 border-b text-dim border-line" style={{ width: 80 }}>Priority</th>
               <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-2 border-b text-dim border-line" style={{ width: 120 }}>Waiting</th>
             </tr>
@@ -91,6 +102,9 @@ export function BacklogView() {
                   </td>
                   <td className="px-4 py-2.5">
                     <span className="text-sm font-semibold text-ink/80">{item.estimate_minutes ? formatEstimate(item.estimate_minutes) : '—'}</span>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    {(() => { const s = statuses.find(st => st.id === item.status_id); return s ? <span className="text-xs font-semibold px-2 py-0.5 rounded-[var(--c-radius-badge)] bg-line text-ink/80">{s.name}</span> : <span className="text-ghost">—</span> })()}
                   </td>
                   <td className="px-4 py-2.5">
                     <span className="text-sm font-bold" style={{ color: priority.color }}>{priority.label}</span>

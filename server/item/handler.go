@@ -3,6 +3,7 @@ package item
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/ashinsabu/cumin/server/api"
 	"github.com/ashinsabu/cumin/server/auth"
@@ -161,7 +162,10 @@ func (h *Handler) Create(ctx context.Context, req CreateRequest) (*Item, error) 
 	it, err := h.store.CreateForProject(ctx, b.ID, req.ProjectID, statusID, req.Title, req.Description,
 		req.EpicID, req.SprintID, req.Priority, req.EstimateMinutes)
 	if err != nil {
-		return nil, api.BadRequest("invalid project_id or project not accessible")
+		if strings.Contains(err.Error(), "project not found") {
+			return nil, api.BadRequest("invalid project_id or project not accessible")
+		}
+		return nil, api.Internal("failed to create item")
 	}
 	return it, nil
 }

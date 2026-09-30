@@ -7,9 +7,10 @@ type Props = {
   onChange: (value: string) => void
   options: Option[]
   placeholder?: string
+  fullWidth?: boolean
 }
 
-export function FilterSelect({ value, onChange, options, placeholder }: Props) {
+export function FilterSelect({ value, onChange, options, placeholder, fullWidth }: Props) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -25,10 +26,11 @@ export function FilterSelect({ value, onChange, options, placeholder }: Props) {
   }, [open])
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className={`relative${fullWidth ? ' w-full' : ''}`}>
       <button
+        type="button"
         onClick={() => setOpen((v) => !v)}
-        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--c-radius-card)] border text-xs font-medium transition-colors outline-none ${
+        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--c-radius-card)] border text-xs font-medium transition-colors outline-none${fullWidth ? ' w-full justify-between' : ''} ${
           isFiltered
             ? 'border-accent text-accent bg-accent/10'
             : 'border-line text-dim bg-surface hover:border-ghost hover:text-ink'
@@ -44,6 +46,7 @@ export function FilterSelect({ value, onChange, options, placeholder }: Props) {
         <div className="absolute top-full left-0 mt-1 z-50 min-w-[120px] rounded-[var(--c-radius-card)] border bg-raised border-line shadow-[var(--c-shadow-modal)] overflow-hidden">
           {options.map((opt) => (
             <button
+              type="button"
               key={opt.value}
               onClick={() => { onChange(opt.value); setOpen(false) }}
               className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${

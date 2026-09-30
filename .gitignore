@@ -24,7 +24,6 @@ Thumbs.db
 .vscode/
 *.swp
 
-# Planning docs (local only)
-docs/
+# Local scratch files
 progress.md
 FEATURE_FACTORY.md

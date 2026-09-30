@@ -5,6 +5,7 @@ import { formatEstimate } from '../hooks/useFormat'
 import { StatusDurationBar } from '../components/StatusDurationBar'
 import { FilterSelect } from '../components/FilterSelect'
 import { SearchInput } from '../components/SearchInput'
+import { CreateItemModal } from '../components/CreateItemModal'
 import type { Item } from '../types'
 
 type ColumnConfig = {
@@ -32,6 +33,7 @@ export function AllItemsView() {
   const [columns, setColumns] = useState<ColumnConfig[]>(DEFAULT_COLUMNS)
   const [resizing, setResizing] = useState<{ id: string; startX: number; startWidth: number } | null>(null)
   const [showColumnConfig, setShowColumnConfig] = useState(false)
+  const [showCreate, setShowCreate] = useState(false)
 
   const epics = [...new Set(items.map((i) => i.epic_name))]
   const activeFilters = Object.entries(filters).filter(([, v]) => v !== 'all').length
@@ -83,7 +85,7 @@ export function AllItemsView() {
       case 'estimate':
         return <span className="text-sm font-semibold text-ink/80">{item.estimate_minutes ? formatEstimate(item.estimate_minutes) : '—'}</span>
       case 'created':
-        return <span className="text-xs text-dim">26 May 2026, 10:00</span>
+        return <span className="text-xs text-dim">{item.created_at ? new Date(item.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</span>
       case 'status':
         return (
           <span className={`text-xs font-semibold px-2 py-1 rounded ${
@@ -105,40 +107,49 @@ export function AllItemsView() {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <div className="shrink-0 px-4 py-3 border-b flex items-center gap-3 border-line">
-        <SearchInput value={search} onChange={setSearch} placeholder="Search work…" />
-        <FilterSelect
-          value={filters.epic}
-          onChange={(v) => setFilters((f) => ({ ...f, epic: v }))}
-          options={[{ value: 'all', label: 'Epic' }, ...epics.filter(Boolean).map((e) => ({ value: e!, label: e! }))]}
-        />
-        <FilterSelect
-          value={filters.status}
-          onChange={(v) => setFilters((f) => ({ ...f, status: v }))}
-          options={[{ value: 'all', label: 'Status' }, ...statuses.map((s) => ({ value: s.id, label: s.name }))]}
-        />
-        <FilterSelect
-          value={filters.priority}
-          onChange={(v) => setFilters((f) => ({ ...f, priority: v }))}
-          options={[{ value: 'all', label: 'Priority' }, { value: '0', label: 'P0' }, { value: '1', label: 'P1' }, { value: '2', label: 'P2' }, { value: '3', label: 'P3' }, { value: '4', label: 'P4' }]}
-        />
-        {activeFilters > 0 && (
-          <button
-            onClick={() => setFilters({ epic: 'all', priority: 'all', status: 'all' })}
-            className="text-xs px-2 py-1 rounded-[var(--c-radius-card)] text-accent hover:bg-accent/10"
-          >
-            Clear ({activeFilters})
-          </button>
-        )}
-
+      {showCreate && <CreateItemModal onClose={() => setShowCreate(false)} />}
+      <div className="shrink-0 px-4 py-3 border-b flex flex-wrap items-center gap-2 border-line">
+        <SearchInput value={search} onChange={setSearch} placeholder="Search work…" className="min-w-[140px] flex-1 sm:flex-none sm:w-48" />
+        <div className="flex items-center gap-2 flex-wrap">
+          <FilterSelect
+            value={filters.epic}
+            onChange={(v) => setFilters((f) => ({ ...f, epic: v }))}
+            options={[{ value: 'all', label: 'Epic' }, ...epics.filter(Boolean).map((e) => ({ value: e!, label: e! }))]}
+          />
+          <FilterSelect
+            value={filters.status}
+            onChange={(v) => setFilters((f) => ({ ...f, status: v }))}
+            options={[{ value: 'all', label: 'Status' }, ...statuses.map((s) => ({ value: s.id, label: s.name }))]}
+          />
+          <FilterSelect
+            value={filters.priority}
+            onChange={(v) => setFilters((f) => ({ ...f, priority: v }))}
+            options={[{ value: 'all', label: 'Priority' }, { value: '0', label: 'P0' }, { value: '1', label: 'P1' }, { value: '2', label: 'P2' }, { value: '3', label: 'P3' }, { value: '4', label: 'P4' }]}
+          />
+          {activeFilters > 0 && (
+            <button
+              onClick={() => setFilters({ epic: 'all', priority: 'all', status: 'all' })}
+              className="text-xs px-2 py-1 rounded-[var(--c-radius-card)] text-accent hover:bg-accent/10"
+            >
+              Clear ({activeFilters})
+            </button>
+          )}
+        </div>
         <div className="ml-auto flex items-center gap-2">
-          <span className="text-xs text-ghost">{filtered.length} items</span>
+          <span className="text-xs text-ghost hidden sm:inline">{filtered.length} items</span>
           <button
             onClick={() => setShowColumnConfig(!showColumnConfig)}
             className="p-1.5 rounded-[var(--c-radius-card)] text-sm text-dim hover:bg-line"
             title="Configure columns"
           >
             ⚙
+          </button>
+          <button
+            onClick={() => setShowCreate(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-[var(--c-radius-card)] bg-accent text-white hover:opacity-90"
+          >
+            <span>+</span>
+            <span className="hidden sm:inline">New item</span>
           </button>
         </div>
       </div>
