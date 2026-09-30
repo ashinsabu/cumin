@@ -10,5 +10,7 @@ FROM alpine:3.19
 
 RUN apk add --no-cache ca-certificates
 COPY --from=builder /cumin /cumin
+COPY migrations /app/migrations
+ENV MIGRATIONS_PATH=/app/migrations
 EXPOSE 8080
 CMD ["/cumin"]

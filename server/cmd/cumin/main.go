@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"runtime"
 
@@ -112,6 +113,10 @@ func healthz(pool *pgxpool.Pool) http.HandlerFunc {
 }
 
 func migrationsDir() string {
+	if p := os.Getenv("MIGRATIONS_PATH"); p != "" {
+		return p
+	}
+	// Dev: resolve relative to source file location
 	_, filename, _, _ := runtime.Caller(0)
 	return filepath.Join(filepath.Dir(filename), "..", "..", "migrations")
 }
