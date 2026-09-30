@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useBoard } from '../context/BoardContext'
 import { FilterSelect } from './FilterSelect'
+import { parseEstimate, formatEstimate } from '../hooks/useFormat'
 
 type Props = {
   onClose: () => void
@@ -13,6 +14,8 @@ export function CreateItemModal({ onClose, onCreated }: Props) {
   const [projectId, setProjectId] = useState(projects[0]?.id ?? '')
   const [epicId, setEpicId] = useState('')
   const [priority, setPriority] = useState(3)
+  const [estimateRaw, setEstimateRaw] = useState('')
+  const [estimateError, setEstimateError] = useState('')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const titleRef = useRef<HTMLInputElement>(null)
@@ -35,14 +38,22 @@ export function CreateItemModal({ onClose, onCreated }: Props) {
     if (!title.trim()) { setError('Title is required'); return }
     if (!projectId) { setError('Select a project'); return }
 
+    let estimateMinutes: number | null = null
+    if (estimateRaw.trim()) {
+      estimateMinutes = parseEstimate(estimateRaw)
+      if (estimateMinutes === null) { setEstimateError('Use formats like 2h, 30m, 1h30m'); return }
+    }
+
     setSubmitting(true)
     setError('')
+    setEstimateError('')
     try {
       const item = await createItem({
         title: title.trim(),
         project_id: projectId,
         epic_id: epicId || null,
         priority,
+        estimate_minutes: estimateMinutes,
       })
       onCreated?.(item.display_id)
       onClose()
@@ -126,6 +137,18 @@ export function CreateItemModal({ onClose, onCreated }: Props) {
                 </button>
               ))}
             </div>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-dim">Estimate <span className="text-ghost font-normal">(optional — e.g. 2h, 30m, 1h30m)</span></label>
+            <input
+              type="text"
+              value={estimateRaw}
+              onChange={(e) => { setEstimateRaw(e.target.value); setEstimateError('') }}
+              placeholder="e.g. 2h, 30m, 1h30m"
+              className="w-full px-3 py-2 text-sm rounded-[var(--c-radius-card)] border bg-surface border-line text-ink placeholder:text-ghost focus:outline-none focus:border-ghost"
+            />
+            {estimateError && <p className="text-xs text-red-500">{estimateError}</p>}
           </div>
 
           {error && <p className="text-xs text-red-500">{error}</p>}
