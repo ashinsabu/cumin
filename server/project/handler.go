@@ -2,6 +2,7 @@ package project
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/ashinsabu/cumin/server/api"
@@ -124,6 +125,14 @@ func (h *Handler) Delete(ctx context.Context) error {
 	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
 	if err != nil || existing.BoardID != b.ID {
 		return api.NotFound("project not found")
+	}
+
+	count, err := h.store.ItemCount(ctx, id)
+	if err != nil {
+		return api.Internal("failed to check item count")
+	}
+	if count > 0 {
+		return api.Conflict(fmt.Sprintf("project has %d item(s) — reassign or delete them first", count))
 	}
 
 	return h.store.Delete(ctx, id)

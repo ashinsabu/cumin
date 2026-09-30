@@ -3,6 +3,8 @@ import { useBoard } from '../context/BoardContext'
 import { PRIORITY } from '../constants'
 import { formatEstimate } from '../hooks/useFormat'
 import { StatusDurationBar } from '../components/StatusDurationBar'
+import { FilterSelect } from '../components/FilterSelect'
+import { SearchInput } from '../components/SearchInput'
 
 export function EpicsView() {
   const { items, statuses, epics, selectItem } = useBoard()
@@ -30,30 +32,17 @@ export function EpicsView() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <div className="shrink-0 px-4 py-3 border-b flex items-center gap-3 border-line">
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-[var(--c-radius-card)] border bg-surface border-line">
-          <span className="text-sm text-ghost">🔍</span>
-          <input
-            type="text"
-            placeholder="Search epics..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="text-sm outline-none bg-transparent w-40 text-ink placeholder:text-ghost"
-          />
-        </div>
-
-        <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
-          className="text-xs px-2.5 py-1.5 rounded-[var(--c-radius-card)] border outline-none bg-surface border-line text-ink">
-          <option value="all">Type</option>
-          <option value="goal">Goal</option>
-          <option value="recurring">Recurring</option>
-          <option value="catchall">Catchall</option>
-        </select>
-
-        {typeFilter !== 'all' && (
-          <button onClick={() => setTypeFilter('all')} className="text-xs px-2 py-1 rounded-[var(--c-radius-card)] text-accent hover:bg-accent/10">
-            Clear
-          </button>
-        )}
+        <SearchInput value={search} onChange={setSearch} placeholder="Search epics…" />
+        <FilterSelect
+          value={typeFilter}
+          onChange={setTypeFilter}
+          options={[
+            { value: 'all', label: 'Type' },
+            { value: 'goal', label: 'Goal' },
+            { value: 'recurring', label: 'Recurring' },
+            { value: 'catchall', label: 'Catch-all' },
+          ]}
+        />
 
         <div className="ml-auto">
           <span className="text-xs text-ghost">{filtered.length} epics</span>

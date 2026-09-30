@@ -3,6 +3,8 @@ import { useBoard } from '../context/BoardContext'
 import { PRIORITY } from '../constants'
 import { formatEstimate } from '../hooks/useFormat'
 import { StatusDurationBar } from '../components/StatusDurationBar'
+import { FilterSelect } from '../components/FilterSelect'
+import { SearchInput } from '../components/SearchInput'
 import type { Item } from '../types'
 
 type ColumnConfig = {
@@ -104,43 +106,30 @@ export function AllItemsView() {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <div className="shrink-0 px-4 py-3 border-b flex items-center gap-3 border-line">
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-[var(--c-radius-card)] border bg-surface border-line">
-          <span className="text-sm text-ghost">🔍</span>
-          <input
-            type="text"
-            placeholder="Search work..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="text-sm outline-none bg-transparent w-40 text-ink placeholder:text-ghost"
-          />
-        </div>
-
-        <div className="flex items-center gap-2">
-          <select value={filters.epic} onChange={(e) => setFilters((f) => ({ ...f, epic: e.target.value }))}
-            className="text-xs px-2.5 py-1.5 rounded-[var(--c-radius-card)] border outline-none bg-surface border-line text-ink">
-            <option value="all">Epic</option>
-            {epics.map((e) => <option key={e} value={e}>{e}</option>)}
-          </select>
-          <select value={filters.status} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}
-            className="text-xs px-2.5 py-1.5 rounded-[var(--c-radius-card)] border outline-none bg-surface border-line text-ink">
-            <option value="all">Status</option>
-            {statuses.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-          <select value={filters.priority} onChange={(e) => setFilters((f) => ({ ...f, priority: e.target.value }))}
-            className="text-xs px-2.5 py-1.5 rounded-[var(--c-radius-card)] border outline-none bg-surface border-line text-ink">
-            <option value="all">Priority</option>
-            <option value="0">P0</option><option value="1">P1</option><option value="2">P2</option><option value="3">P3</option><option value="4">P4</option>
-          </select>
-
-          {activeFilters > 0 && (
-            <button
-              onClick={() => setFilters({ epic: 'all', priority: 'all', status: 'all' })}
-              className="text-xs px-2 py-1 rounded-[var(--c-radius-card)] text-accent hover:bg-accent/10"
-            >
-              Clear ({activeFilters})
-            </button>
-          )}
-        </div>
+        <SearchInput value={search} onChange={setSearch} placeholder="Search work…" />
+        <FilterSelect
+          value={filters.epic}
+          onChange={(v) => setFilters((f) => ({ ...f, epic: v }))}
+          options={[{ value: 'all', label: 'Epic' }, ...epics.filter(Boolean).map((e) => ({ value: e!, label: e! }))]}
+        />
+        <FilterSelect
+          value={filters.status}
+          onChange={(v) => setFilters((f) => ({ ...f, status: v }))}
+          options={[{ value: 'all', label: 'Status' }, ...statuses.map((s) => ({ value: s.id, label: s.name }))]}
+        />
+        <FilterSelect
+          value={filters.priority}
+          onChange={(v) => setFilters((f) => ({ ...f, priority: v }))}
+          options={[{ value: 'all', label: 'Priority' }, { value: '0', label: 'P0' }, { value: '1', label: 'P1' }, { value: '2', label: 'P2' }, { value: '3', label: 'P3' }, { value: '4', label: 'P4' }]}
+        />
+        {activeFilters > 0 && (
+          <button
+            onClick={() => setFilters({ epic: 'all', priority: 'all', status: 'all' })}
+            className="text-xs px-2 py-1 rounded-[var(--c-radius-card)] text-accent hover:bg-accent/10"
+          >
+            Clear ({activeFilters})
+          </button>
+        )}
 
         <div className="ml-auto flex items-center gap-2">
           <span className="text-xs text-ghost">{filtered.length} items</span>

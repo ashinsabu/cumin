@@ -25,6 +25,7 @@ const NAV_VIEWS: NavEntry[] = [
   { id: 'dashboards', path: '/dashboards', label: 'Dashboards', icon: '◩' },
 ]
 
+
 function AppShell() {
   const { user, loading } = useAuth()
   const { items, activeSprint, selectedItem, selectItem } = useBoard()
@@ -68,7 +69,7 @@ function AppShell() {
         <header className="flex items-center justify-between px-4 py-2.5 border-b shrink-0 bg-surface border-line">
           <div className="flex items-center gap-3">
             <button onClick={() => setMobileNavOpen(true)} className="md:hidden p-1.5 rounded-[var(--c-radius-card)] text-dim hover:bg-line">☰</button>
-            <span className="text-sm font-medium text-ink/80">{activeLabel}</span>
+            <span className="text-sm font-semibold text-ink">{activeLabel}</span>
           </div>
           {activeId !== 'account' && (
             <div className="text-xs px-2.5 py-1.5 rounded-[var(--c-radius-card)] bg-line text-dim">

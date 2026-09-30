@@ -3,14 +3,14 @@ import type { Preset } from './types'
 export const PRESETS: Record<Preset['id'], Preset> = {
   cyber: {
     id: 'cyber', name: 'Cyber',
-    fonts: { body: "'Geist', system-ui, sans-serif", mono: "'Geist Mono', ui-monospace, monospace" },
-    radius: { chrome: '0px', card: '4px', badge: '2px' },
-    shadows: { card: 'none', modal: '0 0 0 1px var(--c-line)', focusGlow: '0 0 0 2px var(--c-accent)' },
+    fonts: { body: "'Geist Mono', ui-monospace, monospace", mono: "'Geist Mono', ui-monospace, monospace" },
+    radius: { chrome: '0px', card: '0px', badge: '0px' },
+    shadows: { card: 'none', modal: '0 0 0 1px var(--c-accent)', focusGlow: '0 0 0 1px var(--c-accent), 0 0 12px var(--c-accent)' },
     surfaces: { blur: false, blurAmount: '0px', panelGradient: null },
     colors: {
       dark: {
         canvas: '#09090b', surface: '#111113', raised: '#161618', panel: '#0c0c0e',
-        line: '#1e1e24', ink: '#fafafa', dim: '#71717a', ghost: '#3f3f46',
+        line: '#1e1e24', ink: '#fafafa', dim: '#a1a1aa', ghost: '#71717a',
         accent: '#e11d48', accentFg: '#ffffff',
       },
       light: {

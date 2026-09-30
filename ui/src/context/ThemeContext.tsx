@@ -40,6 +40,7 @@ function applyPreset(preset: Preset, mode: 'dark' | 'light') {
   root.style.setProperty('--c-font-body', preset.fonts.body)
   root.style.setProperty('--c-font-mono', preset.fonts.mono)
   root.classList.toggle('dark', mode === 'dark')
+  root.dataset.preset = preset.id
 }
 
 function loadFromStorage(): ThemePrefs {

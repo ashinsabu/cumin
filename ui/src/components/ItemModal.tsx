@@ -39,7 +39,7 @@ export function ItemModal({ item, onClose }: { item: Item; onClose: () => void }
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" />
       <div
-        className="relative w-full max-w-lg rounded-[var(--c-radius-card)] shadow-xl overflow-hidden bg-raised border border-line"
+        className="raised-surface relative w-full max-w-lg rounded-[var(--c-radius-card)] shadow-xl overflow-hidden bg-raised border border-line"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-6 py-4 border-b border-line">

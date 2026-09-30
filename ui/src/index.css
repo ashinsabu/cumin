@@ -30,16 +30,16 @@
   --c-panel:   #0c0c0e;
   --c-line:    #1e1e24;
   --c-ink:     #fafafa;
-  --c-dim:     #71717a;
-  --c-ghost:   #3f3f46;
+  --c-dim:     #a1a1aa;
+  --c-ghost:   #71717a;
   --c-accent:  #e11d48;
   --c-accent-fg: #ffffff;
   --c-radius-chrome: 0px;
-  --c-radius-card:   4px;
-  --c-radius-badge:  2px;
+  --c-radius-card:   0px;
+  --c-radius-badge:  0px;
   --c-shadow-card:   none;
-  --c-shadow-modal:  0 0 0 1px var(--c-line);
-  --c-shadow-glow:   0 0 0 2px var(--c-accent);
+  --c-shadow-modal:  0 0 0 1px var(--c-accent);
+  --c-shadow-glow:   0 0 0 1px var(--c-accent), 0 0 12px var(--c-accent);
   --c-font-body: 'Geist', system-ui, sans-serif;
   --c-font-mono: 'Geist Mono', ui-monospace, monospace;
   --c-blur:      none;
@@ -65,4 +65,28 @@ body {
 
 .font-data {
   font-family: var(--c-font-mono);
+}
+
+/* ── Cyber: terminal aesthetic ── */
+[data-preset="cyber"] .nav-item-active {
+  background: color-mix(in srgb, var(--c-accent) 8%, transparent) !important;
+  border-left: 2px solid var(--c-accent) !important;
+  border-radius: 0 !important;
+  padding-left: calc(0.75rem - 2px) !important;
+  box-shadow: inset 12px 0 24px color-mix(in srgb, var(--c-accent) 10%, transparent);
+}
+
+[data-preset="cyber"] aside {
+  border-color: color-mix(in srgb, var(--c-accent) 20%, var(--c-line));
+}
+
+/* ── Glass: frosted surfaces ── */
+[data-preset="glass"] aside {
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+[data-preset="glass"] .raised-surface {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }

@@ -8,6 +8,12 @@ type SidebarProps = {
   onNavigate: (id: string) => void
 }
 
+const NAV_GROUPS = [
+  { label: null,       ids: ['board', 'backlog', 'all-items'] },
+  { label: 'Organize', ids: ['epics', 'projects'] },
+  { label: 'Insights', ids: ['dashboards'] },
+]
+
 export function Sidebar({ views, activeId, onNavigate }: SidebarProps) {
   const { isDark, toggle } = useTheme()
   const { user } = useAuth()
@@ -27,16 +33,23 @@ export function Sidebar({ views, activeId, onNavigate }: SidebarProps) {
           <span className="text-base font-bold tracking-tight text-ink">cumin</span>
         </div>
       </div>
-      <nav className="flex-1 px-2">
-        {views.map((nav) => (
-          <button key={nav.id} onClick={() => onNavigate(nav.id)}
-            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-[var(--c-radius-card)] text-sm font-medium mb-0.5 transition-colors ${
-              activeId === nav.id
-                ? 'bg-accent/10 text-accent'
-                : 'text-dim hover:bg-surface hover:text-ink'
-            }`}>
-            <span className="text-sm">{nav.icon}</span>{nav.label}
-          </button>
+      <nav className="flex-1 px-2 space-y-3">
+        {NAV_GROUPS.map((group, gi) => (
+          <div key={gi}>
+            {group.label && (
+              <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-ghost/60">{group.label}</p>
+            )}
+            {views.filter(v => group.ids.includes(v.id)).map((nav) => (
+              <button key={nav.id} onClick={() => onNavigate(nav.id)}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-[var(--c-radius-card)] text-sm font-medium mb-0.5 transition-colors ${
+                  activeId === nav.id
+                    ? 'nav-item-active bg-accent/10 text-accent'
+                    : 'text-dim hover:bg-surface hover:text-ink'
+                }`}>
+                <span className="text-sm">{nav.icon}</span>{nav.label}
+              </button>
+            ))}
+          </div>
         ))}
       </nav>
       <div className="px-3 py-3 border-t border-line">
@@ -84,7 +97,7 @@ export function MobileNav({ views, activeId, onNavigate, onClose }: SidebarProps
           {views.map((nav) => (
             <button key={nav.id} onClick={() => { onNavigate(nav.id); onClose() }}
               className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[var(--c-radius-card)] text-sm font-medium mb-0.5 transition-colors ${
-                activeId === nav.id ? 'bg-accent/10 text-accent' : 'text-dim hover:bg-surface'
+                activeId === nav.id ? 'nav-item-active bg-accent/10 text-accent' : 'text-dim hover:bg-surface'
               }`}><span>{nav.icon}</span>{nav.label}</button>
           ))}
         </nav>

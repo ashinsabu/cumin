@@ -83,6 +83,12 @@ func (s *Store) Update(ctx context.Context, id, name, color, description string)
 	return &p, nil
 }
 
+func (s *Store) ItemCount(ctx context.Context, id string) (int64, error) {
+	var count int64
+	err := s.DB.QueryRow(ctx, `SELECT COUNT(*) FROM items WHERE project_id = $1`, id).Scan(&count)
+	return count, err
+}
+
 func (s *Store) Delete(ctx context.Context, id string) error {
 	_, err := s.DB.Exec(ctx, `DELETE FROM projects WHERE id = $1`, id)
 	return err

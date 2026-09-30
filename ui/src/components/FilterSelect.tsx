@@ -1,0 +1,62 @@
+import { useState, useRef, useEffect } from 'react'
+
+type Option = { value: string; label: string }
+
+type Props = {
+  value: string
+  onChange: (value: string) => void
+  options: Option[]
+  placeholder?: string
+}
+
+export function FilterSelect({ value, onChange, options, placeholder }: Props) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  const selected = options.find((o) => o.value === value)
+  const isFiltered = value !== options[0]?.value
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    if (open) document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [open])
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--c-radius-card)] border text-xs font-medium transition-colors outline-none ${
+          isFiltered
+            ? 'border-accent text-accent bg-accent/10'
+            : 'border-line text-dim bg-surface hover:border-ghost hover:text-ink'
+        }`}
+      >
+        {selected?.label ?? placeholder}
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className={`transition-transform ${open ? 'rotate-180' : ''}`}>
+          <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+
+      {open && (
+        <div className="absolute top-full left-0 mt-1 z-50 min-w-[120px] rounded-[var(--c-radius-card)] border bg-raised border-line shadow-[var(--c-shadow-modal)] overflow-hidden">
+          {options.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => { onChange(opt.value); setOpen(false) }}
+              className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
+                opt.value === value
+                  ? 'text-accent bg-accent/10'
+                  : 'text-ink hover:bg-surface'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
