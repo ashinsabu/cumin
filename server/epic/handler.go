@@ -46,6 +46,7 @@ func (h *Handler) Routes(r chi.Router) {
 	r.Post("/api/epics", api.Handle(h.Create))
 	r.Patch("/api/epics/{id}", api.Handle(h.Update))
 	r.Delete("/api/epics/{id}", api.HandleDelete(h.Delete))
+	r.Post("/api/epics/{id}/restore", api.HandleDelete(h.Restore))
 }
 
 func (h *Handler) List(ctx context.Context) (*ListResponse, error) {
@@ -134,5 +135,22 @@ func (h *Handler) Delete(ctx context.Context) error {
 		return api.NotFound("epic not found")
 	}
 
-	return h.store.Delete(ctx, id)
+	if err := h.store.SoftDelete(ctx, id, b.ID); err != nil {
+		return api.Internal("failed to delete epic")
+	}
+	return nil
+}
+
+func (h *Handler) Restore(ctx context.Context) error {
+	id := api.URLParam(ctx, "id")
+
+	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	if err != nil {
+		return api.NotFound("board not found")
+	}
+
+	if err := h.store.RestoreEpic(ctx, id, b.ID); err != nil {
+		return api.Internal("failed to restore epic")
+	}
+	return nil
 }

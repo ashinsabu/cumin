@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"github.com/ashinsabu/cumin/server/auth"
 	"github.com/ashinsabu/cumin/server/board"
@@ -16,6 +17,7 @@ import (
 	"github.com/ashinsabu/cumin/server/item"
 	"github.com/ashinsabu/cumin/server/project"
 	"github.com/ashinsabu/cumin/server/sprint"
+	"github.com/ashinsabu/cumin/server/trash"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -38,6 +40,8 @@ func main() {
 	}
 	defer pool.Close()
 
+	startPurgeWorker(pool)
+
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
@@ -58,6 +62,9 @@ func main() {
 	// Protected routes
 	r.Group(func(r chi.Router) {
 		if cfg.AuthDisabled {
+			if !cfg.IsDev() {
+				log.Fatal("AUTH_DISABLED=true is not allowed outside of development environment")
+			}
 			r.Use(auth.DevBypass("00000000-0000-0000-0000-000000000001"))
 		} else {
 			r.Use(auth.Middleware(cfg.JWTSecret))
@@ -87,6 +94,21 @@ func registerDomainRoutes(r chi.Router, pool *pgxpool.Pool) {
 	epic.NewHandler(epicStore, boardStore).Routes(r)
 	sprint.NewHandler(sprintStore, boardStore).Routes(r)
 	item.NewHandler(itemStore, boardStore).Routes(r)
+	trash.NewHandler(projectStore, epicStore, boardStore).Routes(r)
+}
+
+// startPurgeWorker hard-deletes soft-deleted rows older than 30 days, running daily.
+func startPurgeWorker(pool *pgxpool.Pool) {
+	ticker := time.NewTicker(24 * time.Hour)
+	go func() {
+		for range ticker.C {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			pool.Exec(ctx, `DELETE FROM items    WHERE deleted_at < NOW() - INTERVAL '30 days'`)
+			pool.Exec(ctx, `DELETE FROM epics    WHERE deleted_at < NOW() - INTERVAL '30 days'`)
+			pool.Exec(ctx, `DELETE FROM projects WHERE deleted_at < NOW() - INTERVAL '30 days'`)
+			cancel()
+		}
+	}()
 }
 
 func newAuthHandler(cfg config.Config, pool *pgxpool.Pool) *auth.Handler {

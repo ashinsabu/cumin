@@ -18,6 +18,14 @@ type Epic struct {
 	CreatedAt   time.Time  `json:"created_at"`
 }
 
+type TrashEpic struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Color     string    `json:"color"`
+	DeletedAt time.Time `json:"deleted_at"`
+	ItemCount int64     `json:"item_count"`
+}
+
 type Store struct {
 	DB *pgxpool.Pool
 }
@@ -25,7 +33,7 @@ type Store struct {
 func (s *Store) List(ctx context.Context, boardID string) ([]Epic, error) {
 	rows, err := s.DB.Query(ctx, `
 		SELECT id, board_id, name, type, color, deadline, description, created_at
-		FROM epics WHERE board_id = $1 ORDER BY created_at
+		FROM epics WHERE board_id = $1 AND deleted_at IS NULL ORDER BY created_at
 	`, boardID)
 	if err != nil {
 		return nil, err
@@ -47,7 +55,7 @@ func (s *Store) GetByID(ctx context.Context, id string) (*Epic, error) {
 	var e Epic
 	err := s.DB.QueryRow(ctx, `
 		SELECT id, board_id, name, type, color, deadline, description, created_at
-		FROM epics WHERE id = $1
+		FROM epics WHERE id = $1 AND deleted_at IS NULL
 	`, id).Scan(&e.ID, &e.BoardID, &e.Name, &e.Type, &e.Color, &e.Deadline, &e.Description, &e.CreatedAt)
 	if err != nil {
 		return nil, err
@@ -73,7 +81,7 @@ func (s *Store) Update(ctx context.Context, id, name, typ, color, description st
 	var e Epic
 	err := s.DB.QueryRow(ctx, `
 		UPDATE epics SET name = $2, type = $3, color = $4, deadline = $5, description = $6
-		WHERE id = $1
+		WHERE id = $1 AND deleted_at IS NULL
 		RETURNING id, board_id, name, type, color, deadline, description, created_at
 	`, id, name, typ, color, deadline, description).Scan(
 		&e.ID, &e.BoardID, &e.Name, &e.Type, &e.Color, &e.Deadline, &e.Description, &e.CreatedAt)
@@ -83,7 +91,87 @@ func (s *Store) Update(ctx context.Context, id, name, typ, color, description st
 	return &e, nil
 }
 
-func (s *Store) Delete(ctx context.Context, id string) error {
-	_, err := s.DB.Exec(ctx, `DELETE FROM epics WHERE id = $1`, id)
-	return err
+// SoftDelete sets deleted_at on the epic and cascades to its items.
+func (s *Store) SoftDelete(ctx context.Context, id, boardID string) error {
+	tx, err := s.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	var ts time.Time
+	err = tx.QueryRow(ctx, `
+		UPDATE epics SET deleted_at = NOW()
+		WHERE id = $1 AND board_id = $2 AND deleted_at IS NULL
+		RETURNING deleted_at
+	`, id, boardID).Scan(&ts)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(ctx, `
+		UPDATE items SET deleted_at = $1
+		WHERE epic_id = $2 AND deleted_at IS NULL
+	`, ts, id)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+}
+
+// RestoreEpic restores the epic and cascade-batch items.
+func (s *Store) RestoreEpic(ctx context.Context, id, boardID string) error {
+	tx, err := s.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	var ts time.Time
+	err = tx.QueryRow(ctx, `
+		SELECT deleted_at FROM epics WHERE id = $1 AND board_id = $2 AND deleted_at IS NOT NULL
+	`, id, boardID).Scan(&ts)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(ctx, `UPDATE epics SET deleted_at = NULL WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(ctx, `
+		UPDATE items SET deleted_at = NULL WHERE epic_id = $1 AND deleted_at = $2
+	`, id, ts)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+}
+
+func (s *Store) ListTrashEpics(ctx context.Context, boardID string) ([]TrashEpic, error) {
+	rows, err := s.DB.Query(ctx, `
+		SELECT e.id, e.name, e.color, e.deleted_at, COUNT(i.id) AS item_count
+		FROM epics e
+		LEFT JOIN items i ON i.epic_id = e.id AND i.deleted_at IS NOT NULL
+		WHERE e.board_id = $1 AND e.deleted_at IS NOT NULL
+		GROUP BY e.id, e.name, e.color, e.deleted_at
+		ORDER BY e.deleted_at DESC
+	`, boardID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []TrashEpic
+	for rows.Next() {
+		var t TrashEpic
+		if err := rows.Scan(&t.ID, &t.Name, &t.Color, &t.DeletedAt, &t.ItemCount); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, nil
 }

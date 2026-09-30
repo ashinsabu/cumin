@@ -2,6 +2,7 @@ package board
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -106,10 +107,73 @@ func (s *Store) CreateStatus(ctx context.Context, boardID, name string, position
 	return &st, nil
 }
 
-func (s *Store) DeleteStatusForBoard(ctx context.Context, id, boardID string) error {
-	_, err := s.DB.Exec(ctx, `DELETE FROM statuses WHERE id = $1 AND board_id = $2`, id, boardID)
-	return err
+// DeleteStatusSafe deletes a status inside a transaction, checking all guards atomically:
+// - cannot delete last done status
+// - cannot delete last initial status
+// - cannot delete if items are assigned to it
+// Returns api.Error for guard violations.
+func (s *Store) DeleteStatusSafe(ctx context.Context, id, boardID string) error {
+	tx, err := s.DB.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	// Lock all statuses for this board to prevent concurrent deletes racing the guards
+	rows, err := tx.Query(ctx, `SELECT id, is_done, is_initial FROM statuses WHERE board_id = $1 FOR UPDATE`, boardID)
+	if err != nil {
+		return err
+	}
+	var target *struct{ isDone, isInitial bool }
+	doneCount, initialCount := 0, 0
+	for rows.Next() {
+		var sid string
+		var isDone, isInitial bool
+		if err := rows.Scan(&sid, &isDone, &isInitial); err != nil {
+			rows.Close()
+			return err
+		}
+		if isDone {
+			doneCount++
+		}
+		if isInitial {
+			initialCount++
+		}
+		if sid == id {
+			target = &struct{ isDone, isInitial bool }{isDone, isInitial}
+		}
+	}
+	rows.Close()
+
+	if target == nil {
+		return &notFoundErr{msg: "status not found"}
+	}
+	if target.isDone && doneCount == 1 {
+		return &conflictErr{msg: "cannot delete the last done status"}
+	}
+	if target.isInitial && initialCount == 1 {
+		return &conflictErr{msg: "cannot delete the last initial status"}
+	}
+
+	var itemCount int64
+	if err := tx.QueryRow(ctx, `SELECT COUNT(*) FROM items WHERE status_id = $1`, id).Scan(&itemCount); err != nil {
+		return err
+	}
+	if itemCount > 0 {
+		return &conflictErr{msg: fmt.Sprintf("status has %d item(s) — reassign them first", itemCount)}
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM statuses WHERE id = $1 AND board_id = $2`, id, boardID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
+
+type notFoundErr struct{ msg string }
+type conflictErr struct{ msg string }
+
+func (e *notFoundErr) Error() string { return e.msg }
+func (e *conflictErr) Error() string { return e.msg }
 
 func (s *Store) ReorderStatuses(ctx context.Context, boardID string, ids []string) error {
 	tx, err := s.DB.Begin(ctx)

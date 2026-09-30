@@ -122,35 +122,17 @@ func (h *Handler) DeleteStatus(ctx context.Context) error {
 
 	id := api.URLParam(ctx, "id")
 
-	// Guard: cannot delete the last done or initial status (spillover and item creation break)
-	statuses, err := h.store.ListStatuses(ctx, b.ID)
-	if err != nil {
-		return api.Internal("failed to check statuses")
-	}
-	var target *Status
-	doneCount, initialCount := 0, 0
-	for i := range statuses {
-		if statuses[i].ID == id {
-			target = &statuses[i]
-		}
-		if statuses[i].IsDone {
-			doneCount++
-		}
-		if statuses[i].IsInitial {
-			initialCount++
+	if err := h.store.DeleteStatusSafe(ctx, id, b.ID); err != nil {
+		switch err.(type) {
+		case *notFoundErr:
+			return api.NotFound(err.Error())
+		case *conflictErr:
+			return api.Conflict(err.Error())
+		default:
+			return api.Internal("delete status failed")
 		}
 	}
-	if target == nil {
-		return api.NotFound("status not found")
-	}
-	if target.IsDone && doneCount == 1 {
-		return api.Conflict("cannot delete the last done status")
-	}
-	if target.IsInitial && initialCount == 1 {
-		return api.Conflict("cannot delete the last initial status")
-	}
-
-	return h.store.DeleteStatusForBoard(ctx, id, b.ID)
+	return nil
 }
 
 func (h *Handler) ReorderStatuses(ctx context.Context, req ReorderStatusesRequest) (*StatusListResponse, error) {

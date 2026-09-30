@@ -74,7 +74,7 @@ func scanItemBase(row interface{ Scan(...any) error }) (*Item, error) {
 }
 
 func (s *Store) List(ctx context.Context, boardID string, sprintID *string) ([]Item, error) {
-	query := `SELECT ` + itemEnrichedCols + ` FROM items i LEFT JOIN epics e ON i.epic_id = e.id WHERE i.board_id = $1`
+	query := `SELECT ` + itemEnrichedCols + ` FROM items i LEFT JOIN epics e ON i.epic_id = e.id WHERE i.board_id = $1 AND i.deleted_at IS NULL`
 	args := []any{boardID}
 
 	if sprintID != nil {
@@ -103,7 +103,7 @@ func (s *Store) List(ctx context.Context, boardID string, sprintID *string) ([]I
 func (s *Store) Backlog(ctx context.Context, boardID string) ([]Item, error) {
 	rows, err := s.DB.Query(ctx, `
 		SELECT `+itemEnrichedCols+` FROM items i LEFT JOIN epics e ON i.epic_id = e.id
-		WHERE i.board_id = $1 AND i.sprint_id IS NULL
+		WHERE i.board_id = $1 AND i.sprint_id IS NULL AND i.deleted_at IS NULL
 		  AND i.status_id NOT IN (SELECT id FROM statuses WHERE board_id = $1 AND is_done = true)
 		ORDER BY i.priority, i.position
 	`, boardID)
@@ -124,7 +124,7 @@ func (s *Store) Backlog(ctx context.Context, boardID string) ([]Item, error) {
 }
 
 func (s *Store) GetByID(ctx context.Context, id string) (*Item, error) {
-	row := s.DB.QueryRow(ctx, `SELECT `+itemEnrichedCols+` FROM items i LEFT JOIN epics e ON i.epic_id = e.id WHERE i.id = $1`, id)
+	row := s.DB.QueryRow(ctx, `SELECT `+itemEnrichedCols+` FROM items i LEFT JOIN epics e ON i.epic_id = e.id WHERE i.id = $1 AND i.deleted_at IS NULL`, id)
 	return scanItemEnriched(row)
 }
 
@@ -226,8 +226,8 @@ func (s *Store) Reorder(ctx context.Context, boardID, statusID string, ids []str
 	return tx.Commit(ctx)
 }
 
-func (s *Store) Delete(ctx context.Context, id string) error {
-	_, err := s.DB.Exec(ctx, `DELETE FROM items WHERE id = $1`, id)
+func (s *Store) SoftDelete(ctx context.Context, id string) error {
+	_, err := s.DB.Exec(ctx, `UPDATE items SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL`, id)
 	return err
 }
 

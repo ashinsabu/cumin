@@ -2,7 +2,6 @@ package project
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/ashinsabu/cumin/server/api"
@@ -42,6 +41,7 @@ func (h *Handler) Routes(r chi.Router) {
 	r.Post("/api/projects", api.Handle(h.Create))
 	r.Patch("/api/projects/{id}", api.Handle(h.Update))
 	r.Delete("/api/projects/{id}", api.HandleDelete(h.Delete))
+	r.Post("/api/projects/{id}/restore", api.HandleDelete(h.Restore))
 }
 
 func (h *Handler) List(ctx context.Context) (*ListResponse, error) {
@@ -127,13 +127,25 @@ func (h *Handler) Delete(ctx context.Context) error {
 		return api.NotFound("project not found")
 	}
 
-	count, err := h.store.ItemCount(ctx, id)
-	if err != nil {
-		return api.Internal("failed to check item count")
+	if err := h.store.SoftDelete(ctx, id, b.ID); err != nil {
+		return api.Internal("failed to delete project")
 	}
-	if count > 0 {
-		return api.Conflict(fmt.Sprintf("project has %d item(s) — reassign or delete them first", count))
+	return nil
+}
+
+func (h *Handler) Restore(ctx context.Context) error {
+	id := api.URLParam(ctx, "id")
+
+	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	if err != nil {
+		return api.NotFound("board not found")
 	}
 
-	return h.store.Delete(ctx, id)
+	if err := h.store.RestoreProject(ctx, id, b.ID); err != nil {
+		if msg, ok := IsPrefixConflict(err); ok {
+			return api.Conflict(msg)
+		}
+		return api.Internal("failed to restore project")
+	}
+	return nil
 }

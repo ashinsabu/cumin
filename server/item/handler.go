@@ -247,7 +247,7 @@ func (h *Handler) Delete(ctx context.Context) error {
 		return api.NotFound("item not found")
 	}
 
-	return h.store.Delete(ctx, it.ID)
+	return h.store.SoftDelete(ctx, it.ID)
 }
 
 func (h *Handler) Move(ctx context.Context, req MoveRequest) (*Item, error) {

@@ -12,6 +12,15 @@ export type CreateItemPayload = {
   estimate_minutes?: number | null
 }
 
+export type UpdateItemPayload = {
+  title?: string
+  epic_id?: string | null
+  clear_epic?: boolean
+  priority?: number
+  estimate_minutes?: number | null
+  status_id?: string
+}
+
 type BoardContextValue = {
   board: Board | null
   items: Item[]
@@ -22,6 +31,8 @@ type BoardContextValue = {
   loading: boolean
   moveItem: (itemId: string, toStatusId: string) => void
   createItem: (payload: CreateItemPayload) => Promise<Item>
+  updateItem: (id: string, payload: UpdateItemPayload) => Promise<void>
+  deleteItem: (id: string) => Promise<void>
   selectedItem: Item | null
   selectItem: (item: Item | null) => void
   refresh: () => void
@@ -133,6 +144,46 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     return item
   }, [])
 
+  const updateItem = useCallback(async (id: string, payload: UpdateItemPayload): Promise<void> => {
+    setItems((prev) => prev.map((i) => {
+      if (i.id !== id) return i
+      const merged = { ...i, ...payload }
+      if (payload.clear_epic) { merged.epic_id = null; merged.epic_name = undefined; merged.epic_color = undefined }
+      return merged
+    }))
+    try {
+      const res = await fetch(`${API}/api/items/${id}`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to update item')
+      }
+      const updated: Item = await res.json()
+      setItems((prev) => prev.map((i) => i.id === id ? updated : i))
+    } catch (err) {
+      await fetchAll()
+      throw err
+    }
+  }, [fetchAll])
+
+  const deleteItem = useCallback(async (id: string): Promise<void> => {
+    setItems((prev) => prev.filter((i) => i.id !== id))
+    try {
+      const res = await fetch(`${API}/api/items/${id}`, { method: 'DELETE', credentials: 'include' })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to delete item')
+      }
+    } catch (err) {
+      await fetchAll()
+      throw err
+    }
+  }, [fetchAll])
+
   return (
     <BoardContext.Provider value={{
       board,
@@ -144,6 +195,8 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       loading,
       moveItem,
       createItem,
+      updateItem,
+      deleteItem,
       selectedItem,
       selectItem,
       refresh: fetchAll,
