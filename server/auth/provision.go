@@ -71,7 +71,7 @@ func (p *Provisioner) ProvisionNewUser(ctx context.Context, userID string) error
 		}
 	}
 
-	// Default project: all personal life items live here
+	// Default project
 	var projectID string
 	if err := tx.QueryRow(ctx, `
 		INSERT INTO projects (board_id, name, prefix, color, description)

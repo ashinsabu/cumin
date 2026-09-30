@@ -1,4 +1,4 @@
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
 COPY go.mod ./
@@ -7,6 +7,7 @@ COPY . .
 RUN CGO_ENABLED=0 go build -o /cumin ./cmd/cumin
 
 FROM alpine:3.19
+
 RUN apk add --no-cache ca-certificates
 COPY --from=builder /cumin /cumin
 EXPOSE 8080

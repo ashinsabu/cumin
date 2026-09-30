@@ -1,6 +1,6 @@
 # Cumin
 
-Personal sprint board for managing life goals outside of work. Time-boxed sprints, kanban, backlog, and time-in-status tracking — built for one person.
+Sprint board for life goals. Time-boxed sprints, kanban, backlog, and time-in-status tracking.
 
 [cumin.ashinsabu.com](https://cumin.ashinsabu.com)
 
@@ -35,7 +35,7 @@ Personal sprint board for managing life goals outside of work. Time-boxed sprint
 
 ## Local development
 
-**Prerequisites:** Go 1.24+, Node 18+, Docker
+**Prerequisites:** Go 1.25+, Node 18+, Docker
 
 ```sh
 # Start DB + API + frontend in one shot
@@ -52,8 +52,25 @@ cd server && make wipe-user EMAIL=you@example.com
 
 ## Deploy
 
-- **Frontend** — Firebase Hosting (`firebase deploy` from `ui/`)
-- **Backend** — Railway (push to main, Railway auto-deploys)
+- **Frontend** — Firebase Hosting
+- **Backend** — Railway (Dockerfile in `server/`)
 - **Database** — PostgreSQL on Railway
 
-Copy `server/.env.production.example` to `.env` on the server and fill in values before deploying.
+Copy `server/.env.example.production` to `.env` on the server and fill in values before deploying.
+
+## Releasing
+
+Tag and push — CI verifies the build, then backend (Railway) and frontend (Firebase) deploy in parallel from the same commit.
+
+```sh
+git tag v1.x.x -m "brief summary"
+git push origin v1.x.x
+```
+
+If CI fails, nothing deploys. Fix the build, re-tag, push again.
+
+**One-time setup:**
+1. `firebase init hosting` from repo root — public dir: `ui/dist`, SPA: yes
+2. Get `FIREBASE_TOKEN` via `firebase login:ci`, get `RAILWAY_TOKEN` from Railway → Account Settings → Tokens
+3. Add both to GitHub → Settings → Secrets and variables → Actions
+4. Railway dashboard → cumin service → Settings → disable auto-deploy, enable Wait for CI
