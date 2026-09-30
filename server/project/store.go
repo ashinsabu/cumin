@@ -99,7 +99,8 @@ func (s *Store) ItemCount(ctx context.Context, id string) (int64, error) {
 	return count, err
 }
 
-// SoftDelete cascades: project → epics → items, all sharing the same deleted_at timestamp.
+// SoftDelete cascades project → items only. Epics are board-scoped, not project-scoped,
+// so they are not touched when a project is deleted.
 func (s *Store) SoftDelete(ctx context.Context, id, boardID string) error {
 	tx, err := s.DB.Begin(ctx)
 	if err != nil {
@@ -113,17 +114,6 @@ func (s *Store) SoftDelete(ctx context.Context, id, boardID string) error {
 		WHERE id = $1 AND board_id = $2 AND deleted_at IS NULL
 		RETURNING deleted_at
 	`, id, boardID).Scan(&ts)
-	if err != nil {
-		return err
-	}
-
-	// Cascade to epics belonging to this project's board that reference this project
-	// (epics belong to board not project, so we cascade items that belong to this project)
-	_, err = tx.Exec(ctx, `
-		UPDATE epics SET deleted_at = $1
-		WHERE board_id = $2 AND deleted_at IS NULL
-		AND id IN (SELECT DISTINCT epic_id FROM items WHERE project_id = $3 AND epic_id IS NOT NULL)
-	`, ts, boardID, id)
 	if err != nil {
 		return err
 	}

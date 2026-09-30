@@ -98,15 +98,22 @@ func registerDomainRoutes(r chi.Router, pool *pgxpool.Pool) {
 }
 
 // startPurgeWorker hard-deletes soft-deleted rows older than 30 days, running daily.
+// FK order: items first (references epics + projects), then epics, then projects.
 func startPurgeWorker(pool *pgxpool.Pool) {
 	ticker := time.NewTicker(24 * time.Hour)
 	go func() {
+		defer ticker.Stop()
 		for range ticker.C {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			pool.Exec(ctx, `DELETE FROM items    WHERE deleted_at < NOW() - INTERVAL '30 days'`)
-			pool.Exec(ctx, `DELETE FROM epics    WHERE deleted_at < NOW() - INTERVAL '30 days'`)
-			pool.Exec(ctx, `DELETE FROM projects WHERE deleted_at < NOW() - INTERVAL '30 days'`)
-			cancel()
+			purge := func(query string) {
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				if _, err := pool.Exec(ctx, query); err != nil {
+					log.Printf("purge worker: %v", err)
+				}
+			}
+			purge(`DELETE FROM items    WHERE deleted_at < NOW() - INTERVAL '30 days'`)
+			purge(`DELETE FROM epics    WHERE deleted_at < NOW() - INTERVAL '30 days'`)
+			purge(`DELETE FROM projects WHERE deleted_at < NOW() - INTERVAL '30 days'`)
 		}
 	}()
 }
