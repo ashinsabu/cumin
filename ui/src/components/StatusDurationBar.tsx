@@ -1,11 +1,8 @@
-import { useTheme } from '../context/ThemeContext'
 import { formatDuration } from '../hooks/useFormat'
 
 export function StatusDurationBar({ minutes }: { minutes: number | undefined }) {
-  const { isDark } = useTheme()
-
   if (minutes == null) {
-    return <span className={`text-[11px] ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>—</span>
+    return <span className="text-xs text-ghost">—</span>
   }
 
   const days = minutes / 1440
@@ -19,10 +16,10 @@ export function StatusDurationBar({ minutes }: { minutes: number | undefined }) 
 
   return (
     <div className="flex items-center gap-2 w-full">
-      <div className={`flex-1 h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-[#2e303a]' : 'bg-gray-200'}`}>
+      <div className="flex-1 h-1.5 rounded-full overflow-hidden bg-line">
         <div className="h-full rounded-full transition-all" style={{ width: `${width}%`, backgroundColor: color }} />
       </div>
-      <span className="text-[11px] font-semibold shrink-0" style={{ color }}>
+      <span className="text-xs font-semibold shrink-0" style={{ color }}>
         {formatDuration(minutes)}
       </span>
     </div>

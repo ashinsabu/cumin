@@ -1,16 +1,12 @@
-import { useTheme } from '../context/ThemeContext'
-
 export function LoginPage() {
-  const { isDark } = useTheme()
-
   return (
-    <div className={`h-screen flex items-center justify-center ${isDark ? 'bg-[#111218]' : 'bg-[#f8f9fc]'}`}>
-      <div className={`text-center p-8 rounded-xl border ${isDark ? 'bg-[#1e1f25] border-[#2e303a]' : 'bg-white border-gray-200'}`}>
-        <h1 className={`text-2xl font-bold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>cumin</h1>
-        <p className={`text-sm mb-6 ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Your life, sprint-planned.</p>
+    <div className="h-screen flex items-center justify-center bg-canvas">
+      <div className="text-center p-8 rounded-[var(--c-radius-card)] border bg-surface border-line">
+        <h1 className="text-2xl font-bold mb-2 text-ink">cumin</h1>
+        <p className="text-sm mb-6 text-dim">Your life, sprint-planned.</p>
         <a
           href="/api/auth/google/login"
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-white border border-gray-300 text-gray-700 font-medium text-sm hover:bg-gray-50 transition-colors shadow-sm"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-[var(--c-radius-card)] bg-white border border-gray-300 text-gray-700 font-medium text-sm hover:bg-gray-50 transition-colors shadow-sm"
         >
           <svg viewBox="0 0 24 24" className="w-5 h-5">
             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>

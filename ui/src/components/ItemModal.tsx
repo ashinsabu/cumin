@@ -1,5 +1,4 @@
 import type { Item } from '../types'
-import { useTheme } from '../context/ThemeContext'
 import { useBoard } from '../context/BoardContext'
 import { useAuth } from '../context/AuthContext'
 import { PRIORITY } from '../constants'
@@ -7,17 +6,15 @@ import { formatEstimate } from '../hooks/useFormat'
 import { StatusDurationBar } from './StatusDurationBar'
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  const { isDark } = useTheme()
   return (
     <div className="flex items-center justify-between">
-      <span className={`text-[12px] font-medium ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{label}</span>
+      <span className="text-sm font-medium text-dim">{label}</span>
       {children}
     </div>
   )
 }
 
 export function ItemModal({ item, onClose }: { item: Item; onClose: () => void }) {
-  const { isDark } = useTheme()
   const { statuses, moveItem } = useBoard()
   const { user } = useAuth()
   const priority = PRIORITY[item.priority] ?? PRIORITY[4]
@@ -42,20 +39,18 @@ export function ItemModal({ item, onClose }: { item: Item; onClose: () => void }
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" />
       <div
-        className={`relative w-full max-w-lg rounded-xl shadow-xl overflow-hidden ${
-          isDark ? 'bg-[#1e1f25] border border-[#2e303a]' : 'bg-white border border-gray-200'
-        }`}
+        className="relative w-full max-w-lg rounded-[var(--c-radius-card)] shadow-xl overflow-hidden bg-raised border border-line"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className={`px-6 py-4 border-b ${isDark ? 'border-[#2e303a]' : 'border-gray-100'}`}>
+        <div className="px-6 py-4 border-b border-line">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="text-[13px] font-bold px-2 py-0.5 rounded" style={{ backgroundColor: priority.bg, color: priority.color }}>{priority.label}</span>
-              <span className={`text-[13px] font-mono font-medium ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>{item.display_id}</span>
+              <span className="text-sm font-bold px-2 py-0.5 rounded" style={{ backgroundColor: priority.bg, color: priority.color }}>{priority.label}</span>
+              <span className="text-sm font-mono font-medium text-dim">{item.display_id}</span>
             </div>
-            <button onClick={onClose} className={`p-1.5 rounded-md transition-colors ${isDark ? 'hover:bg-[#2e303a] text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}>✕</button>
+            <button onClick={onClose} className="p-1.5 rounded-[var(--c-radius-card)] transition-colors hover:bg-line text-dim">✕</button>
           </div>
-          <h2 className={`text-base font-semibold mt-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>{item.title}</h2>
+          <h2 className="text-base font-semibold mt-2 text-ink">{item.title}</h2>
         </div>
 
         <div className="px-6 py-4 space-y-4">
@@ -65,12 +60,12 @@ export function ItemModal({ item, onClose }: { item: Item; onClose: () => void }
                 <button
                   key={s.id}
                   onClick={() => handleStatusChange(s.id)}
-                  className={`text-[11px] font-semibold px-2.5 py-1 rounded transition-colors ${
+                  className={`text-xs font-semibold px-2.5 py-1 rounded transition-colors ${
                     s.id === item.status_id
                       ? s.is_done
                         ? 'bg-green-100 text-green-700 border border-green-300'
-                        : isDark ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/40' : 'bg-indigo-50 text-indigo-600 border border-indigo-200'
-                      : isDark ? 'bg-[#2e303a] text-gray-400 hover:text-gray-200 hover:bg-[#3e4050]' : 'bg-gray-100 text-gray-500 hover:text-gray-700 hover:bg-gray-200'
+                        : 'bg-accent/15 text-accent border border-accent/30'
+                      : 'bg-line text-dim hover:text-ink hover:bg-raised'
                   }`}
                 >
                   {s.name}
@@ -80,18 +75,18 @@ export function ItemModal({ item, onClose }: { item: Item; onClose: () => void }
           </Row>
           <Row label="Epic">
             {item.epic_name
-              ? <span className="text-[11px] font-semibold px-2.5 py-1 rounded" style={{ backgroundColor: epicColor + '18', color: epicColor, border: `1px solid ${epicColor}30` }}>{item.epic_name}</span>
-              : <span className={`text-[11px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>—</span>
+              ? <span className="text-xs font-semibold px-2.5 py-1 rounded" style={{ backgroundColor: epicColor + '18', color: epicColor, border: `1px solid ${epicColor}30` }}>{item.epic_name}</span>
+              : <span className="text-xs text-ghost">—</span>
             }
           </Row>
           <Row label="Estimate">
-            <span className={`text-[13px] font-semibold ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{item.estimate_minutes ? formatEstimate(item.estimate_minutes) : '—'}</span>
+            <span className="text-sm font-semibold text-ink/80">{item.estimate_minutes ? formatEstimate(item.estimate_minutes) : '—'}</span>
           </Row>
           <Row label="Time in status">
             <div className="w-40"><StatusDurationBar minutes={item.time_in_status_minutes} /></div>
           </Row>
           <Row label="Deadline">
-            <span className={`text-[12px] ${isOverdue ? 'text-red-500 font-semibold' : isDark ? 'text-gray-200' : 'text-gray-700'}`}>
+            <span className={`text-sm ${isOverdue ? 'text-red-500 font-semibold' : 'text-ink/80'}`}>
               {item.deadline ? `${item.deadline}${isOverdue ? ' (overdue)' : ''}` : '—'}
             </span>
           </Row>
@@ -99,18 +94,18 @@ export function ItemModal({ item, onClose }: { item: Item; onClose: () => void }
             <Row label="Sprints">
               <div className="flex items-center gap-1 flex-wrap justify-end">
                 {sprints.map((s) => (
-                  <span key={s} className={`text-[11px] px-2 py-0.5 rounded ${isDark ? 'bg-[#2e303a] text-gray-300' : 'bg-gray-100 text-gray-600'}`}>{s}</span>
+                  <span key={s} className="text-xs px-2 py-0.5 rounded bg-line text-dim">{s}</span>
                 ))}
               </div>
             </Row>
           )}
         </div>
 
-        <div className={`px-6 py-3 border-t flex items-center justify-between ${isDark ? 'border-[#2e303a] bg-[#16171d]' : 'border-gray-100 bg-gray-50'}`}>
-          <span className={`text-[11px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+        <div className="px-6 py-3 border-t border-line flex items-center justify-between bg-panel">
+          <span className="text-xs text-ghost">
             {sprints.length > 1 ? `Spilled ${sprints.length - 1}×` : 'No spillover'}
           </span>
-          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-white text-[10px] font-bold">{initials}</div>
+          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-accent to-accent/70 flex items-center justify-center text-white text-xs font-bold">{initials}</div>
         </div>
       </div>
     </div>

@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useTheme } from '../context/ThemeContext'
 import { useBoard } from '../context/BoardContext'
 import { PRIORITY } from '../constants'
 import { formatEstimate } from '../hooks/useFormat'
@@ -25,7 +24,6 @@ const DEFAULT_COLUMNS: ColumnConfig[] = [
 ]
 
 export function AllItemsView() {
-  const { isDark } = useTheme()
   const { items, statuses, selectItem } = useBoard()
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<{ epic: string; priority: string; status: string }>({ epic: 'all', priority: 'all', status: 'all' })
@@ -75,27 +73,27 @@ export function AllItemsView() {
 
     switch (col.id) {
       case 'id':
-        return <span className={`text-[12px] font-mono font-medium ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}>{item.display_id}</span>
+        return <span className="text-sm font-mono font-medium text-accent">{item.display_id}</span>
       case 'title':
-        return <span className={`text-[12px] font-medium ${isDark ? 'text-gray-100' : 'text-gray-800'}`}>{item.title}</span>
+        return <span className="text-sm font-medium text-ink">{item.title}</span>
       case 'epic':
-        return <span className="text-[11px] font-semibold px-2 py-0.5 rounded" style={{ backgroundColor: item.epic_color + '18', color: item.epic_color, border: `1px solid ${item.epic_color}25` }}>{item.epic_name}</span>
+        return <span className="text-xs font-semibold px-2 py-0.5 rounded" style={{ backgroundColor: item.epic_color + '18', color: item.epic_color, border: `1px solid ${item.epic_color}25` }}>{item.epic_name}</span>
       case 'estimate':
-        return <span className={`text-[12px] font-semibold ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{item.estimate_minutes ? formatEstimate(item.estimate_minutes) : '—'}</span>
+        return <span className="text-sm font-semibold text-ink/80">{item.estimate_minutes ? formatEstimate(item.estimate_minutes) : '—'}</span>
       case 'created':
-        return <span className={`text-[11px] ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>26 May 2026, 10:00</span>
+        return <span className="text-xs text-dim">26 May 2026, 10:00</span>
       case 'status':
         return (
-          <span className={`text-[11px] font-semibold px-2 py-1 rounded ${
+          <span className={`text-xs font-semibold px-2 py-1 rounded ${
             status?.is_done
               ? 'bg-green-50 text-green-700 border border-green-200'
-              : isDark ? 'bg-[#2e303a] text-gray-200' : 'bg-gray-100 text-gray-700'
+              : 'bg-line text-ink/80'
           }`}>
             {status?.name}
           </span>
         )
       case 'priority':
-        return <span className="text-[12px] font-bold" style={{ color: priority.color }}>{priority.label}</span>
+        return <span className="text-sm font-bold" style={{ color: priority.color }}>{priority.label}</span>
       case 'in_status':
         return <div className="w-full"><StatusDurationBar minutes={item.time_in_status_minutes} /></div>
       default:
@@ -105,31 +103,31 @@ export function AllItemsView() {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <div className={`shrink-0 px-4 py-3 border-b flex items-center gap-3 ${isDark ? 'border-[#2e303a]' : 'border-gray-200'}`}>
-        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${isDark ? 'bg-[#1e1f25] border-[#2e303a]' : 'bg-white border-gray-200'}`}>
-          <span className={`text-[12px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>🔍</span>
+      <div className="shrink-0 px-4 py-3 border-b flex items-center gap-3 border-line">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-[var(--c-radius-card)] border bg-surface border-line">
+          <span className="text-sm text-ghost">🔍</span>
           <input
             type="text"
             placeholder="Search work..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className={`text-[12px] outline-none bg-transparent w-40 ${isDark ? 'text-gray-200 placeholder-gray-500' : 'text-gray-800 placeholder-gray-400'}`}
+            className="text-sm outline-none bg-transparent w-40 text-ink placeholder:text-ghost"
           />
         </div>
 
         <div className="flex items-center gap-2">
           <select value={filters.epic} onChange={(e) => setFilters((f) => ({ ...f, epic: e.target.value }))}
-            className={`text-[11px] px-2.5 py-1.5 rounded-lg border outline-none ${isDark ? 'bg-[#1e1f25] border-[#2e303a] text-gray-200' : 'bg-white border-gray-200 text-gray-700'}`}>
+            className="text-xs px-2.5 py-1.5 rounded-[var(--c-radius-card)] border outline-none bg-surface border-line text-ink">
             <option value="all">Epic</option>
             {epics.map((e) => <option key={e} value={e}>{e}</option>)}
           </select>
           <select value={filters.status} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}
-            className={`text-[11px] px-2.5 py-1.5 rounded-lg border outline-none ${isDark ? 'bg-[#1e1f25] border-[#2e303a] text-gray-200' : 'bg-white border-gray-200 text-gray-700'}`}>
+            className="text-xs px-2.5 py-1.5 rounded-[var(--c-radius-card)] border outline-none bg-surface border-line text-ink">
             <option value="all">Status</option>
             {statuses.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
           <select value={filters.priority} onChange={(e) => setFilters((f) => ({ ...f, priority: e.target.value }))}
-            className={`text-[11px] px-2.5 py-1.5 rounded-lg border outline-none ${isDark ? 'bg-[#1e1f25] border-[#2e303a] text-gray-200' : 'bg-white border-gray-200 text-gray-700'}`}>
+            className="text-xs px-2.5 py-1.5 rounded-[var(--c-radius-card)] border outline-none bg-surface border-line text-ink">
             <option value="all">Priority</option>
             <option value="0">P0</option><option value="1">P1</option><option value="2">P2</option><option value="3">P3</option><option value="4">P4</option>
           </select>
@@ -137,7 +135,7 @@ export function AllItemsView() {
           {activeFilters > 0 && (
             <button
               onClick={() => setFilters({ epic: 'all', priority: 'all', status: 'all' })}
-              className={`text-[11px] px-2 py-1 rounded-md ${isDark ? 'text-indigo-400 hover:bg-indigo-500/10' : 'text-indigo-600 hover:bg-indigo-50'}`}
+              className="text-xs px-2 py-1 rounded-[var(--c-radius-card)] text-accent hover:bg-accent/10"
             >
               Clear ({activeFilters})
             </button>
@@ -145,10 +143,10 @@ export function AllItemsView() {
         </div>
 
         <div className="ml-auto flex items-center gap-2">
-          <span className={`text-[11px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{filtered.length} items</span>
+          <span className="text-xs text-ghost">{filtered.length} items</span>
           <button
             onClick={() => setShowColumnConfig(!showColumnConfig)}
-            className={`p-1.5 rounded-md text-[12px] ${isDark ? 'text-gray-400 hover:bg-[#2e303a]' : 'text-gray-500 hover:bg-gray-100'}`}
+            className="p-1.5 rounded-[var(--c-radius-card)] text-sm text-dim hover:bg-line"
             title="Configure columns"
           >
             ⚙
@@ -157,10 +155,10 @@ export function AllItemsView() {
       </div>
 
       {showColumnConfig && (
-        <div className={`absolute right-4 top-24 z-30 rounded-lg shadow-lg border p-3 ${isDark ? 'bg-[#1e1f25] border-[#2e303a]' : 'bg-white border-gray-200'}`}>
-          <p className={`text-[11px] font-semibold mb-2 ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>Columns</p>
+        <div className="absolute right-4 top-24 z-30 rounded-[var(--c-radius-card)] shadow-lg border p-3 bg-raised border-line">
+          <p className="text-xs font-semibold mb-2 text-ink/80">Columns</p>
           {columns.map((col) => (
-            <label key={col.id} className={`flex items-center gap-2 py-1 cursor-pointer text-[12px] ${isDark ? 'text-gray-300' : 'text-gray-700'}`}>
+            <label key={col.id} className="flex items-center gap-2 py-1 cursor-pointer text-sm text-ink/80">
               <input
                 type="checkbox"
                 checked={col.visible}
@@ -176,17 +174,17 @@ export function AllItemsView() {
       <div className="flex-1 overflow-auto">
         <table className="w-full border-collapse" style={{ minWidth: visibleCols.reduce((s, c) => s + c.width, 0) }}>
           <thead className="sticky top-0 z-10">
-            <tr className={isDark ? 'bg-[#16171d]' : 'bg-gray-50'}>
+            <tr className="bg-panel">
               {visibleCols.map((col) => (
                 <th
                   key={col.id}
-                  className={`text-left text-[11px] font-semibold uppercase tracking-wider px-4 py-2 relative select-none border-b ${isDark ? 'text-gray-400 border-[#2e303a]' : 'text-gray-500 border-gray-200'}`}
+                  className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-2 relative select-none border-b text-dim border-line"
                   style={{ width: col.width, minWidth: col.width }}
                 >
                   {col.label}
                   <div
                     onMouseDown={(e) => handleMouseDown(col.id, e)}
-                    className={`absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-indigo-400 ${resizing?.id === col.id ? 'bg-indigo-400' : ''}`}
+                    className={`absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-accent/40 ${resizing?.id === col.id ? 'bg-accent/40' : ''}`}
                   />
                 </th>
               ))}
@@ -197,7 +195,7 @@ export function AllItemsView() {
               <tr
                 key={item.id}
                 onClick={() => selectItem(item)}
-                className={`cursor-pointer transition-colors border-b ${isDark ? 'hover:bg-[#1e1f25] border-[#2e303a]' : 'hover:bg-blue-50/40 border-gray-100'}`}
+                className="cursor-pointer transition-colors border-b hover:bg-surface border-line"
               >
                 {visibleCols.map((col) => (
                   <td

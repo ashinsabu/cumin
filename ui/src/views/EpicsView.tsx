@@ -1,12 +1,10 @@
 import { useState } from 'react'
-import { useTheme } from '../context/ThemeContext'
 import { useBoard } from '../context/BoardContext'
 import { PRIORITY } from '../constants'
 import { formatEstimate } from '../hooks/useFormat'
 import { StatusDurationBar } from '../components/StatusDurationBar'
 
 export function EpicsView() {
-  const { isDark } = useTheme()
   const { items, statuses, epics, selectItem } = useBoard()
   const [expandedEpics, setExpandedEpics] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
@@ -31,20 +29,20 @@ export function EpicsView() {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      <div className={`shrink-0 px-4 py-3 border-b flex items-center gap-3 ${isDark ? 'border-[#2e303a]' : 'border-gray-200'}`}>
-        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${isDark ? 'bg-[#1e1f25] border-[#2e303a]' : 'bg-white border-gray-200'}`}>
-          <span className={`text-[12px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>🔍</span>
+      <div className="shrink-0 px-4 py-3 border-b flex items-center gap-3 border-line">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-[var(--c-radius-card)] border bg-surface border-line">
+          <span className="text-sm text-ghost">🔍</span>
           <input
             type="text"
             placeholder="Search epics..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className={`text-[12px] outline-none bg-transparent w-40 ${isDark ? 'text-gray-200 placeholder-gray-500' : 'text-gray-800 placeholder-gray-400'}`}
+            className="text-sm outline-none bg-transparent w-40 text-ink placeholder:text-ghost"
           />
         </div>
 
         <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
-          className={`text-[11px] px-2.5 py-1.5 rounded-lg border outline-none ${isDark ? 'bg-[#1e1f25] border-[#2e303a] text-gray-200' : 'bg-white border-gray-200 text-gray-700'}`}>
+          className="text-xs px-2.5 py-1.5 rounded-[var(--c-radius-card)] border outline-none bg-surface border-line text-ink">
           <option value="all">Type</option>
           <option value="goal">Goal</option>
           <option value="recurring">Recurring</option>
@@ -52,27 +50,27 @@ export function EpicsView() {
         </select>
 
         {typeFilter !== 'all' && (
-          <button onClick={() => setTypeFilter('all')} className={`text-[11px] px-2 py-1 rounded-md ${isDark ? 'text-indigo-400 hover:bg-indigo-500/10' : 'text-indigo-600 hover:bg-indigo-50'}`}>
+          <button onClick={() => setTypeFilter('all')} className="text-xs px-2 py-1 rounded-[var(--c-radius-card)] text-accent hover:bg-accent/10">
             Clear
           </button>
         )}
 
         <div className="ml-auto">
-          <span className={`text-[11px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>{filtered.length} epics</span>
+          <span className="text-xs text-ghost">{filtered.length} epics</span>
         </div>
       </div>
 
       <div className="flex-1 overflow-auto">
         <table className="w-full border-collapse" style={{ minWidth: 900 }}>
           <thead className="sticky top-0 z-10">
-            <tr className={isDark ? 'bg-[#16171d]' : 'bg-gray-50'}>
-              <th className={`text-left text-[11px] font-semibold uppercase tracking-wider px-4 py-2 border-b w-8 ${isDark ? 'text-gray-400 border-[#2e303a]' : 'text-gray-500 border-gray-200'}`}></th>
-              <th className={`text-left text-[11px] font-semibold uppercase tracking-wider px-4 py-2 border-b ${isDark ? 'text-gray-400 border-[#2e303a]' : 'text-gray-500 border-gray-200'}`} style={{ width: 260 }}>Epic</th>
-              <th className={`text-left text-[11px] font-semibold uppercase tracking-wider px-4 py-2 border-b ${isDark ? 'text-gray-400 border-[#2e303a]' : 'text-gray-500 border-gray-200'}`} style={{ width: 90 }}>Type</th>
-              <th className={`text-left text-[11px] font-semibold uppercase tracking-wider px-4 py-2 border-b ${isDark ? 'text-gray-400 border-[#2e303a]' : 'text-gray-500 border-gray-200'}`} style={{ width: 100 }}>Items</th>
-              <th className={`text-left text-[11px] font-semibold uppercase tracking-wider px-4 py-2 border-b ${isDark ? 'text-gray-400 border-[#2e303a]' : 'text-gray-500 border-gray-200'}`} style={{ width: 100 }}>Estimate</th>
-              <th className={`text-left text-[11px] font-semibold uppercase tracking-wider px-4 py-2 border-b ${isDark ? 'text-gray-400 border-[#2e303a]' : 'text-gray-500 border-gray-200'}`} style={{ width: 200 }}>Progress</th>
-              <th className={`text-left text-[11px] font-semibold uppercase tracking-wider px-4 py-2 border-b ${isDark ? 'text-gray-400 border-[#2e303a]' : 'text-gray-500 border-gray-200'}`} style={{ width: 100 }}>Deadline</th>
+            <tr className="bg-panel">
+              <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-2 border-b w-8 text-dim border-line"></th>
+              <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-2 border-b text-dim border-line" style={{ width: 260 }}>Epic</th>
+              <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-2 border-b text-dim border-line" style={{ width: 90 }}>Type</th>
+              <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-2 border-b text-dim border-line" style={{ width: 100 }}>Items</th>
+              <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-2 border-b text-dim border-line" style={{ width: 100 }}>Estimate</th>
+              <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-2 border-b text-dim border-line" style={{ width: 200 }}>Progress</th>
+              <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-2 border-b text-dim border-line" style={{ width: 100 }}>Deadline</th>
             </tr>
           </thead>
           <tbody>
@@ -95,7 +93,6 @@ export function EpicsView() {
                   progress={progress}
                   daysUntilDeadline={daysUntilDeadline}
                   isExpanded={isExpanded}
-                  isDark={isDark}
                   onToggle={() => toggleEpic(epic.id)}
                   onSelectItem={selectItem}
                   statuses={statuses}
@@ -109,7 +106,7 @@ export function EpicsView() {
   )
 }
 
-function EpicRow({ epic, epicItems, doneItems, totalEstimate, progress, daysUntilDeadline, isExpanded, isDark, onToggle, onSelectItem, statuses }: {
+function EpicRow({ epic, epicItems, doneItems, totalEstimate, progress, daysUntilDeadline, isExpanded, onToggle, onSelectItem, statuses }: {
   epic: { id: string; name: string; type: string; color: string; deadline: string | null; description: string }
   epicItems: any[]
   doneItems: any[]
@@ -117,58 +114,54 @@ function EpicRow({ epic, epicItems, doneItems, totalEstimate, progress, daysUnti
   progress: number
   daysUntilDeadline: number | null
   isExpanded: boolean
-  isDark: boolean
   onToggle: () => void
   onSelectItem: (item: any) => void
   statuses: any[]
 }) {
   return (
     <>
-      <tr
-        onClick={onToggle}
-        className={`cursor-pointer transition-colors border-b ${isDark ? 'hover:bg-[#1e1f25] border-[#2e303a]' : 'hover:bg-blue-50/40 border-gray-100'}`}
-      >
+      <tr onClick={onToggle} className="cursor-pointer transition-colors border-b hover:bg-surface border-line">
         <td className="px-4 py-2.5">
-          <span className={`text-[11px] ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>{isExpanded ? '▾' : '▸'}</span>
+          <span className="text-xs text-dim">{isExpanded ? '▾' : '▸'}</span>
         </td>
         <td className="px-4 py-2.5">
           <div className="flex items-center gap-2.5">
             <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: epic.color }} />
-            <span className={`text-[12px] font-semibold ${isDark ? 'text-gray-100' : 'text-gray-800'}`}>{epic.name}</span>
+            <span className="text-sm font-semibold text-ink">{epic.name}</span>
           </div>
         </td>
         <td className="px-4 py-2.5">
-          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded uppercase ${
-            epic.type === 'recurring' ? isDark ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-green-50 text-green-700 border border-green-200' :
-            epic.type === 'goal' ? isDark ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' : 'bg-purple-50 text-purple-700 border border-purple-200' :
-            isDark ? 'bg-gray-500/10 text-gray-400 border border-gray-500/20' : 'bg-gray-50 text-gray-600 border border-gray-200'
+          <span className={`text-xs font-semibold px-2 py-0.5 rounded uppercase ${
+            epic.type === 'recurring' ? 'bg-green-500/10 text-green-400 border border-green-500/20' :
+            epic.type === 'goal' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' :
+            'bg-line text-dim border border-line'
           }`}>{epic.type}</span>
         </td>
         <td className="px-4 py-2.5">
-          <span className={`text-[12px] font-medium ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
-            {doneItems.length}<span className={isDark ? 'text-gray-500' : 'text-gray-400'}>/{epicItems.length}</span>
+          <span className="text-sm font-medium text-ink/80">
+            {doneItems.length}<span className="text-ghost">/{epicItems.length}</span>
           </span>
         </td>
         <td className="px-4 py-2.5">
-          <span className={`text-[12px] font-semibold ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>
+          <span className="text-sm font-semibold text-ink/80">
             {totalEstimate ? formatEstimate(totalEstimate) : '—'}
           </span>
         </td>
         <td className="px-4 py-2.5">
           <div className="flex items-center gap-2">
-            <div className={`flex-1 h-2 rounded-full overflow-hidden ${isDark ? 'bg-[#2e303a]' : 'bg-gray-100'}`}>
+            <div className="flex-1 h-2 rounded-full overflow-hidden bg-line">
               <div className="h-full rounded-full transition-all" style={{ width: `${progress}%`, backgroundColor: epic.color }} />
             </div>
-            <span className={`text-[11px] font-semibold shrink-0 w-8 text-right ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>{progress}%</span>
+            <span className="text-xs font-semibold shrink-0 w-8 text-right text-dim">{progress}%</span>
           </div>
         </td>
         <td className="px-4 py-2.5">
           {daysUntilDeadline !== null ? (
-            <span className={`text-[11px] font-medium ${daysUntilDeadline <= 0 ? 'text-red-500' : daysUntilDeadline < 7 ? 'text-amber-500' : isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+            <span className={`text-xs font-medium ${daysUntilDeadline <= 0 ? 'text-red-500' : daysUntilDeadline < 7 ? 'text-amber-500' : 'text-ink/80'}`}>
               {daysUntilDeadline <= 0 ? 'Overdue' : `${daysUntilDeadline}d left`}
             </span>
           ) : (
-            <span className={`text-[11px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>—</span>
+            <span className="text-xs text-ghost">—</span>
           )}
         </td>
       </tr>
@@ -176,25 +169,25 @@ function EpicRow({ epic, epicItems, doneItems, totalEstimate, progress, daysUnti
       {isExpanded && (
         <>
           {epic.description && (
-            <tr className={isDark ? 'bg-[#16171d]' : 'bg-gray-50/50'}>
-              <td colSpan={7} className={`px-12 py-2 text-[11px] italic ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+            <tr className="bg-panel">
+              <td colSpan={7} className="px-12 py-2 text-xs italic text-ghost">
                 {epic.description}
               </td>
             </tr>
           )}
           {epicItems.length === 0 ? (
-            <tr className={isDark ? 'bg-[#16171d]' : 'bg-gray-50/50'}>
-              <td colSpan={7} className={`px-12 py-3 text-[12px] ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>No items yet</td>
+            <tr className="bg-panel">
+              <td colSpan={7} className="px-12 py-3 text-sm text-ghost">No items yet</td>
             </tr>
           ) : (
             <>
-              <tr className={isDark ? 'bg-[#13141a]' : 'bg-gray-50'}>
+              <tr className="bg-panel">
                 <td></td>
-                <td className={`text-[10px] font-semibold uppercase tracking-wider px-4 py-1.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>ID / Work</td>
-                <td className={`text-[10px] font-semibold uppercase tracking-wider px-4 py-1.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Status</td>
-                <td className={`text-[10px] font-semibold uppercase tracking-wider px-4 py-1.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Priority</td>
-                <td className={`text-[10px] font-semibold uppercase tracking-wider px-4 py-1.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Estimate</td>
-                <td colSpan={2} className={`text-[10px] font-semibold uppercase tracking-wider px-4 py-1.5 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>In Status</td>
+                <td className="text-xs font-semibold uppercase tracking-wider px-4 py-1.5 text-ghost">ID / Work</td>
+                <td className="text-xs font-semibold uppercase tracking-wider px-4 py-1.5 text-ghost">Status</td>
+                <td className="text-xs font-semibold uppercase tracking-wider px-4 py-1.5 text-ghost">Priority</td>
+                <td className="text-xs font-semibold uppercase tracking-wider px-4 py-1.5 text-ghost">Estimate</td>
+                <td colSpan={2} className="text-xs font-semibold uppercase tracking-wider px-4 py-1.5 text-ghost">In Status</td>
               </tr>
               {epicItems.map((item) => {
                 const priority = PRIORITY[item.priority]
@@ -203,27 +196,27 @@ function EpicRow({ epic, epicItems, doneItems, totalEstimate, progress, daysUnti
                   <tr
                     key={item.id}
                     onClick={(e) => { e.stopPropagation(); onSelectItem(item) }}
-                    className={`cursor-pointer transition-colors border-b ${isDark ? 'hover:bg-[#1e1f25] border-[#2e303a] bg-[#16171d]' : 'hover:bg-blue-50/40 border-gray-100 bg-gray-50/50'}`}
+                    className="cursor-pointer transition-colors border-b hover:bg-surface border-line bg-panel"
                   >
                     <td></td>
                     <td className="px-4 py-2">
                       <div className="flex items-center gap-2">
-                        <span className={`text-[11px] font-mono font-medium ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`}>{item.display_id}</span>
-                        <span className={`text-[12px] font-medium truncate ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>{item.title}</span>
+                        <span className="text-xs font-mono font-medium text-accent">{item.display_id}</span>
+                        <span className="text-sm font-medium truncate text-ink/80">{item.title}</span>
                       </div>
                     </td>
                     <td className="px-4 py-2">
-                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded ${
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
                         status?.is_done
                           ? 'bg-green-50 text-green-700 border border-green-200'
-                          : isDark ? 'bg-[#2e303a] text-gray-200' : 'bg-gray-100 text-gray-700'
+                          : 'bg-line text-ink/80'
                       }`}>{status?.name}</span>
                     </td>
                     <td className="px-4 py-2">
-                      <span className="text-[12px] font-bold" style={{ color: priority.color }}>{priority.label}</span>
+                      <span className="text-sm font-bold" style={{ color: priority.color }}>{priority.label}</span>
                     </td>
                     <td className="px-4 py-2">
-                      <span className={`text-[12px] font-semibold ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>
+                      <span className="text-sm font-semibold text-ink/80">
                         {item.estimate_minutes ? formatEstimate(item.estimate_minutes) : '—'}
                       </span>
                     </td>
@@ -235,10 +228,10 @@ function EpicRow({ epic, epicItems, doneItems, totalEstimate, progress, daysUnti
               })}
             </>
           )}
-          <tr className={`border-b ${isDark ? 'border-[#2e303a] bg-[#16171d]' : 'border-gray-100 bg-gray-50/50'}`}>
+          <tr className="border-b border-line bg-panel">
             <td></td>
             <td colSpan={6} className="px-4 py-2">
-              <button className={`text-[12px] font-medium ${isDark ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-600 hover:text-indigo-700'}`}>
+              <button className="text-sm font-medium text-accent hover:opacity-80">
                 + Add item to {epic.name}
               </button>
             </td>

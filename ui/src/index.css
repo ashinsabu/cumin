@@ -1,5 +1,68 @@
 @import "tailwindcss";
+@import "@fontsource/geist/400.css";
+@import "@fontsource/geist/500.css";
+@import "@fontsource/geist/600.css";
+@import "@fontsource/geist-mono/400.css";
+
+@theme inline {
+  --color-canvas:  var(--c-canvas);
+  --color-surface: var(--c-surface);
+  --color-raised:  var(--c-raised);
+  --color-panel:   var(--c-panel);
+  --color-line:    var(--c-line);
+  --color-ink:     var(--c-ink);
+  --color-dim:     var(--c-dim);
+  --color-ghost:   var(--c-ghost);
+  --color-accent:  var(--c-accent);
+  --radius-chrome: var(--c-radius-chrome);
+  --radius-card:   var(--c-radius-card);
+  --radius-badge:  var(--c-radius-badge);
+  --shadow-card:   var(--c-shadow-card);
+  --shadow-modal:  var(--c-shadow-modal);
+  --shadow-glow:   var(--c-shadow-glow);
+}
+
+/* Default: Cyber Dark */
+:root {
+  --c-canvas:  #09090b;
+  --c-surface: #111113;
+  --c-raised:  #161618;
+  --c-panel:   #0c0c0e;
+  --c-line:    #1e1e24;
+  --c-ink:     #fafafa;
+  --c-dim:     #71717a;
+  --c-ghost:   #3f3f46;
+  --c-accent:  #e11d48;
+  --c-accent-fg: #ffffff;
+  --c-radius-chrome: 0px;
+  --c-radius-card:   4px;
+  --c-radius-badge:  2px;
+  --c-shadow-card:   none;
+  --c-shadow-modal:  0 0 0 1px var(--c-line);
+  --c-shadow-glow:   0 0 0 2px var(--c-accent);
+  --c-font-body: 'Geist', system-ui, sans-serif;
+  --c-font-mono: 'Geist Mono', ui-monospace, monospace;
+  --c-blur:      none;
+  --c-panel-bg:  none;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
 
 body {
   margin: 0;
+  background-color: var(--c-canvas);
+  color: var(--c-ink);
+  font-family: var(--c-font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.font-data {
+  font-family: var(--c-font-mono);
 }

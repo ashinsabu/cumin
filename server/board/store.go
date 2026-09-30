@@ -106,11 +106,6 @@ func (s *Store) CreateStatus(ctx context.Context, boardID, name string, position
 	return &st, nil
 }
 
-func (s *Store) DeleteStatus(ctx context.Context, id string) error {
-	_, err := s.DB.Exec(ctx, `DELETE FROM statuses WHERE id = $1`, id)
-	return err
-}
-
 func (s *Store) DeleteStatusForBoard(ctx context.Context, id, boardID string) error {
 	_, err := s.DB.Exec(ctx, `DELETE FROM statuses WHERE id = $1 AND board_id = $2`, id, boardID)
 	return err

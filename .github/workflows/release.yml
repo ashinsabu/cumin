@@ -46,7 +46,7 @@ jobs:
         run: npm install -g @railway/cli
 
       - name: Deploy
-        run: cd server && railway up --service cumin --detach
+        run: railway up --service cumin --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 

@@ -1,10 +1,8 @@
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd'
-import { useTheme } from '../context/ThemeContext'
 import { useBoard } from '../context/BoardContext'
 import { ItemCard } from '../components/ItemCard'
 
 export function BoardView() {
-  const { isDark } = useTheme()
   const { items, statuses, moveItem, selectItem } = useBoard()
 
   function handleDragEnd(result: DropResult) {
@@ -21,10 +19,10 @@ export function BoardView() {
             return (
               <div key={status.id} className="min-w-[200px] flex-1 flex flex-col">
                 <div className="flex items-center gap-2 mb-2 px-1">
-                  <h3 className={`text-[11px] font-bold uppercase tracking-wider ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-dim">
                     {status.name}
                   </h3>
-                  <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${isDark ? 'text-gray-400 bg-[#2e303a]' : 'text-gray-500 bg-gray-200'}`}>
+                  <span className="text-xs font-medium px-1.5 py-0.5 rounded-full text-dim bg-line">
                     {columnItems.length}
                   </span>
                 </div>
@@ -33,10 +31,10 @@ export function BoardView() {
                     <div
                       ref={provided.innerRef}
                       {...provided.droppableProps}
-                      className={`flex flex-col gap-2 flex-1 rounded-lg p-2.5 min-h-[200px] transition-colors ${
+                      className={`flex flex-col gap-2 flex-1 rounded-[var(--c-radius-card)] p-2.5 min-h-[200px] transition-colors ${
                         snapshot.isDraggingOver
-                          ? isDark ? 'bg-indigo-500/10 border-2 border-indigo-500/30' : 'bg-indigo-50 border-2 border-indigo-200'
-                          : isDark ? 'bg-[#16171d] border border-[#2e303a]' : 'bg-gray-100 border border-gray-200'
+                          ? 'bg-accent/5 border-2 border-accent/20'
+                          : 'bg-surface border border-line'
                       }`}
                     >
                       {columnItems.map((item, index) => (
