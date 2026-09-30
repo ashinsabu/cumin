@@ -17,6 +17,7 @@ export function ProjectsView() {
   const [form, setForm] = useState({ name: '', prefix: '', color: '#6b7280', description: '' })
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null)
 
   useEffect(() => {
     fetchProjects()
@@ -70,12 +71,18 @@ export function ProjectsView() {
   }
 
   async function handleDelete(id: string, name: string) {
-    if (!confirm(`Delete "${name}"?\n\nExisting items will NOT be deleted but will lose their project association. This cannot be undone.`)) return
+    setConfirmDelete({ id, name })
+  }
+
+  async function confirmDeleteProject() {
+    if (!confirmDelete) return
     try {
-      const res = await fetch(`/api/projects/${id}`, { method: 'DELETE', credentials: 'include' })
+      const res = await fetch(`/api/projects/${confirmDelete.id}`, { method: 'DELETE', credentials: 'include' })
       if (res.ok) fetchProjects()
     } catch {
       // silently ignore — list will stay as-is
+    } finally {
+      setConfirmDelete(null)
     }
   }
 
@@ -145,6 +152,32 @@ export function ProjectsView() {
             </button>
           </form>
           {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
+        </div>
+      )}
+
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setConfirmDelete(null)} />
+          <div className="relative z-10 w-full max-w-sm rounded-[var(--c-radius-card)] border bg-raised border-line shadow-[var(--c-shadow-modal)] p-5 flex flex-col gap-4">
+            <div>
+              <p className="text-sm font-semibold text-ink">Delete "{confirmDelete.name}"?</p>
+              <p className="text-xs text-dim mt-1">All items in this project will be moved to trash. You can restore them within 30 days.</p>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setConfirmDelete(null)}
+                className="px-3 py-1.5 text-sm rounded-[var(--c-radius-card)] text-dim hover:text-ink hover:bg-line"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteProject}
+                className="px-4 py-1.5 text-sm font-semibold rounded-[var(--c-radius-card)] bg-red-500 text-white hover:opacity-90"
+              >
+                Delete project
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
