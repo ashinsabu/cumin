@@ -4,7 +4,6 @@ import { useBoard } from '../context/BoardContext'
 import { PRIORITY } from '../constants'
 import { formatEstimate } from '../hooks/useFormat'
 import { StatusDurationBar } from '../components/StatusDurationBar'
-import type { Item } from '../types'
 
 export function BacklogView() {
   const { isDark } = useTheme()

@@ -42,7 +42,7 @@ export function AllItemsView() {
     if (filters.status !== 'all' && item.status_id !== filters.status) return false
     if (search) {
       const q = search.toLowerCase()
-      if (!item.title.toLowerCase().includes(q) && !item.display_id.toLowerCase().includes(q) && !item.epic_name.toLowerCase().includes(q)) return false
+      if (!item.title.toLowerCase().includes(q) && !item.display_id.toLowerCase().includes(q) && !(item.epic_name ?? '').toLowerCase().includes(q)) return false
     }
     return true
   })
