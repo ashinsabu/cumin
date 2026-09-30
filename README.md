@@ -60,14 +60,13 @@ Copy `server/.env.example.production` to `.env` on the server and fill in values
 
 ## Releasing
 
-Tag and push — CI verifies the build, then backend (Railway) and frontend (Firebase) deploy in parallel from the same commit.
-
 ```sh
-git tag v1.x.x -m "brief summary"
-git push origin v1.x.x
+make release          # patch bump (v1.0.0 → v1.0.1)
+make release BUMP=minor  # v1.0.0 → v1.1.0
+make release BUMP=major  # v1.0.0 → v2.0.0
 ```
 
-If CI fails, nothing deploys. Fix the build, re-tag, push again.
+The script detects the current version, builds a changelog from commits since the last tag, shows a preview, and tags + pushes on confirm. CI verifies the build first — if it fails, nothing deploys.
 
 **One-time setup:**
 1. `firebase init hosting` from repo root — public dir: `ui/dist`, SPA: yes
