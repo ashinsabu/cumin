@@ -1,13 +1,37 @@
 #!/usr/bin/env bash
-# Usage: ./scripts/release.sh [major|minor|patch]
+# Usage:
+#   ./scripts/release.sh [major|minor|patch]   — bump and release
+#   ./scripts/release.sh --tag v1.2.3          — redeploy an existing tag
 set -e
-
-BUMP="${1:-patch}"
 
 # Must be run from repo root
 if [ ! -f "firebase.json" ]; then
   echo "error: run from repo root" && exit 1
 fi
+
+# ── Redeploy existing tag ─────────────────────────────────────────────────────
+if [ "$1" = "--tag" ]; then
+  TAG="$2"
+  if [ -z "$TAG" ]; then
+    echo "error: --tag requires a version, e.g. --tag v1.2.3" && exit 1
+  fi
+  if ! git tag | grep -qx "$TAG"; then
+    echo "error: tag $TAG does not exist" && exit 1
+  fi
+  echo ""
+  echo "  Redeploying $TAG"
+  read -p "  Push $TAG to trigger deploy? [y/N] " CONFIRM
+  if [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]]; then
+    echo "aborted" && exit 0
+  fi
+  git push -f origin "$TAG"
+  echo ""
+  echo "  Deploy triggered — watch CI at https://github.com/ashinsabu/cumin/actions"
+  exit 0
+fi
+
+# ── New release ───────────────────────────────────────────────────────────────
+BUMP="${1:-patch}"
 
 # Must be on main, no uncommitted changes
 BRANCH=$(git branch --show-current)
