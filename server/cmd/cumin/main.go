@@ -51,40 +51,43 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(applogger.RequestLogger)
 	r.Use(middleware.Recoverer)
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   cfg.AllowedOriginsList(),
-		AllowedMethods:   []string{"GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Content-Type", "Authorization"},
-		AllowCredentials: true,
-	}))
 
+	// Browser-navigation routes: no CORS needed (not XHR, Origin header from Google would be blocked)
 	r.Get("/healthz", healthz(pool))
 	r.Get("/api/version", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(version.Get().JSON())
 	})
-
-	// Public auth routes
 	oauthHandler := newAuthHandler(cfg, pool)
 	r.Get("/api/auth/google/login", oauthHandler.HandleLogin)
 	r.Get("/api/auth/google/callback", oauthHandler.HandleCallback)
 
-	// Protected routes
+	// All XHR API routes — CORS required
 	r.Group(func(r chi.Router) {
-		if cfg.AuthDisabled {
-			if !cfg.IsDev() {
-				slog.Error("AUTH_DISABLED=true is not allowed outside of development environment")
-				os.Exit(1)
+		r.Use(cors.Handler(cors.Options{
+			AllowedOrigins:   cfg.AllowedOriginsList(),
+			AllowedMethods:   []string{"GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"},
+			AllowedHeaders:   []string{"Content-Type", "Authorization"},
+			AllowCredentials: true,
+		}))
+
+		// Protected routes
+		r.Group(func(r chi.Router) {
+			if cfg.AuthDisabled {
+				if !cfg.IsDev() {
+					slog.Error("AUTH_DISABLED=true is not allowed outside of development environment")
+					os.Exit(1)
+				}
+				r.Use(auth.DevBypass("00000000-0000-0000-0000-000000000001"))
+			} else {
+				r.Use(auth.Middleware(cfg.JWTSecret))
 			}
-			r.Use(auth.DevBypass("00000000-0000-0000-0000-000000000001"))
-		} else {
-			r.Use(auth.Middleware(cfg.JWTSecret))
-		}
 
-		r.Get("/api/auth/me", oauthHandler.HandleMe)
-		r.Post("/api/auth/logout", oauthHandler.HandleLogout)
+			r.Get("/api/auth/me", oauthHandler.HandleMe)
+			r.Post("/api/auth/logout", oauthHandler.HandleLogout)
 
-		registerDomainRoutes(r, pool)
+			registerDomainRoutes(r, pool)
+		})
 	})
 
 	slog.Info("cumin server starting", "port", cfg.Port, "auth_disabled", cfg.AuthDisabled)
