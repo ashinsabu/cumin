@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
 import type { Epic } from '../types'
 import { useBoard } from '../context/BoardContext'
 import { formatEstimate } from '../hooks/useFormat'
 import { ItemRow } from './item/ItemRow'
 import { QuickAddItem } from './item/QuickAddItem'
+import { fade, slideRight, slideUp } from '../lib/motionVariants'
 
 const API = import.meta.env.VITE_API_URL ?? ''
 
@@ -91,10 +93,13 @@ export function EpicModal({ epic, onClose }: { epic: Epic; onClose: () => void }
     }
   }
 
-  // Minimized state
   if (mode === 'minimized') {
     return (
-      <div
+      <motion.div
+        variants={slideUp}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
         className="fixed bottom-4 right-4 z-50 flex items-center gap-2.5 px-4 py-2.5 rounded-full shadow-lg bg-raised border border-line cursor-pointer hover:border-accent/40 transition-colors"
         onClick={() => setMode('open')}
       >
@@ -105,15 +110,28 @@ export function EpicModal({ epic, onClose }: { epic: Epic; onClose: () => void }
           onClick={(e) => { e.stopPropagation(); onClose() }}
           className="ml-1 text-ghost hover:text-ink transition-colors leading-none"
         >×</button>
-      </div>
+      </motion.div>
     )
   }
 
   return (
     <>
-      <div className="fixed inset-0 z-40 bg-black/20" onClick={onClose} />
+      <motion.div
+        variants={fade}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        transition={{ duration: 0.15 }}
+        className="fixed inset-0 z-40 bg-black/20"
+        onClick={onClose}
+      />
 
-      <div className="fixed top-0 right-0 bottom-0 z-50 flex flex-col w-[520px] bg-raised shadow-2xl border-l border-line overflow-hidden">
+      <motion.div
+        variants={slideRight}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
+        className="fixed top-0 right-0 bottom-0 z-50 flex flex-col w-[520px] bg-raised shadow-2xl border-l border-line overflow-hidden">
         {/* Header */}
         <div className="shrink-0 px-5 py-3.5 border-b border-line bg-panel flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -257,7 +275,7 @@ export function EpicModal({ epic, onClose }: { epic: Epic; onClose: () => void }
             </div>
           )}
         </div>
-      </div>
+      </motion.div>
     </>
   )
 }
