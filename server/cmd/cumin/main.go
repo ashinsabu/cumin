@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -15,9 +15,11 @@ import (
 	"github.com/ashinsabu/cumin/server/db"
 	"github.com/ashinsabu/cumin/server/epic"
 	"github.com/ashinsabu/cumin/server/item"
+	applogger "github.com/ashinsabu/cumin/server/logger"
 	"github.com/ashinsabu/cumin/server/project"
 	"github.com/ashinsabu/cumin/server/sprint"
 	"github.com/ashinsabu/cumin/server/trash"
+	"github.com/ashinsabu/cumin/server/version"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -25,34 +27,42 @@ import (
 )
 
 func main() {
+	applogger.Setup()
+
 	cfg := config.Load()
 
 	migrationsPath := migrationsDir()
 	if err := db.RunMigrations(cfg.DatabaseURL, migrationsPath); err != nil {
-		log.Fatalf("migrations: %v", err)
+		slog.Error("migrations failed", "err", err)
+		os.Exit(1)
 	}
-	log.Println("migrations applied")
+	slog.Info("migrations applied")
 
 	ctx := context.Background()
 	pool, err := db.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("db connect: %v", err)
+		slog.Error("db connect failed", "err", err)
+		os.Exit(1)
 	}
 	defer pool.Close()
 
 	startPurgeWorker(pool)
 
 	r := chi.NewRouter()
-	r.Use(middleware.Logger)
+	r.Use(applogger.RequestLogger)
 	r.Use(middleware.Recoverer)
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{cfg.FrontendURL},
+		AllowedOrigins:   cfg.AllowedOriginsList(),
 		AllowedMethods:   []string{"GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Content-Type", "Authorization"},
 		AllowCredentials: true,
 	}))
 
 	r.Get("/healthz", healthz(pool))
+	r.Get("/api/version", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(version.Get().JSON())
+	})
 
 	// Public auth routes
 	oauthHandler := newAuthHandler(cfg, pool)
@@ -63,7 +73,8 @@ func main() {
 	r.Group(func(r chi.Router) {
 		if cfg.AuthDisabled {
 			if !cfg.IsDev() {
-				log.Fatal("AUTH_DISABLED=true is not allowed outside of development environment")
+				slog.Error("AUTH_DISABLED=true is not allowed outside of development environment")
+				os.Exit(1)
 			}
 			r.Use(auth.DevBypass("00000000-0000-0000-0000-000000000001"))
 		} else {
@@ -76,9 +87,10 @@ func main() {
 		registerDomainRoutes(r, pool)
 	})
 
-	log.Printf("cumin server starting on :%s (auth_disabled=%v)", cfg.Port, cfg.AuthDisabled)
+	slog.Info("cumin server starting", "port", cfg.Port, "auth_disabled", cfg.AuthDisabled)
 	if err := http.ListenAndServe(":"+cfg.Port, r); err != nil {
-		log.Fatal(err)
+		slog.Error("server stopped", "err", err)
+		os.Exit(1)
 	}
 }
 
@@ -108,7 +120,7 @@ func startPurgeWorker(pool *pgxpool.Pool) {
 				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cancel()
 				if _, err := pool.Exec(ctx, query); err != nil {
-					log.Printf("purge worker: %v", err)
+					slog.Error("purge worker failed", "err", err)
 				}
 			}
 			purge(`DELETE FROM items    WHERE deleted_at < NOW() - INTERVAL '30 days'`)
@@ -122,11 +134,11 @@ func newAuthHandler(cfg config.Config, pool *pgxpool.Pool) *auth.Handler {
 	repo := auth.NewRepo(pool)
 	provisioner := auth.NewProvisioner(pool)
 	return auth.NewHandler(auth.OAuthConfig{
-		ClientID:     cfg.GoogleClientID,
-		ClientSecret: cfg.GoogleClientSecret,
-		RedirectURL:  cfg.GoogleRedirectURL,
-		FrontendURL:  cfg.FrontendURL,
-		JWTSecret:    cfg.JWTSecret,
+		ClientID:       cfg.GoogleClientID,
+		ClientSecret:   cfg.GoogleClientSecret,
+		RedirectURL:    cfg.GoogleRedirectURL,
+		AllowedOrigins: cfg.AllowedOriginsList(),
+		JWTSecret:      cfg.JWTSecret,
 	}, repo, provisioner.ProvisionNewUser)
 }
 

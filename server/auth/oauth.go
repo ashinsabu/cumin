@@ -6,32 +6,35 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"net/url"
 	"time"
 
+	applogger "github.com/ashinsabu/cumin/server/logger"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
 
 type OAuthConfig struct {
-	ClientID     string
-	ClientSecret string
-	RedirectURL  string
-	FrontendURL  string
-	JWTSecret    string
+	ClientID       string
+	ClientSecret   string
+	RedirectURL    string
+	AllowedOrigins []string
+	JWTSecret      string
 }
 
 type GoogleUserInfo struct {
-	Sub        string `json:"sub"`
-	Email      string `json:"email"`
-	Name       string `json:"name"`
-	Picture    string `json:"picture"`
+	Sub     string `json:"sub"`
+	Email   string `json:"email"`
+	Name    string `json:"name"`
+	Picture string `json:"picture"`
 }
 
 type Handler struct {
-	oauth    *oauth2.Config
-	repo     *Repo
-	cfg      OAuthConfig
+	oauth     *oauth2.Config
+	repo      *Repo
+	cfg       OAuthConfig
 	provision func(ctx context.Context, userID string) error
 }
 
@@ -50,9 +53,25 @@ func NewHandler(cfg OAuthConfig, repo *Repo, provision func(ctx context.Context,
 	}
 }
 
+func (h *Handler) frontendURL() string {
+	if len(h.cfg.AllowedOrigins) > 0 {
+		return h.cfg.AllowedOrigins[0]
+	}
+	return ""
+}
+
+func (h *Handler) authError(w http.ResponseWriter, r *http.Request, reason string) {
+	applogger.FromContext(r.Context()).Warn("auth: login failed",
+		slog.String("reason", reason),
+		slog.String("ip", r.RemoteAddr),
+	)
+	http.Redirect(w, r, h.frontendURL()+"/auth-error?reason="+url.QueryEscape(reason), http.StatusTemporaryRedirect)
+}
+
 func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
+		applogger.FromContext(r.Context()).Error("auth: failed to generate state", slog.Any("err", err))
 		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
 		return
 	}
@@ -62,63 +81,77 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		Value:    state,
 		Path:     "/",
 		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteLaxMode,
 		MaxAge:   300,
 	})
-	url := h.oauth.AuthCodeURL(state, oauth2.AccessTypeOffline)
-	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
+	authURL := h.oauth.AuthCodeURL(state, oauth2.AccessTypeOffline)
+	http.Redirect(w, r, authURL, http.StatusTemporaryRedirect)
 }
 
 func (h *Handler) HandleCallback(w http.ResponseWriter, r *http.Request) {
+	l := applogger.FromContext(r.Context())
+
 	stateCookie, err := r.Cookie("oauth_state")
 	if err != nil || r.URL.Query().Get("state") != stateCookie.Value {
-		http.Error(w, `{"error":"invalid state"}`, http.StatusForbidden)
+		h.authError(w, r, "invalid_state")
 		return
 	}
 	http.SetCookie(w, &http.Cookie{Name: "oauth_state", Value: "", Path: "/", MaxAge: -1})
 
 	code := r.URL.Query().Get("code")
 	if code == "" {
-		http.Error(w, "missing code", http.StatusBadRequest)
+		h.authError(w, r, "missing_code")
 		return
 	}
 
 	token, err := h.oauth.Exchange(r.Context(), code)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("token exchange: %v", err), http.StatusInternalServerError)
+		l.Error("auth: token exchange failed", slog.Any("err", err))
+		h.authError(w, r, "token_exchange_failed")
 		return
 	}
 
 	userInfo, err := fetchGoogleUserInfo(r.Context(), token.AccessToken)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("fetch user info: %v", err), http.StatusInternalServerError)
+		l.Error("auth: google userinfo failed", slog.Any("err", err))
+		h.authError(w, r, "server_error")
 		return
 	}
 
 	isNew, err := h.repo.IsNewUser(r.Context(), userInfo.Sub)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("check user: %v", err), http.StatusInternalServerError)
+		l.Error("auth: IsNewUser failed", slog.String("email", userInfo.Email), slog.Any("err", err))
+		h.authError(w, r, "server_error")
 		return
 	}
 
 	user, err := h.repo.UpsertUser(r.Context(), userInfo.Sub, userInfo.Email, userInfo.Name, userInfo.Picture)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("upsert user: %v", err), http.StatusInternalServerError)
+		l.Error("auth: UpsertUser failed", slog.String("email", userInfo.Email), slog.Any("err", err))
+		h.authError(w, r, "server_error")
 		return
 	}
 
 	if isNew && h.provision != nil {
 		if err := h.provision(r.Context(), user.ID); err != nil {
-			http.Error(w, fmt.Sprintf("provision: %v", err), http.StatusInternalServerError)
+			l.Error("auth: provision failed", slog.String("user_id", user.ID), slog.Any("err", err))
+			h.authError(w, r, "server_error")
 			return
 		}
 	}
 
 	jwtToken, err := IssueToken(h.cfg.JWTSecret, user.ID, user.Email)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("issue token: %v", err), http.StatusInternalServerError)
+		l.Error("auth: JWT issue failed", slog.String("user_id", user.ID), slog.Any("err", err))
+		h.authError(w, r, "server_error")
 		return
 	}
+
+	l.Info("auth: login success",
+		slog.String("email", userInfo.Email),
+		slog.String("user_id", user.ID),
+		slog.Bool("new_user", isNew),
+	)
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     "token",
@@ -130,7 +163,7 @@ func (h *Handler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   int(24 * time.Hour / time.Second),
 	})
 
-	http.Redirect(w, r, h.cfg.FrontendURL, http.StatusTemporaryRedirect)
+	http.Redirect(w, r, h.frontendURL(), http.StatusTemporaryRedirect)
 }
 
 func (h *Handler) HandleMe(w http.ResponseWriter, r *http.Request) {
@@ -141,6 +174,8 @@ func (h *Handler) HandleMe(w http.ResponseWriter, r *http.Request) {
 	}
 	user, err := h.repo.GetUserByID(r.Context(), userID)
 	if err != nil {
+		applogger.FromContext(r.Context()).Error("auth: GetUserByID failed",
+			slog.String("user_id", userID), slog.Any("err", err))
 		http.Error(w, `{"error":"user not found"}`, http.StatusNotFound)
 		return
 	}
