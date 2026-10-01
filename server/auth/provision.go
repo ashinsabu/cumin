@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"unicode"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -17,11 +19,39 @@ func NewProvisioner(db *pgxpool.Pool) *Provisioner {
 	return &Provisioner{db: db}
 }
 
+// defaultProjectName returns the user's display name cleaned for use as a project name,
+// falling back to "Personal" if empty.
+func defaultProjectName(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "Personal"
+	}
+	return name
+}
+
+// defaultProjectPrefix returns the first 3 uppercase alphanumeric chars from name,
+// falling back to "PRJ" if name yields fewer than 1 char.
+func defaultProjectPrefix(name string) string {
+	var chars []rune
+	for _, r := range strings.ToUpper(name) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			chars = append(chars, r)
+			if len(chars) == 3 {
+				break
+			}
+		}
+	}
+	if len(chars) == 0 {
+		return "PRJ"
+	}
+	return string(chars)
+}
+
 // ProvisionNewUser creates the full default setup for a new user:
-// board → statuses → default project → Study epic → 2 starter items.
+// board → statuses → default project (named after the user) → Study epic → 2 starter items.
 // Idempotent via ON CONFLICT (user_id) DO NOTHING on the board insert.
 // If a concurrent login already provisioned this user, returns nil immediately.
-func (p *Provisioner) ProvisionNewUser(ctx context.Context, userID string) error {
+func (p *Provisioner) ProvisionNewUser(ctx context.Context, userID, name string) error {
 	tx, err := p.db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
@@ -71,13 +101,15 @@ func (p *Provisioner) ProvisionNewUser(ctx context.Context, userID string) error
 		}
 	}
 
-	// Default project
+	// Default project named after the user
+	projName := defaultProjectName(name)
+	projPrefix := defaultProjectPrefix(name)
 	var projectID string
 	if err := tx.QueryRow(ctx, `
 		INSERT INTO projects (board_id, name, prefix, color, description)
-		VALUES ($1, 'Life', 'LIF', '#6366f1', 'Default project for life goals')
+		VALUES ($1, $2, $3, '#6366f1', 'Default project')
 		RETURNING id
-	`, boardID).Scan(&projectID); err != nil {
+	`, boardID, projName, projPrefix).Scan(&projectID); err != nil {
 		return fmt.Errorf("create default project: %w", err)
 	}
 

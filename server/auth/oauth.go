@@ -35,10 +35,10 @@ type Handler struct {
 	oauth     *oauth2.Config
 	repo      *Repo
 	cfg       OAuthConfig
-	provision func(ctx context.Context, userID string) error
+	provision func(ctx context.Context, userID, name string) error
 }
 
-func NewHandler(cfg OAuthConfig, repo *Repo, provision func(ctx context.Context, userID string) error) *Handler {
+func NewHandler(cfg OAuthConfig, repo *Repo, provision func(ctx context.Context, userID, name string) error) *Handler {
 	return &Handler{
 		oauth: &oauth2.Config{
 			ClientID:     cfg.ClientID,
@@ -135,7 +135,7 @@ func (h *Handler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if isNew && h.provision != nil {
-		if err := h.provision(r.Context(), user.ID); err != nil {
+		if err := h.provision(r.Context(), user.ID, userInfo.Name); err != nil {
 			l.Error("auth: provision failed", slog.String("user_id", user.ID), slog.Any("err", err))
 			h.authError(w, r, "server_error")
 			return
