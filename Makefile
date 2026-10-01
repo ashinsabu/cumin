@@ -14,11 +14,13 @@ check-ui:
 	@cd ui && npm run build -- --mode development 2>&1 | tail -5
 
 # New release:    make release [BUMP=minor|major]  (default: patch)
+# Non-interactive: make release YES=true
 # Redeploy tag:   make release TAG=v1.2.3
 BUMP ?= patch
+YES  ?= false
 release:
 ifdef TAG
-	@./scripts/release.sh --tag $(TAG)
+	@./scripts/release.sh --tag $(TAG) $(if $(filter true,$(YES)),-y,)
 else
-	@./scripts/release.sh $(BUMP)
+	@./scripts/release.sh $(BUMP) $(if $(filter true,$(YES)),-y,)
 endif

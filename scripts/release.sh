@@ -1,8 +1,21 @@
 #!/usr/bin/env bash
 # Usage:
-#   ./scripts/release.sh [major|minor|patch]   — bump and release
-#   ./scripts/release.sh --tag v1.2.3          — redeploy an existing tag
+#   ./scripts/release.sh [major|minor|patch]      — bump and release (interactive)
+#   ./scripts/release.sh [major|minor|patch] -y   — bump and release (non-interactive)
+#   ./scripts/release.sh --tag v1.2.3             — redeploy an existing tag
 set -e
+
+# Parse -y / --yes flag from any position
+YES=false
+ARGS=()
+for arg in "$@"; do
+  if [[ "$arg" == "-y" || "$arg" == "--yes" ]]; then
+    YES=true
+  else
+    ARGS+=("$arg")
+  fi
+done
+set -- "${ARGS[@]}"
 
 # Must be run from repo root
 if [ ! -f "firebase.json" ]; then
@@ -20,9 +33,11 @@ if [ "$1" = "--tag" ]; then
   fi
   echo ""
   echo "  Redeploying $TAG"
-  read -p "  Push $TAG to trigger deploy? [y/N] " CONFIRM
-  if [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]]; then
-    echo "aborted" && exit 0
+  if [[ "$YES" != "true" ]]; then
+    read -p "  Push $TAG to trigger deploy? [y/N] " CONFIRM
+    if [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]]; then
+      echo "aborted" && exit 0
+    fi
   fi
   git push -f origin "$TAG"
   echo ""
@@ -81,9 +96,11 @@ echo ""
 echo "  Changelog:"
 echo "$CHANGELOG" | sed 's/^/    /'
 echo ""
-read -p "  Tag and push $NEXT? [y/N] " CONFIRM
-if [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]]; then
-  echo "aborted" && exit 0
+if [[ "$YES" != "true" ]]; then
+  read -p "  Tag and push $NEXT? [y/N] " CONFIRM
+  if [[ "$CONFIRM" != "y" && "$CONFIRM" != "Y" ]]; then
+    echo "aborted" && exit 0
+  fi
 fi
 
 TAG_MSG=$(printf "%s\n\n%s" "$NEXT" "$CHANGELOG")
