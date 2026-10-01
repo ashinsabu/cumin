@@ -9,7 +9,7 @@ interface Props {
   placeholder?: string
 }
 
-export function QuickAddItem({ epicId, projectId, sprintId, onDone, placeholder }: Props) {
+export function QuickAddItem({ epicId, projectId, onDone, placeholder }: Props) {
   const { createItem, projects } = useBoard()
   const [title, setTitle] = useState('')
   const [saving, setSaving] = useState(false)

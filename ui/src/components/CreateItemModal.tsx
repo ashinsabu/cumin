@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useBoard } from '../context/BoardContext'
 import { FilterSelect } from './FilterSelect'
-import { parseEstimate, formatEstimate } from '../hooks/useFormat'
+import { parseEstimate } from '../hooks/useFormat'
 
 type Props = {
   onClose: () => void

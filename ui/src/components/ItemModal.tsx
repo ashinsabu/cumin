@@ -31,7 +31,6 @@ export function ItemModal({ item, onClose }: { item: Item; onClose: () => void }
   const [deleting, setDeleting] = useState(false)
 
   const priorityConfig = PRIORITY[item.priority] ?? PRIORITY[4]
-  const epicColor = item.epic_color ?? '#6b7280'
   const sprints = item.sprints ?? []
 
   const isDirty =

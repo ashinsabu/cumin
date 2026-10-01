@@ -153,13 +153,18 @@ func (h *Handler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 		slog.Bool("new_user", isNew),
 	)
 
+	secure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+	sameSite := http.SameSiteLaxMode
+	if secure {
+		sameSite = http.SameSiteNoneMode
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     "token",
 		Value:    jwtToken,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   r.TLS != nil,
-		SameSite: http.SameSiteLaxMode,
+		Secure:   secure,
+		SameSite: sameSite,
 		MaxAge:   int(24 * time.Hour / time.Second),
 	})
 
