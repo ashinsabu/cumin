@@ -3,6 +3,7 @@ import { formatEstimate } from '../hooks/useFormat'
 import { FilterSelect } from '../components/FilterSelect'
 import { SearchInput } from '../components/SearchInput'
 import { EpicModal } from '../components/EpicModal'
+import { CreateEpicModal } from '../components/CreateEpicModal'
 import { useState } from 'react'
 
 const TYPE_STYLES: Record<string, string> = {
@@ -15,6 +16,7 @@ export function EpicsView() {
   const { items, statuses, epics, selectEpic, selectedEpic } = useBoard()
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
+  const [showCreate, setShowCreate] = useState(false)
 
   const filtered = epics.filter((epic) => {
     if (typeFilter !== 'all' && epic.type !== typeFilter) return false
@@ -27,6 +29,7 @@ export function EpicsView() {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
+      {showCreate && <CreateEpicModal onClose={() => setShowCreate(false)} />}
       {selectedEpic && <EpicModal epic={selectedEpic} onClose={() => selectEpic(null)} />}
 
       <div className="shrink-0 px-4 py-3 border-b flex items-center gap-3 border-line">
@@ -41,8 +44,14 @@ export function EpicsView() {
             { value: 'catchall', label: 'Catch-all' },
           ]}
         />
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-3">
           <span className="text-xs text-ghost">{filtered.length} epics</span>
+          <button
+            onClick={() => setShowCreate(true)}
+            className="text-xs font-semibold px-3 py-1.5 rounded-[var(--c-radius-card)] bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
+          >
+            + New Epic
+          </button>
         </div>
       </div>
 
