@@ -18,7 +18,13 @@ jobs:
           cache-dependency-path: server/go.sum
 
       - name: Build backend
-        run: cd server && go build ./...
+        run: |
+          cd server
+          go build \
+            -ldflags "-X github.com/ashinsabu/cumin/server/version.GitCommit=$(git rev-parse --short HEAD) \
+                      -X github.com/ashinsabu/cumin/server/version.GitBranch=$(git rev-parse --abbrev-ref HEAD) \
+                      -X github.com/ashinsabu/cumin/server/version.Version=${{ github.ref_name }}" \
+            ./...
 
       - name: Vet backend
         run: cd server && go vet ./...
@@ -68,6 +74,8 @@ jobs:
 
       - name: Build
         run: cd ui && npm run build
+        env:
+          VITE_API_URL: https://api.cumin.ashinsabu.com
 
       - name: Deploy to Firebase Hosting
         run: npx firebase-tools deploy --only hosting --token "${{ secrets.FIREBASE_TOKEN }}"
