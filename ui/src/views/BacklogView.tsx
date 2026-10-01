@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useBoard } from '../context/BoardContext'
+import { usePersistentState } from '../hooks/usePersistentState'
 import { PRIORITY } from '../constants'
 import { formatEstimate } from '../hooks/useFormat'
 import { StatusDurationBar } from '../components/StatusDurationBar'
@@ -19,10 +20,10 @@ function SortIcon({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; s
 export function BacklogView() {
   const { items, statuses, epics: epicList, selectItem } = useBoard()
   const [search, setSearch] = useState('')
-  const [filters, setFilters] = useState<{ epic: string; priority: string }>({ epic: 'all', priority: 'all' })
+  const [filters, setFilters] = usePersistentState<{ epic: string; priority: string }>('cumin:backlog:filters', { epic: 'all', priority: 'all' })
   const [showCreate, setShowCreate] = useState(false)
-  const [sortKey, setSortKey] = useState<SortKey>('priority')
-  const [sortDir, setSortDir] = useState<SortDir>('asc')
+  const [sortKey, setSortKey] = usePersistentState<SortKey>('cumin:backlog:sortKey', 'priority')
+  const [sortDir, setSortDir] = usePersistentState<SortDir>('cumin:backlog:sortDir', 'asc')
 
   const epicOptions = useMemo(() => [
     { value: 'all', label: 'Epic' },

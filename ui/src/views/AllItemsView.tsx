@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useBoard } from '../context/BoardContext'
+import { usePersistentState } from '../hooks/usePersistentState'
 import { PRIORITY } from '../constants'
 import { formatEstimate } from '../hooks/useFormat'
 import { StatusDurationBar } from '../components/StatusDurationBar'
@@ -41,7 +42,7 @@ const SORTABLE_COLS = new Set(['id', 'title', 'epic', 'estimate', 'created', 'st
 export function AllItemsView() {
   const { items, statuses, epics: epicList, selectItem } = useBoard()
   const [search, setSearch] = useState('')
-  const [filters, setFilters] = useState<{ epic: string; priority: string; status: string }>({ epic: 'all', priority: 'all', status: 'all' })
+  const [filters, setFilters] = usePersistentState<{ epic: string; priority: string; status: string }>('cumin:items:filters', { epic: 'all', priority: 'all', status: 'all' })
 
   const middleStatuses = useMemo(() => statuses.filter(s => !s.is_initial && !s.is_done), [statuses])
 
@@ -62,12 +63,12 @@ export function AllItemsView() {
     { value: 'all', label: 'Priority' },
     ...([0, 1, 2, 3, 4] as const).map((p) => ({ value: String(p), label: PRIORITY[p].label, color: PRIORITY[p].color })),
   ], [])
-  const [columns, setColumns] = useState<ColumnConfig[]>(DEFAULT_COLUMNS)
+  const [columns, setColumns] = usePersistentState<ColumnConfig[]>('cumin:items:columns', DEFAULT_COLUMNS)
   const [resizing, setResizing] = useState<{ id: string; startX: number; startWidth: number } | null>(null)
   const [showColumnConfig, setShowColumnConfig] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
-  const [sortKey, setSortKey] = useState<SortKey>('created')
-  const [sortDir, setSortDir] = useState<SortDir>('desc')
+  const [sortKey, setSortKey] = usePersistentState<SortKey>('cumin:items:sortKey', 'created')
+  const [sortDir, setSortDir] = usePersistentState<SortDir>('cumin:items:sortDir', 'desc')
 
   const activeFilters = Object.entries(filters).filter(([, v]) => v !== 'all').length
 
