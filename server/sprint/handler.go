@@ -155,7 +155,7 @@ func (h *Handler) Close(ctx context.Context) (*CloseResponse, error) {
 
 	result, err := h.store.Close(ctx, id, b.ID, cadence, doneIDs)
 	if err != nil {
-		return nil, api.Conflict("close failed: " + err.Error())
+		return nil, api.Conflict("close failed — check sprint state and try again")
 	}
 	return &CloseResponse{SpilledCount: result.SpilledCount, NextSprint: result.NextSprint}, nil
 }

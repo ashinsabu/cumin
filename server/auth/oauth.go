@@ -76,11 +76,13 @@ func (h *Handler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	state := base64.URLEncoding.EncodeToString(b)
+	stateSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
 	http.SetCookie(w, &http.Cookie{
 		Name:     "oauth_state",
 		Value:    state,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   stateSecure,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   300,
 	})
@@ -189,11 +191,18 @@ func (h *Handler) HandleMe(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandleLogout(w http.ResponseWriter, r *http.Request) {
+	secure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+	sameSite := http.SameSiteLaxMode
+	if secure {
+		sameSite = http.SameSiteNoneMode
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     "token",
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   secure,
+		SameSite: sameSite,
 		MaxAge:   -1,
 	})
 	w.WriteHeader(http.StatusOK)

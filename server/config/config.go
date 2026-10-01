@@ -35,8 +35,8 @@ func Load() Config {
 		slog.Error("JWT_SECRET must be set")
 		os.Exit(1)
 	}
-	if cfg.Env != "development" && len(cfg.JWTSecret) < 32 {
-		slog.Error("JWT_SECRET must be at least 32 characters in non-development environments")
+	if len(cfg.JWTSecret) < 32 {
+		slog.Error("JWT_SECRET must be at least 32 characters")
 		os.Exit(1)
 	}
 	if cfg.AllowedOrigins == "" {

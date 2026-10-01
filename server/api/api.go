@@ -27,6 +27,7 @@ func Handle[Req any, Res any](fn func(ctx context.Context, req Req) (*Res, error
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req Req
 		if r.Body != nil && r.ContentLength != 0 {
+			r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MB
 			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 				applogger.FromContext(r.Context()).Warn("api: bad request body",
 					slog.String("path", r.URL.Path),
