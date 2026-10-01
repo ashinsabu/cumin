@@ -21,6 +21,8 @@ if (import.meta.env.VITE_SENTRY_DSN) {
       }),
     ],
     tracesSampleRate: 1.0,
-    tracePropagationTargets: [/^https:\/\/api\.cumin\.ashinsabu\.com/],
+    // Don't propagate trace headers to the API — backend has no Sentry yet,
+    // and the extra headers trigger CORS preflights that chi can't handle cleanly.
+    tracePropagationTargets: [],
   })
 }

@@ -67,9 +67,12 @@ func main() {
 		r.Use(cors.Handler(cors.Options{
 			AllowedOrigins:   cfg.AllowedOriginsList(),
 			AllowedMethods:   []string{"GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"},
-			AllowedHeaders:   []string{"Content-Type", "Authorization"},
+			AllowedHeaders:   []string{"Content-Type", "Authorization", "sentry-trace", "baggage"},
 			AllowCredentials: true,
 		}))
+		// Explicit OPTIONS handler so chi routes preflights through the CORS middleware
+		// instead of returning 405 before middleware runs.
+		r.Options("/*", func(w http.ResponseWriter, r *http.Request) {})
 
 		// Protected routes
 		r.Group(func(r chi.Router) {
