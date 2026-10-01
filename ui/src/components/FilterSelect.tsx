@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { popover } from '../lib/motionVariants'
 
 export type FilterOption = {
   value: string
@@ -49,29 +51,38 @@ export function FilterSelect({ value, onChange, options, placeholder, fullWidth 
         </svg>
       </button>
 
-      {open && (
-        <div className="absolute top-full left-0 mt-1 z-50 min-w-[140px] rounded-[var(--c-radius-card)] border bg-raised border-line shadow-[var(--c-shadow-modal)] overflow-hidden">
-          {options.map((opt) => (
-            <button
-              type="button"
-              key={opt.value}
-              onClick={() => { onChange(opt.value); setOpen(false) }}
-              className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors ${
-                opt.value === value
-                  ? 'text-accent bg-accent/10'
-                  : 'text-ink hover:bg-surface'
-              }`}
-            >
-              {opt.color ? (
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: opt.color }} />
-              ) : (
-                <span className="w-2 h-2 shrink-0" />
-              )}
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      )}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            variants={popover}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            style={{ originX: 0, originY: 0 }}
+            className="absolute top-full left-0 mt-1 z-50 min-w-[140px] rounded-[var(--c-radius-card)] border bg-raised border-line shadow-[var(--c-shadow-modal)] overflow-hidden"
+          >
+            {options.map((opt) => (
+              <button
+                type="button"
+                key={opt.value}
+                onClick={() => { onChange(opt.value); setOpen(false) }}
+                className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors ${
+                  opt.value === value
+                    ? 'text-accent bg-accent/10'
+                    : 'text-ink hover:bg-surface'
+                }`}
+              >
+                {opt.color ? (
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: opt.color }} />
+                ) : (
+                  <span className="w-2 h-2 shrink-0" />
+                )}
+                {opt.label}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

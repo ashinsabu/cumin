@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
+import { fade, modalScale } from '../lib/motionVariants'
 import type { Item } from '../types'
 import { useBoard } from '../context/BoardContext'
 import { useAuth } from '../context/AuthContext'
@@ -96,8 +98,12 @@ export function ItemModal({ item, onClose }: { item: Item; onClose: () => void }
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" onClick={onClose}>
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" />
-      <div
+      <motion.div variants={fade} initial="hidden" animate="visible" exit="exit" transition={{ duration: 0.15 }} className="fixed inset-0 bg-black/40 backdrop-blur-sm" />
+      <motion.div
+        variants={modalScale}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
         className="relative w-full max-w-lg rounded-[var(--c-radius-card)] shadow-xl overflow-hidden bg-raised border border-line"
         onClick={(e) => e.stopPropagation()}
       >
@@ -222,7 +228,7 @@ export function ItemModal({ item, onClose }: { item: Item; onClose: () => void }
             </div>
           )}
         </div>
-      </div>
+      </motion.div>
     </div>
   )
 }

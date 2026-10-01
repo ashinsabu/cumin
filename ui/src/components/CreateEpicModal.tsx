@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import { motion } from 'framer-motion'
 import { useBoard } from '../context/BoardContext'
 import type { CreateEpicPayload } from '../context/BoardContext'
+import { fade, modalScale } from '../lib/motionVariants'
 
 const PRESET_COLORS = [
   '#6366f1', '#8b5cf6', '#ec4899', '#e11d48',
@@ -45,8 +47,12 @@ export function CreateEpicModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" />
-      <div
+      <motion.div variants={fade} initial="hidden" animate="visible" exit="exit" transition={{ duration: 0.15 }} className="fixed inset-0 bg-black/40 backdrop-blur-sm" />
+      <motion.div
+        variants={modalScale}
+        initial="hidden"
+        animate="visible"
+        exit="exit"
         className="relative w-full max-w-md rounded-[var(--c-radius-card)] shadow-xl bg-raised border border-line"
         onClick={(e) => e.stopPropagation()}
       >
@@ -144,7 +150,7 @@ export function CreateEpicModal({ onClose }: { onClose: () => void }) {
             </button>
           </div>
         </form>
-      </div>
+      </motion.div>
     </div>
   )
 }

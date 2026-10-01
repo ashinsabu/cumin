@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import type { Item } from '../../types'
 import { useBoard } from '../../context/BoardContext'
+import { popover } from '../../lib/motionVariants'
 
 interface Props {
   item: Item
@@ -35,23 +37,32 @@ export function ItemStatusBadge({ item, editable = true }: Props) {
   return (
     <div ref={ref} className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
       <div onClick={() => setOpen((v) => !v)}>{badge}</div>
-      {open && (
-        <div className="absolute right-0 top-full mt-1 z-20 bg-raised border border-line rounded-lg shadow-xl py-1 min-w-[140px]">
-          {statuses.map((st) => (
-            <button
-              key={st.id}
-              type="button"
-              onClick={() => { moveItem(item.id, st.id); setOpen(false) }}
-              className={`w-full text-left px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-surface ${
-                st.id === item.status_id ? 'text-accent' : 'text-ink'
-              }`}
-            >
-              {st.name}
-              {st.id === item.status_id && <span className="ml-1.5 text-ghost text-[10px]">✓</span>}
-            </button>
-          ))}
-        </div>
-      )}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            variants={popover}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            style={{ originX: 1, originY: 0 }}
+            className="absolute right-0 top-full mt-1 z-20 bg-raised border border-line rounded-lg shadow-xl py-1 min-w-[140px]"
+          >
+            {statuses.map((st) => (
+              <button
+                key={st.id}
+                type="button"
+                onClick={() => { moveItem(item.id, st.id); setOpen(false) }}
+                className={`w-full text-left px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-surface ${
+                  st.id === item.status_id ? 'text-accent' : 'text-ink'
+                }`}
+              >
+                {st.name}
+                {st.id === item.status_id && <span className="ml-1.5 text-ghost text-[10px]">✓</span>}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

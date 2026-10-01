@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { pageTransition } from './lib/motionVariants'
 import { useAuth } from './context/AuthContext'
 import { useBoard } from './context/BoardContext'
 import { Sidebar, MobileNav } from './components/Sidebar'
@@ -87,16 +89,27 @@ function AppShell() {
             <button onClick={() => window.location.reload()} className="text-sm px-3 py-1.5 rounded-[var(--c-radius-card)] bg-accent text-white hover:opacity-90">Reload</button>
           </div>
         }>
-          <Routes>
-            <Route path="/" element={<BoardView />} />
-            <Route path="/backlog" element={<BacklogView />} />
-            <Route path="/items" element={<AllItemsView />} />
-            <Route path="/epics" element={<EpicsView />} />
-            <Route path="/projects" element={<ProjectsView />} />
-            <Route path="/dashboards" element={<DashboardView />} />
-            <Route path="/account" element={<AccountView />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={location.pathname}
+              variants={pageTransition}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="flex-1 flex flex-col min-h-0 overflow-hidden"
+            >
+              <Routes location={location}>
+                <Route path="/" element={<BoardView />} />
+                <Route path="/backlog" element={<BacklogView />} />
+                <Route path="/items" element={<AllItemsView />} />
+                <Route path="/epics" element={<EpicsView />} />
+                <Route path="/projects" element={<ProjectsView />} />
+                <Route path="/dashboards" element={<DashboardView />} />
+                <Route path="/account" element={<AccountView />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </motion.div>
+          </AnimatePresence>
         </ErrorBoundary>
       </div>
 

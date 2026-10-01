@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import type { Item } from '../../types'
 import { PRIORITY } from '../../constants'
 import { useBoard } from '../../context/BoardContext'
+import { popover } from '../../lib/motionVariants'
 
 interface Props {
   item: Item
@@ -37,24 +39,33 @@ export function ItemPriorityBadge({ item, editable = true }: Props) {
   return (
     <div ref={ref} className="relative shrink-0" onClick={(e) => e.stopPropagation()}>
       <div onClick={() => setOpen((v) => !v)}>{badge}</div>
-      {open && (
-        <div className="absolute left-0 top-full mt-1 z-20 bg-raised border border-line rounded-lg shadow-xl py-1 min-w-[90px]">
-          {Object.entries(PRIORITY).map(([val, cfg]) => (
-            <button
-              key={val}
-              type="button"
-              onClick={() => { updateItem(item.id, { priority: Number(val) }); setOpen(false) }}
-              className={`w-full text-left px-3 py-1.5 text-xs font-bold transition-colors hover:bg-surface ${
-                item.priority === Number(val) ? 'opacity-100' : 'opacity-70'
-              }`}
-              style={{ color: cfg.color }}
-            >
-              {cfg.label}
-              {item.priority === Number(val) && <span className="ml-1.5 text-ghost text-[10px] font-normal">✓</span>}
-            </button>
-          ))}
-        </div>
-      )}
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            variants={popover}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            style={{ originX: 0, originY: 0 }}
+            className="absolute left-0 top-full mt-1 z-20 bg-raised border border-line rounded-lg shadow-xl py-1 min-w-[90px]"
+          >
+            {Object.entries(PRIORITY).map(([val, cfg]) => (
+              <button
+                key={val}
+                type="button"
+                onClick={() => { updateItem(item.id, { priority: Number(val) }); setOpen(false) }}
+                className={`w-full text-left px-3 py-1.5 text-xs font-bold transition-colors hover:bg-surface ${
+                  item.priority === Number(val) ? 'opacity-100' : 'opacity-70'
+                }`}
+                style={{ color: cfg.color }}
+              >
+                {cfg.label}
+                {item.priority === Number(val) && <span className="ml-1.5 text-ghost text-[10px] font-normal">✓</span>}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
