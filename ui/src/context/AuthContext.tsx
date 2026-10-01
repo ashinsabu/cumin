@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
 
+const API = import.meta.env.VITE_API_URL ?? ''
+
 type AuthUser = {
   id: string
   email: string
@@ -21,7 +23,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/api/auth/me', { credentials: 'include' })
+    fetch(`${API}/api/auth/me`, { credentials: 'include' })
       .then((res) => {
         if (res.ok) return res.json()
         return null
@@ -32,7 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const logout = () => {
-    fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+    fetch(`${API}/api/auth/logout`, { method: 'POST', credentials: 'include' })
       .then(() => setUser(null))
   }
 
