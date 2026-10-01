@@ -33,8 +33,11 @@ type BoardContextValue = {
   createItem: (payload: CreateItemPayload) => Promise<Item>
   updateItem: (id: string, payload: UpdateItemPayload) => Promise<void>
   deleteItem: (id: string) => Promise<void>
+  deleteEpic: (id: string) => Promise<void>
   selectedItem: Item | null
   selectItem: (item: Item | null) => void
+  selectedEpic: Epic | null
+  selectEpic: (epic: Epic | null) => void
   refresh: () => void
 }
 
@@ -49,6 +52,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   const [activeSprint, setActiveSprint] = useState<Sprint | null>(null)
   const [loading, setLoading] = useState(true)
   const [selectedItem, setSelectedItem] = useState<Item | null>(null)
+  const [selectedEpic, setSelectedEpic] = useState<Epic | null>(null)
   const [searchParams, setSearchParams] = useSearchParams()
 
   const fetchAll = useCallback(async () => {
@@ -184,6 +188,21 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     }
   }, [fetchAll])
 
+  const deleteEpic = useCallback(async (id: string): Promise<void> => {
+    setEpics((prev) => prev.filter((e) => e.id !== id))
+    setItems((prev) => prev.map((i) => i.epic_id === id ? { ...i, epic_id: null, epic_name: undefined, epic_color: undefined } : i))
+    try {
+      const res = await fetch(`${API}/api/epics/${id}`, { method: 'DELETE', credentials: 'include' })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to delete epic')
+      }
+    } catch (err) {
+      await fetchAll()
+      throw err
+    }
+  }, [fetchAll])
+
   return (
     <BoardContext.Provider value={{
       board,
@@ -197,8 +216,11 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       createItem,
       updateItem,
       deleteItem,
+      deleteEpic,
       selectedItem,
       selectItem,
+      selectedEpic,
+      selectEpic: setSelectedEpic,
       refresh: fetchAll,
     }}>
       {children}
