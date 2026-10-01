@@ -39,9 +39,9 @@ export function EpicsView() {
           onChange={setTypeFilter}
           options={[
             { value: 'all', label: 'Type' },
-            { value: 'goal', label: 'Goal' },
-            { value: 'recurring', label: 'Recurring' },
-            { value: 'catchall', label: 'Catch-all' },
+            { value: 'goal',      label: 'Goal',      color: '#a855f7' },
+            { value: 'recurring', label: 'Recurring', color: '#22c55e' },
+            { value: 'catchall',  label: 'Catch-all', color: '#71717a' },
           ]}
         />
         <div className="ml-auto flex items-center gap-3">

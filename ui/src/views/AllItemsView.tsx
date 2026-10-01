@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useBoard } from '../context/BoardContext'
 import { PRIORITY } from '../constants'
 import { formatEstimate } from '../hooks/useFormat'
@@ -7,6 +7,8 @@ import { FilterSelect } from '../components/FilterSelect'
 import { SearchInput } from '../components/SearchInput'
 import { CreateItemModal } from '../components/CreateItemModal'
 import type { Item } from '../types'
+
+const MIDDLE_COLORS = ['#ef4444', '#3b82f6', '#f59e0b', '#8b5cf6']
 
 type ColumnConfig = {
   id: string
@@ -37,9 +39,29 @@ function SortIcon({ col, sortKey, sortDir }: { col: string; sortKey: SortKey; so
 const SORTABLE_COLS = new Set(['id', 'title', 'epic', 'estimate', 'created', 'status', 'priority', 'in_status'])
 
 export function AllItemsView() {
-  const { items, statuses, selectItem } = useBoard()
+  const { items, statuses, epics: epicList, selectItem } = useBoard()
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<{ epic: string; priority: string; status: string }>({ epic: 'all', priority: 'all', status: 'all' })
+
+  const middleStatuses = useMemo(() => statuses.filter(s => !s.is_initial && !s.is_done), [statuses])
+
+  const epicOptions = useMemo(() => [
+    { value: 'all', label: 'Epic' },
+    ...epicList.map((e) => ({ value: e.name, label: e.name, color: e.color })),
+  ], [epicList])
+
+  const statusOptions = useMemo(() => [
+    { value: 'all', label: 'Status' },
+    ...statuses.map((s) => {
+      const color = s.is_initial ? '#71717a' : s.is_done ? '#22c55e' : MIDDLE_COLORS[middleStatuses.indexOf(s) % MIDDLE_COLORS.length]
+      return { value: s.id, label: s.name, color }
+    }),
+  ], [statuses, middleStatuses])
+
+  const priorityOptions = useMemo(() => [
+    { value: 'all', label: 'Priority' },
+    ...([0, 1, 2, 3, 4] as const).map((p) => ({ value: String(p), label: PRIORITY[p].label, color: PRIORITY[p].color })),
+  ], [])
   const [columns, setColumns] = useState<ColumnConfig[]>(DEFAULT_COLUMNS)
   const [resizing, setResizing] = useState<{ id: string; startX: number; startWidth: number } | null>(null)
   const [showColumnConfig, setShowColumnConfig] = useState(false)
@@ -47,7 +69,6 @@ export function AllItemsView() {
   const [sortKey, setSortKey] = useState<SortKey>('created')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
 
-  const epics = [...new Set(items.map((i) => i.epic_name))]
   const activeFilters = Object.entries(filters).filter(([, v]) => v !== 'all').length
 
   const filtered = items.filter((item) => {
@@ -157,21 +178,9 @@ export function AllItemsView() {
       <div className="shrink-0 px-4 py-3 border-b flex flex-wrap items-center gap-2 border-line">
         <SearchInput value={search} onChange={setSearch} placeholder="Search work…" className="min-w-[140px] flex-1 sm:flex-none sm:w-48" />
         <div className="flex items-center gap-2 flex-wrap">
-          <FilterSelect
-            value={filters.epic}
-            onChange={(v) => setFilters((f) => ({ ...f, epic: v }))}
-            options={[{ value: 'all', label: 'Epic' }, ...epics.filter(Boolean).map((e) => ({ value: e!, label: e! }))]}
-          />
-          <FilterSelect
-            value={filters.status}
-            onChange={(v) => setFilters((f) => ({ ...f, status: v }))}
-            options={[{ value: 'all', label: 'Status' }, ...statuses.map((s) => ({ value: s.id, label: s.name }))]}
-          />
-          <FilterSelect
-            value={filters.priority}
-            onChange={(v) => setFilters((f) => ({ ...f, priority: v }))}
-            options={[{ value: 'all', label: 'Priority' }, { value: '0', label: 'P0' }, { value: '1', label: 'P1' }, { value: '2', label: 'P2' }, { value: '3', label: 'P3' }, { value: '4', label: 'P4' }]}
-          />
+          <FilterSelect value={filters.epic} onChange={(v) => setFilters((f) => ({ ...f, epic: v }))} options={epicOptions} />
+          <FilterSelect value={filters.status} onChange={(v) => setFilters((f) => ({ ...f, status: v }))} options={statusOptions} />
+          <FilterSelect value={filters.priority} onChange={(v) => setFilters((f) => ({ ...f, priority: v }))} options={priorityOptions} />
           {activeFilters > 0 && (
             <button
               onClick={() => setFilters({ epic: 'all', priority: 'all', status: 'all' })}

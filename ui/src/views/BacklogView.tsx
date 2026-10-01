@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useBoard } from '../context/BoardContext'
 import { PRIORITY } from '../constants'
 import { formatEstimate } from '../hooks/useFormat'
@@ -17,12 +17,22 @@ function SortIcon({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; s
 }
 
 export function BacklogView() {
-  const { items, statuses, selectItem } = useBoard()
+  const { items, statuses, epics: epicList, selectItem } = useBoard()
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<{ epic: string; priority: string }>({ epic: 'all', priority: 'all' })
   const [showCreate, setShowCreate] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>('priority')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
+
+  const epicOptions = useMemo(() => [
+    { value: 'all', label: 'Epic' },
+    ...epicList.map((e) => ({ value: e.name, label: e.name, color: e.color })),
+  ], [epicList])
+
+  const priorityOptions = useMemo(() => [
+    { value: 'all', label: 'Priority' },
+    ...([0, 1, 2, 3, 4] as const).map((p) => ({ value: String(p), label: PRIORITY[p].label, color: PRIORITY[p].color })),
+  ], [])
 
   function handleSort(key: SortKey) {
     if (sortKey === key) {
@@ -38,7 +48,6 @@ export function BacklogView() {
   }
 
   const backlogItems = items.filter((i) => !statuses.find((s) => s.id === i.status_id)?.is_done)
-  const epics = [...new Set(backlogItems.map((i) => i.epic_name))]
 
   const filtered = backlogItems.filter((item) => {
     if (filters.epic !== 'all' && item.epic_name !== filters.epic) return false
@@ -79,16 +88,8 @@ export function BacklogView() {
       <div className="shrink-0 px-4 py-3 border-b flex flex-wrap items-center gap-2 border-line">
         <SearchInput value={search} onChange={setSearch} placeholder="Search backlog…" className="min-w-[140px] flex-1 sm:flex-none sm:w-48" />
         <div className="flex items-center gap-2 flex-wrap">
-          <FilterSelect
-            value={filters.epic}
-            onChange={(v) => setFilters((f) => ({ ...f, epic: v }))}
-            options={[{ value: 'all', label: 'Epic' }, ...epics.filter(Boolean).map((e) => ({ value: e!, label: e! }))]}
-          />
-          <FilterSelect
-            value={filters.priority}
-            onChange={(v) => setFilters((f) => ({ ...f, priority: v }))}
-            options={[{ value: 'all', label: 'Priority' }, { value: '0', label: 'P0' }, { value: '1', label: 'P1' }, { value: '2', label: 'P2' }, { value: '3', label: 'P3' }, { value: '4', label: 'P4' }]}
-          />
+          <FilterSelect value={filters.epic} onChange={(v) => setFilters((f) => ({ ...f, epic: v }))} options={epicOptions} />
+          <FilterSelect value={filters.priority} onChange={(v) => setFilters((f) => ({ ...f, priority: v }))} options={priorityOptions} />
           {activeFilters > 0 && (
             <button onClick={() => setFilters({ epic: 'all', priority: 'all' })}
               className="text-xs px-2 py-1 rounded-[var(--c-radius-card)] text-accent hover:bg-accent/10">

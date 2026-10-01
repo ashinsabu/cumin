@@ -1,11 +1,15 @@
 import { useState, useRef, useEffect } from 'react'
 
-type Option = { value: string; label: string }
+export type FilterOption = {
+  value: string
+  label: string
+  color?: string  // hex dot indicator; omit for "all/reset" row
+}
 
 type Props = {
   value: string
   onChange: (value: string) => void
-  options: Option[]
+  options: FilterOption[]
   placeholder?: string
   fullWidth?: boolean
 }
@@ -36,25 +40,33 @@ export function FilterSelect({ value, onChange, options, placeholder, fullWidth 
             : 'border-line text-dim bg-surface hover:border-ghost hover:text-ink'
         }`}
       >
+        {selected?.color && isFiltered && (
+          <span className="w-2 h-2 rounded-full shrink-0 inline-block" style={{ backgroundColor: selected.color }} />
+        )}
         {selected?.label ?? placeholder}
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className={`transition-transform ${open ? 'rotate-180' : ''}`}>
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className={`transition-transform shrink-0 ${open ? 'rotate-180' : ''}`}>
           <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 z-50 min-w-[120px] rounded-[var(--c-radius-card)] border bg-raised border-line shadow-[var(--c-shadow-modal)] overflow-hidden">
+        <div className="absolute top-full left-0 mt-1 z-50 min-w-[140px] rounded-[var(--c-radius-card)] border bg-raised border-line shadow-[var(--c-shadow-modal)] overflow-hidden">
           {options.map((opt) => (
             <button
               type="button"
               key={opt.value}
               onClick={() => { onChange(opt.value); setOpen(false) }}
-              className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
+              className={`w-full text-left px-3 py-1.5 text-xs flex items-center gap-2 transition-colors ${
                 opt.value === value
                   ? 'text-accent bg-accent/10'
                   : 'text-ink hover:bg-surface'
               }`}
             >
+              {opt.color ? (
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: opt.color }} />
+              ) : (
+                <span className="w-2 h-2 shrink-0" />
+              )}
               {opt.label}
             </button>
           ))}
