@@ -6,17 +6,38 @@ import { StatusDurationBar } from '../components/StatusDurationBar'
 import { FilterSelect } from '../components/FilterSelect'
 import { SearchInput } from '../components/SearchInput'
 import { CreateItemModal } from '../components/CreateItemModal'
+import type { Item } from '../types'
+
+type SortKey = 'id' | 'title' | 'epic' | 'estimate' | 'status' | 'priority' | 'waiting'
+type SortDir = 'asc' | 'desc'
+
+function SortIcon({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; sortDir: SortDir }) {
+  if (col !== sortKey) return <span className="ml-1 text-ghost/40">↕</span>
+  return <span className="ml-1 text-accent">{sortDir === 'asc' ? '↑' : '↓'}</span>
+}
 
 export function BacklogView() {
   const { items, statuses, selectItem } = useBoard()
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState<{ epic: string; priority: string }>({ epic: 'all', priority: 'all' })
   const [showCreate, setShowCreate] = useState(false)
+  const [sortKey, setSortKey] = useState<SortKey>('priority')
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
 
-  const backlogItems = items
-    .filter((i) => !statuses.find((s) => s.id === i.status_id)?.is_done)
-    .sort((a, b) => a.priority - b.priority)
+  function handleSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
 
+  function thClass(key: SortKey) {
+    return `text-left text-xs font-semibold uppercase tracking-wider px-4 py-2 border-b text-dim border-line cursor-pointer select-none hover:text-ink transition-colors ${sortKey === key ? 'text-ink' : ''}`
+  }
+
+  const backlogItems = items.filter((i) => !statuses.find((s) => s.id === i.status_id)?.is_done)
   const epics = [...new Set(backlogItems.map((i) => i.epic_name))]
 
   const filtered = backlogItems.filter((item) => {
@@ -27,6 +48,26 @@ export function BacklogView() {
       if (!item.title.toLowerCase().includes(q) && !item.display_id.toLowerCase().includes(q)) return false
     }
     return true
+  })
+
+  function sortValue(item: Item, key: SortKey): string | number {
+    switch (key) {
+      case 'id': return item.display_id
+      case 'title': return item.title.toLowerCase()
+      case 'epic': return item.epic_name ?? ''
+      case 'estimate': return item.estimate_minutes ?? 0
+      case 'status': return statuses.find((s) => s.id === item.status_id)?.name ?? ''
+      case 'priority': return item.priority
+      case 'waiting': return item.time_in_status_minutes ?? 0
+      default: return 0
+    }
+  }
+
+  const sorted = [...filtered].sort((a, b) => {
+    const av = sortValue(a, sortKey)
+    const bv = sortValue(b, sortKey)
+    const cmp = av < bv ? -1 : av > bv ? 1 : 0
+    return sortDir === 'asc' ? cmp : -cmp
   })
 
   const activeFilters = Object.values(filters).filter((v) => v !== 'all').length
@@ -61,7 +102,7 @@ export function BacklogView() {
           </span>
           <button
             onClick={() => setShowCreate(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-[var(--c-radius-card)] bg-accent text-white hover:opacity-90"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-[var(--c-radius-card)] bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
           >
             <span>+</span>
             <span className="hidden sm:inline">New item</span>
@@ -73,18 +114,32 @@ export function BacklogView() {
         <table className="w-full border-collapse" style={{ minWidth: 800 }}>
           <thead className="sticky top-0 z-10">
             <tr className="bg-panel">
-              <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-2 border-b text-dim border-line" style={{ width: 90 }}>ID</th>
-              <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-2 border-b text-dim border-line">Work</th>
-              <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-2 border-b text-dim border-line" style={{ width: 130 }}>Epic</th>
-              <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-2 border-b text-dim border-line" style={{ width: 80 }}>Estimate</th>
-              <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-2 border-b text-dim border-line" style={{ width: 120 }}>Status</th>
-              <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-2 border-b text-dim border-line" style={{ width: 80 }}>Priority</th>
-              <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-2 border-b text-dim border-line" style={{ width: 120 }}>Waiting</th>
+              <th className={thClass('id')} style={{ width: 90 }} onClick={() => handleSort('id')}>
+                ID<SortIcon col="id" sortKey={sortKey} sortDir={sortDir} />
+              </th>
+              <th className={thClass('title')} onClick={() => handleSort('title')}>
+                Work<SortIcon col="title" sortKey={sortKey} sortDir={sortDir} />
+              </th>
+              <th className={thClass('epic')} style={{ width: 130 }} onClick={() => handleSort('epic')}>
+                Epic<SortIcon col="epic" sortKey={sortKey} sortDir={sortDir} />
+              </th>
+              <th className={thClass('estimate')} style={{ width: 80 }} onClick={() => handleSort('estimate')}>
+                Estimate<SortIcon col="estimate" sortKey={sortKey} sortDir={sortDir} />
+              </th>
+              <th className={thClass('status')} style={{ width: 120 }} onClick={() => handleSort('status')}>
+                Status<SortIcon col="status" sortKey={sortKey} sortDir={sortDir} />
+              </th>
+              <th className={thClass('priority')} style={{ width: 80 }} onClick={() => handleSort('priority')}>
+                Priority<SortIcon col="priority" sortKey={sortKey} sortDir={sortDir} />
+              </th>
+              <th className={thClass('waiting')} style={{ width: 120 }} onClick={() => handleSort('waiting')}>
+                Waiting<SortIcon col="waiting" sortKey={sortKey} sortDir={sortDir} />
+              </th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((item) => {
-              const priority = PRIORITY[item.priority]
+            {sorted.map((item) => {
+              const priority = PRIORITY[item.priority] ?? PRIORITY[4]
               return (
                 <tr
                   key={item.id}
@@ -98,13 +153,20 @@ export function BacklogView() {
                     <span className="text-sm font-medium text-ink">{item.title}</span>
                   </td>
                   <td className="px-4 py-2.5">
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded" style={{ backgroundColor: item.epic_color + '18', color: item.epic_color, border: `1px solid ${item.epic_color}25` }}>{item.epic_name}</span>
+                    {item.epic_name
+                      ? <span className="text-xs font-semibold px-2 py-0.5 rounded" style={{ backgroundColor: (item.epic_color ?? '#6b7280') + '18', color: item.epic_color ?? '#6b7280', border: `1px solid ${item.epic_color ?? '#6b7280'}25` }}>{item.epic_name}</span>
+                      : <span className="text-ghost text-xs">—</span>}
                   </td>
                   <td className="px-4 py-2.5">
                     <span className="text-sm font-semibold text-ink/80">{item.estimate_minutes ? formatEstimate(item.estimate_minutes) : '—'}</span>
                   </td>
                   <td className="px-4 py-2.5">
-                    {(() => { const s = statuses.find(st => st.id === item.status_id); return s ? <span className="text-xs font-semibold px-2 py-0.5 rounded-[var(--c-radius-badge)] bg-line text-ink/80">{s.name}</span> : <span className="text-ghost">—</span> })()}
+                    {(() => {
+                      const s = statuses.find((st) => st.id === item.status_id)
+                      return s
+                        ? <span className="text-xs font-semibold px-2 py-0.5 rounded-[var(--c-radius-badge)] bg-line text-ink/80">{s.name}</span>
+                        : <span className="text-ghost">—</span>
+                    })()}
                   </td>
                   <td className="px-4 py-2.5">
                     <span className="text-sm font-bold" style={{ color: priority.color }}>{priority.label}</span>
@@ -115,9 +177,9 @@ export function BacklogView() {
                 </tr>
               )
             })}
-            {filtered.length === 0 && (
+            {sorted.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-sm text-ghost">
+                <td colSpan={7} className="px-4 py-8 text-center text-sm text-ghost">
                   No backlog items{activeFilters > 0 ? ' matching filters' : ''}
                 </td>
               </tr>

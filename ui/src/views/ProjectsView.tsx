@@ -1,95 +1,39 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { useBoard } from '../context/BoardContext'
 
-type Project = {
-  id: string
-  name: string
-  prefix: string
-  item_seq: number
-  color: string
-  description: string
-  created_at: string
-}
+const PRESET_COLORS = ['#6b7280', '#6366f1', '#8b5cf6', '#ec4899', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#3b82f6']
 
 export function ProjectsView() {
-  const [projects, setProjects] = useState<Project[]>([])
-  const [loading, setLoading] = useState(true)
+  const { projects, items, createProject, deleteProject } = useBoard()
   const [showCreate, setShowCreate] = useState(false)
-  const [form, setForm] = useState({ name: '', prefix: '', color: '#6b7280', description: '' })
+  const [form, setForm] = useState({ name: '', prefix: '', color: PRESET_COLORS[0], description: '' })
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; name: string } | null>(null)
 
-  useEffect(() => {
-    fetchProjects()
-  }, [])
-
-  async function fetchProjects() {
-    try {
-      const res = await fetch('/api/projects', { credentials: 'include' })
-      if (res.ok) {
-        const data = await res.json()
-        setProjects(data.projects ?? [])
-      }
-    } catch {
-      // network error — projects stays empty, user sees empty state
-    } finally {
-      setLoading(false)
-    }
-  }
-
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
     setError('')
-
-    if (!form.name || !form.prefix) {
-      setError('Name and prefix are required')
-      return
-    }
-
+    if (!form.name || !form.prefix) { setError('Name and prefix are required'); return }
     setSubmitting(true)
     try {
-      const res = await fetch('/api/projects', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      })
-
-      if (res.ok) {
-        setShowCreate(false)
-        setForm({ name: '', prefix: '', color: '#6b7280', description: '' })
-        fetchProjects()
-      } else {
-        const data = await res.json()
-        setError(data.error || 'Create failed')
-      }
-    } catch {
-      setError('Network error — please try again')
+      await createProject({ name: form.name, prefix: form.prefix, color: form.color, description: form.description })
+      setShowCreate(false)
+      setForm({ name: '', prefix: '', color: PRESET_COLORS[0], description: '' })
+    } catch (err: any) {
+      setError(err.message || 'Create failed')
     } finally {
       setSubmitting(false)
     }
   }
 
-  async function handleDelete(id: string, name: string) {
-    setConfirmDelete({ id, name })
-  }
-
-  async function confirmDeleteProject() {
+  async function handleConfirmDelete() {
     if (!confirmDelete) return
     try {
-      const res = await fetch(`/api/projects/${confirmDelete.id}`, { method: 'DELETE', credentials: 'include' })
-      if (res.ok) fetchProjects()
-    } catch {
-      // silently ignore — list will stay as-is
+      await deleteProject(confirmDelete.id)
     } finally {
       setConfirmDelete(null)
     }
-  }
-
-  if (loading) {
-    return <div className="flex-1 flex items-center justify-center text-ghost">
-      <span className="text-sm">Loading...</span>
-    </div>
   }
 
   return (
@@ -110,10 +54,11 @@ export function ProjectsView() {
             <div>
               <label className="text-xs font-semibold uppercase tracking-wider block mb-1 text-ghost">Name</label>
               <input
+                autoFocus
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 placeholder="Interview Prep"
-                className="text-sm px-3 py-1.5 rounded-[var(--c-radius-card)] border outline-none w-44 bg-surface border-line text-ink"
+                className="text-sm px-3 py-1.5 rounded-[var(--c-radius-card)] border outline-none w-44 bg-surface border-line text-ink focus:border-accent"
               />
             </div>
             <div>
@@ -123,31 +68,38 @@ export function ProjectsView() {
                 onChange={(e) => setForm((f) => ({ ...f, prefix: e.target.value.toUpperCase().slice(0, 5) }))}
                 placeholder="INT"
                 maxLength={5}
-                className="text-sm px-3 py-1.5 rounded-[var(--c-radius-card)] border outline-none w-20 font-mono uppercase bg-surface border-line text-ink"
+                className="text-sm px-3 py-1.5 rounded-[var(--c-radius-card)] border outline-none w-20 font-mono uppercase bg-surface border-line text-ink focus:border-accent"
               />
             </div>
             <div>
               <label className="text-xs font-semibold uppercase tracking-wider block mb-1 text-ghost">Color</label>
-              <input
-                type="color"
-                value={form.color}
-                onChange={(e) => setForm((f) => ({ ...f, color: e.target.value }))}
-                className="w-8 h-8 rounded border-0 cursor-pointer"
-              />
+              <div className="flex gap-1.5 flex-wrap pt-0.5">
+                {PRESET_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, color: c }))}
+                    className={`w-5 h-5 rounded-full transition-transform ${form.color === c ? 'scale-125' : 'hover:scale-110'}`}
+                    style={{ backgroundColor: c, outline: form.color === c ? `2px solid ${c}` : undefined, outlineOffset: '2px' }}
+                  />
+                ))}
+              </div>
             </div>
             <div className="flex-1">
               <label className="text-xs font-semibold uppercase tracking-wider block mb-1 text-ghost">Description</label>
               <input
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                placeholder="Optional description"
-                className="text-sm px-3 py-1.5 rounded-[var(--c-radius-card)] border outline-none w-full bg-surface border-line text-ink"
+                placeholder="Optional"
+                className="text-sm px-3 py-1.5 rounded-[var(--c-radius-card)] border outline-none w-full bg-surface border-line text-ink focus:border-accent"
               />
             </div>
-            <button type="submit" disabled={submitting} className="text-sm font-medium px-4 py-1.5 rounded-[var(--c-radius-card)] bg-accent text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed">
+            <button type="submit" disabled={submitting}
+              className="text-sm font-medium px-4 py-1.5 rounded-[var(--c-radius-card)] bg-accent text-white hover:opacity-90 disabled:opacity-50">
               {submitting ? 'Creating…' : 'Create'}
             </button>
-            <button type="button" onClick={() => setShowCreate(false)} className="text-sm px-3 py-1.5 rounded-[var(--c-radius-card)] text-dim hover:bg-line">
+            <button type="button" onClick={() => setShowCreate(false)}
+              className="text-sm px-3 py-1.5 rounded-[var(--c-radius-card)] text-dim hover:bg-line">
               Cancel
             </button>
           </form>
@@ -158,22 +110,18 @@ export function ProjectsView() {
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/50" onClick={() => setConfirmDelete(null)} />
-          <div className="relative z-10 w-full max-w-sm rounded-[var(--c-radius-card)] border bg-raised border-line shadow-[var(--c-shadow-modal)] p-5 flex flex-col gap-4">
+          <div className="relative z-10 w-full max-w-sm rounded-[var(--c-radius-card)] border bg-raised border-line shadow-xl p-5 flex flex-col gap-4">
             <div>
               <p className="text-sm font-semibold text-ink">Delete "{confirmDelete.name}"?</p>
               <p className="text-xs text-dim mt-1">All items in this project will be moved to trash. You can restore them within 30 days.</p>
             </div>
             <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setConfirmDelete(null)}
-                className="px-3 py-1.5 text-sm rounded-[var(--c-radius-card)] text-dim hover:text-ink hover:bg-line"
-              >
+              <button onClick={() => setConfirmDelete(null)}
+                className="px-3 py-1.5 text-sm rounded-[var(--c-radius-card)] text-dim hover:text-ink hover:bg-line">
                 Cancel
               </button>
-              <button
-                onClick={confirmDeleteProject}
-                className="px-4 py-1.5 text-sm font-semibold rounded-[var(--c-radius-card)] bg-red-500 text-white hover:opacity-90"
-              >
+              <button onClick={handleConfirmDelete}
+                className="px-4 py-1.5 text-sm font-semibold rounded-[var(--c-radius-card)] bg-red-500 text-white hover:opacity-90">
                 Delete project
               </button>
             </div>
@@ -189,7 +137,7 @@ export function ProjectsView() {
               <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-2 border-b text-dim border-line">Project</th>
               <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-2 border-b text-dim border-line" style={{ width: 200 }}>Description</th>
               <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-2 border-b text-dim border-line" style={{ width: 80 }}>Items</th>
-              <th className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-2 border-b text-dim border-line" style={{ width: 60 }}></th>
+              <th style={{ width: 60 }} />
             </tr>
           </thead>
           <tbody>
@@ -208,11 +156,11 @@ export function ProjectsView() {
                   <span className="text-xs text-dim">{p.description || '—'}</span>
                 </td>
                 <td className="px-4 py-3">
-                  <span className="text-sm font-medium text-ink/80">{p.item_seq}</span>
+                  <span className="text-sm font-medium text-ink/80">{items.filter(i => i.project_id === p.id).length}</span>
                 </td>
                 <td className="px-4 py-3">
                   <button
-                    onClick={() => handleDelete(p.id, p.name)}
+                    onClick={() => setConfirmDelete({ id: p.id, name: p.name })}
                     className="text-xs px-2 py-1 rounded transition-colors text-red-400 hover:bg-red-500/10"
                   >
                     Delete

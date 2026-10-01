@@ -16,15 +16,25 @@ type ColumnConfig = {
 }
 
 const DEFAULT_COLUMNS: ColumnConfig[] = [
-  { id: 'id', label: 'ID', width: 90, visible: true },
-  { id: 'title', label: 'Work', width: 280, visible: true },
-  { id: 'epic', label: 'Epic', width: 140, visible: true },
-  { id: 'estimate', label: 'Estimate', width: 80, visible: true },
-  { id: 'created', label: 'Created', width: 140, visible: true },
-  { id: 'status', label: 'Status', width: 130, visible: true },
-  { id: 'priority', label: 'Priority', width: 80, visible: true },
-  { id: 'in_status', label: 'In Status', width: 120, visible: true },
+  { id: 'id',       label: 'ID',        width: 90,  visible: true },
+  { id: 'title',    label: 'Work',      width: 280, visible: true },
+  { id: 'epic',     label: 'Epic',      width: 140, visible: true },
+  { id: 'estimate', label: 'Estimate',  width: 80,  visible: true },
+  { id: 'created',  label: 'Created',   width: 140, visible: true },
+  { id: 'status',   label: 'Status',    width: 130, visible: true },
+  { id: 'priority', label: 'Priority',  width: 80,  visible: true },
+  { id: 'in_status',label: 'In Status', width: 120, visible: true },
 ]
+
+type SortKey = 'id' | 'title' | 'epic' | 'estimate' | 'created' | 'status' | 'priority' | 'in_status'
+type SortDir = 'asc' | 'desc'
+
+function SortIcon({ col, sortKey, sortDir }: { col: string; sortKey: SortKey; sortDir: SortDir }) {
+  if (col !== sortKey) return <span className="ml-1 text-ghost/40">↕</span>
+  return <span className="ml-1 text-accent">{sortDir === 'asc' ? '↑' : '↓'}</span>
+}
+
+const SORTABLE_COLS = new Set(['id', 'title', 'epic', 'estimate', 'created', 'status', 'priority', 'in_status'])
 
 export function AllItemsView() {
   const { items, statuses, selectItem } = useBoard()
@@ -34,6 +44,8 @@ export function AllItemsView() {
   const [resizing, setResizing] = useState<{ id: string; startX: number; startWidth: number } | null>(null)
   const [showColumnConfig, setShowColumnConfig] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
+  const [sortKey, setSortKey] = useState<SortKey>('created')
+  const [sortDir, setSortDir] = useState<SortDir>('desc')
 
   const epics = [...new Set(items.map((i) => i.epic_name))]
   const activeFilters = Object.entries(filters).filter(([, v]) => v !== 'all').length
@@ -48,6 +60,38 @@ export function AllItemsView() {
     }
     return true
   })
+
+  function sortValue(item: Item, key: SortKey): string | number {
+    switch (key) {
+      case 'id':        return item.display_id
+      case 'title':     return item.title.toLowerCase()
+      case 'epic':      return item.epic_name ?? ''
+      case 'estimate':  return item.estimate_minutes ?? 0
+      case 'created':   return item.created_at ?? ''
+      case 'status':    return statuses.find((s) => s.id === item.status_id)?.name ?? ''
+      case 'priority':  return item.priority
+      case 'in_status': return item.time_in_status_minutes ?? 0
+      default:          return 0
+    }
+  }
+
+  const sorted = [...filtered].sort((a, b) => {
+    const av = sortValue(a, sortKey)
+    const bv = sortValue(b, sortKey)
+    const cmp = av < bv ? -1 : av > bv ? 1 : 0
+    return sortDir === 'asc' ? cmp : -cmp
+  })
+
+  function handleSort(colId: string) {
+    if (!SORTABLE_COLS.has(colId)) return
+    const key = colId as SortKey
+    if (sortKey === key) {
+      setSortDir((d) => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortKey(key)
+      setSortDir('asc')
+    }
+  }
 
   const visibleCols = columns.filter((c) => c.visible)
 
@@ -72,7 +116,7 @@ export function AllItemsView() {
   }
 
   function renderCell(col: ColumnConfig, item: Item) {
-    const priority = PRIORITY[item.priority]
+    const priority = PRIORITY[item.priority] ?? PRIORITY[4]
     const status = statuses.find((s) => s.id === item.status_id)
 
     switch (col.id) {
@@ -81,7 +125,9 @@ export function AllItemsView() {
       case 'title':
         return <span className="text-sm font-medium text-ink">{item.title}</span>
       case 'epic':
-        return <span className="text-xs font-semibold px-2 py-0.5 rounded" style={{ backgroundColor: item.epic_color + '18', color: item.epic_color, border: `1px solid ${item.epic_color}25` }}>{item.epic_name}</span>
+        return item.epic_name
+          ? <span className="text-xs font-semibold px-2 py-0.5 rounded" style={{ backgroundColor: (item.epic_color ?? '#6b7280') + '18', color: item.epic_color ?? '#6b7280', border: `1px solid ${item.epic_color ?? '#6b7280'}25` }}>{item.epic_name}</span>
+          : <span className="text-ghost text-xs">—</span>
       case 'estimate':
         return <span className="text-sm font-semibold text-ink/80">{item.estimate_minutes ? formatEstimate(item.estimate_minutes) : '—'}</span>
       case 'created':
@@ -90,7 +136,7 @@ export function AllItemsView() {
         return (
           <span className={`text-xs font-semibold px-2 py-1 rounded ${
             status?.is_done
-              ? 'bg-green-50 text-green-700 border border-green-200'
+              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
               : 'bg-line text-ink/80'
           }`}>
             {status?.name}
@@ -146,7 +192,7 @@ export function AllItemsView() {
           </button>
           <button
             onClick={() => setShowCreate(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-[var(--c-radius-card)] bg-accent text-white hover:opacity-90"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-[var(--c-radius-card)] bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
           >
             <span>+</span>
             <span className="hidden sm:inline">New item</span>
@@ -178,12 +224,14 @@ export function AllItemsView() {
               {visibleCols.map((col) => (
                 <th
                   key={col.id}
-                  className="text-left text-xs font-semibold uppercase tracking-wider px-4 py-2 relative select-none border-b text-dim border-line"
+                  onClick={() => handleSort(col.id)}
+                  className={`text-left text-xs font-semibold uppercase tracking-wider px-4 py-2 relative select-none border-b text-dim border-line transition-colors ${SORTABLE_COLS.has(col.id) ? 'cursor-pointer hover:text-ink' : ''} ${sortKey === col.id ? 'text-ink' : ''}`}
                   style={{ width: col.width, minWidth: col.width }}
                 >
                   {col.label}
+                  {SORTABLE_COLS.has(col.id) && <SortIcon col={col.id} sortKey={sortKey} sortDir={sortDir} />}
                   <div
-                    onMouseDown={(e) => handleMouseDown(col.id, e)}
+                    onMouseDown={(e) => { e.stopPropagation(); handleMouseDown(col.id, e) }}
                     className={`absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-accent/40 ${resizing?.id === col.id ? 'bg-accent/40' : ''}`}
                   />
                 </th>
@@ -191,7 +239,7 @@ export function AllItemsView() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((item) => (
+            {sorted.map((item) => (
               <tr
                 key={item.id}
                 onClick={() => selectItem(item)}
@@ -208,6 +256,13 @@ export function AllItemsView() {
                 ))}
               </tr>
             ))}
+            {sorted.length === 0 && (
+              <tr>
+                <td colSpan={visibleCols.length} className="px-4 py-8 text-center text-sm text-ghost">
+                  No items{activeFilters > 0 ? ' matching filters' : ''}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

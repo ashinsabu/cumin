@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useCallback, useEffect, type React
 import { useSearchParams } from 'react-router-dom'
 import type { Item, Status, Epic, Sprint, Board, Project } from '../types'
 
-const API = ''
+const API = import.meta.env.VITE_API_URL ?? ''
 
 export type CreateItemPayload = {
   title: string
@@ -10,6 +10,21 @@ export type CreateItemPayload = {
   epic_id?: string | null
   priority?: number
   estimate_minutes?: number | null
+}
+
+export type CreateProjectPayload = {
+  name: string
+  prefix: string
+  color: string
+  description?: string
+}
+
+export type CreateEpicPayload = {
+  name: string
+  type: 'recurring' | 'goal' | 'catchall'
+  color: string
+  description?: string
+  deadline?: string | null
 }
 
 export type UpdateItemPayload = {
@@ -33,6 +48,9 @@ type BoardContextValue = {
   createItem: (payload: CreateItemPayload) => Promise<Item>
   updateItem: (id: string, payload: UpdateItemPayload) => Promise<void>
   deleteItem: (id: string) => Promise<void>
+  createProject: (payload: CreateProjectPayload) => Promise<Project>
+  deleteProject: (id: string) => Promise<void>
+  createEpic: (payload: CreateEpicPayload) => Promise<Epic>
   deleteEpic: (id: string) => Promise<void>
   selectedItem: Item | null
   selectItem: (item: Item | null) => void
@@ -153,6 +171,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       if (i.id !== id) return i
       const merged = { ...i, ...payload }
       if (payload.clear_epic) { merged.epic_id = null; merged.epic_name = undefined; merged.epic_color = undefined }
+      if (payload.status_id && payload.status_id !== i.status_id) { merged.time_in_status_minutes = 0 }
       return merged
     }))
     try {
@@ -188,6 +207,54 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     }
   }, [fetchAll])
 
+  const createProject = useCallback(async (payload: CreateProjectPayload): Promise<Project> => {
+    const res = await fetch(`${API}/api/projects`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.error || 'Failed to create project')
+    }
+    const project: Project = await res.json()
+    setProjects((prev) => [...prev, project])
+    return project
+  }, [])
+
+  const deleteProject = useCallback(async (id: string): Promise<void> => {
+    // Optimistically remove project and its items immediately
+    setProjects((prev) => prev.filter((p) => p.id !== id))
+    setItems((prev) => prev.filter((i) => i.project_id !== id))
+    try {
+      const res = await fetch(`${API}/api/projects/${id}`, { method: 'DELETE', credentials: 'include' })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to delete project')
+      }
+    } catch (err) {
+      await fetchAll()
+      throw err
+    }
+  }, [fetchAll])
+
+  const createEpic = useCallback(async (payload: CreateEpicPayload): Promise<Epic> => {
+    const res = await fetch(`${API}/api/epics`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err.error || 'Failed to create epic')
+    }
+    const epic: Epic = await res.json()
+    setEpics((prev) => [...prev, epic])
+    return epic
+  }, [])
+
   const deleteEpic = useCallback(async (id: string): Promise<void> => {
     setEpics((prev) => prev.filter((e) => e.id !== id))
     setItems((prev) => prev.map((i) => i.epic_id === id ? { ...i, epic_id: null, epic_name: undefined, epic_color: undefined } : i))
@@ -216,6 +283,9 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       createItem,
       updateItem,
       deleteItem,
+      createProject,
+      deleteProject,
+      createEpic,
       deleteEpic,
       selectedItem,
       selectItem,
