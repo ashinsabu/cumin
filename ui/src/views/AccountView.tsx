@@ -133,7 +133,7 @@ function RecentlyDeletedSection() {
 function ProfileSection() {
   const { user } = useAuth()
   if (!user) return null
-  const initials = user.display_name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
+  const initials = user.display_name.split(' ').filter(n => n.length > 0).map((n) => n[0]).join('').toUpperCase().slice(0, 2)
   return (
     <div className="space-y-5">
       <h2 className="text-base font-semibold text-ink">Profile</h2>

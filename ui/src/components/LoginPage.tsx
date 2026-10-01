@@ -5,7 +5,7 @@ export function LoginPage() {
         <h1 className="text-2xl font-bold mb-2 text-ink">cumin</h1>
         <p className="text-sm mb-6 text-dim">Your life, sprint-planned.</p>
         <a
-          href="/api/auth/google/login"
+          href={`${import.meta.env.VITE_API_URL ?? ''}/api/auth/google/login`}
           className="inline-flex items-center gap-2 px-5 py-2.5 rounded-[var(--c-radius-card)] bg-white border border-gray-300 text-gray-700 font-medium text-sm hover:bg-gray-50 transition-colors shadow-sm"
         >
           <svg viewBox="0 0 24 24" className="w-5 h-5">

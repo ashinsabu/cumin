@@ -96,7 +96,7 @@ export function ItemModal({ item, onClose }: { item: Item; onClose: () => void }
   ]
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" onClick={onClose}>
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" />
       <div
         className="relative w-full max-w-lg rounded-[var(--c-radius-card)] shadow-xl overflow-hidden bg-raised border border-line"
@@ -132,7 +132,7 @@ export function ItemModal({ item, onClose }: { item: Item; onClose: () => void }
                 <button key={s.id} type="button" onClick={() => s.id !== item.status_id && moveItem(item.id, s.id)}
                   className={`text-xs font-semibold px-2.5 py-1 rounded transition-colors ${
                     s.id === item.status_id
-                      ? s.is_done ? 'bg-green-100 text-green-700 border border-green-300' : 'bg-accent/15 text-accent border border-accent/30'
+                      ? s.is_done ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-accent/15 text-accent border border-accent/30'
                       : 'bg-line text-dim hover:text-ink hover:bg-raised'
                   }`}>
                   {s.name}

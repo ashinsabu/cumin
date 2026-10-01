@@ -5,6 +5,7 @@ import { useBoard } from './context/BoardContext'
 import { Sidebar, MobileNav } from './components/Sidebar'
 import { ItemModal } from './components/ItemModal'
 import { LoginPage } from './components/LoginPage'
+import { AuthErrorPage } from './components/AuthErrorPage'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { BoardView } from './views/BoardView'
 import { BacklogView } from './views/BacklogView'
@@ -105,5 +106,10 @@ function AppShell() {
 }
 
 export default function App() {
-  return <AppShell />
+  return (
+    <Routes>
+      <Route path="/auth-error" element={<AuthErrorPage />} />
+      <Route path="*" element={<AppShell />} />
+    </Routes>
+  )
 }
