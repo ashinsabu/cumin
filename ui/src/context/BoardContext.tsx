@@ -257,7 +257,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
 
   const deleteEpic = useCallback(async (id: string): Promise<void> => {
     setEpics((prev) => prev.filter((e) => e.id !== id))
-    setItems((prev) => prev.map((i) => i.epic_id === id ? { ...i, epic_id: null, epic_name: undefined, epic_color: undefined } : i))
+    setItems((prev) => prev.filter((i) => i.epic_id !== id))
     try {
       const res = await fetch(`${API}/api/epics/${id}`, { method: 'DELETE', credentials: 'include' })
       if (!res.ok) {
