@@ -1,15 +1,31 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
+    branches: [main]
+  push:
     branches: [main]
 
 jobs:
   backend:
-    name: Build backend
+    name: Backend (build + vet + test)
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: cumin
+          POSTGRES_PASSWORD: cumin
+          POSTGRES_DB: cumin
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
 
@@ -24,9 +40,15 @@ jobs:
       - name: Vet
         run: cd server && go vet ./...
 
+      - name: Integration tests
+        run: cd server && go test ./integration/... -count=1 -timeout 60s
+        env:
+          TEST_DATABASE_URL: postgres://cumin:cumin@localhost:5432/cumin?sslmode=disable
+
   frontend:
-    name: Build frontend
+    name: Frontend (build + test)
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -36,8 +58,11 @@ jobs:
           cache: npm
           cache-dependency-path: ui/package-lock.json
 
-      - name: Install
+      - name: Install deps
         run: cd ui && npm ci
 
       - name: Build
         run: cd ui && npm run build
+
+      - name: Unit tests
+        run: cd ui && npm test
