@@ -16,6 +16,8 @@ type Config struct {
 	GoogleClientID     string `envconfig:"GOOGLE_CLIENT_ID"`
 	GoogleClientSecret string `envconfig:"GOOGLE_CLIENT_SECRET"`
 	GoogleRedirectURL  string `envconfig:"GOOGLE_REDIRECT_URL" default:"http://localhost:8080/api/auth/google/callback"`
+	// GoogleAppClientIDs are the native app (iOS) OAuth client IDs accepted by /api/auth/google/mobile.
+	GoogleAppClientIDs []string `envconfig:"GOOGLE_MOBILE_CLIENT_IDS"`
 	// AllowedOrigins is a comma-separated list of allowed frontend origins for CORS and post-auth redirect.
 	AllowedOrigins string `envconfig:"ALLOWED_ORIGINS"`
 	Env            string `envconfig:"ENV" default:"development"`

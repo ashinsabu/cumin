@@ -22,6 +22,8 @@ type OAuthConfig struct {
 	RedirectURL    string
 	AllowedOrigins []string
 	JWTSecret      string
+	// AppClientIDs are the native app OAuth client IDs accepted as ID token audiences.
+	AppClientIDs []string
 }
 
 type GoogleUserInfo struct {
@@ -120,31 +122,8 @@ func (h *Handler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isNew, err := h.repo.IsNewUser(r.Context(), userInfo.Sub)
+	user, isNew, jwtToken, err := h.signIn(r.Context(), userInfo, WebTokenTTL)
 	if err != nil {
-		l.Error("auth: IsNewUser failed", slog.String("email", userInfo.Email), slog.Any("err", err))
-		h.authError(w, r, "server_error")
-		return
-	}
-
-	user, err := h.repo.UpsertUser(r.Context(), userInfo.Sub, userInfo.Email, userInfo.Name, userInfo.Picture)
-	if err != nil {
-		l.Error("auth: UpsertUser failed", slog.String("email", userInfo.Email), slog.Any("err", err))
-		h.authError(w, r, "server_error")
-		return
-	}
-
-	if isNew && h.provision != nil {
-		if err := h.provision(r.Context(), user.ID, userInfo.Name); err != nil {
-			l.Error("auth: provision failed", slog.String("user_id", user.ID), slog.Any("err", err))
-			h.authError(w, r, "server_error")
-			return
-		}
-	}
-
-	jwtToken, err := IssueToken(h.cfg.JWTSecret, user.ID, user.Email)
-	if err != nil {
-		l.Error("auth: JWT issue failed", slog.String("user_id", user.ID), slog.Any("err", err))
 		h.authError(w, r, "server_error")
 		return
 	}
@@ -171,6 +150,38 @@ func (h *Handler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	})
 
 	http.Redirect(w, r, h.frontendURL(), http.StatusTemporaryRedirect)
+}
+
+// signIn upserts the Google user, provisions defaults on first login and issues a Cumin JWT.
+// Shared by the web callback and the native mobile login.
+func (h *Handler) signIn(ctx context.Context, info *GoogleUserInfo, ttl time.Duration) (*User, bool, string, error) {
+	l := applogger.FromContext(ctx)
+
+	isNew, err := h.repo.IsNewUser(ctx, info.Sub)
+	if err != nil {
+		l.Error("auth: IsNewUser failed", slog.String("email", info.Email), slog.Any("err", err))
+		return nil, false, "", err
+	}
+
+	user, err := h.repo.UpsertUser(ctx, info.Sub, info.Email, info.Name, info.Picture)
+	if err != nil {
+		l.Error("auth: UpsertUser failed", slog.String("email", info.Email), slog.Any("err", err))
+		return nil, false, "", err
+	}
+
+	if isNew && h.provision != nil {
+		if err := h.provision(ctx, user.ID, info.Name); err != nil {
+			l.Error("auth: provision failed", slog.String("user_id", user.ID), slog.Any("err", err))
+			return nil, false, "", err
+		}
+	}
+
+	jwtToken, err := IssueToken(h.cfg.JWTSecret, user.ID, user.Email, ttl)
+	if err != nil {
+		l.Error("auth: JWT issue failed", slog.String("user_id", user.ID), slog.Any("err", err))
+		return nil, false, "", err
+	}
+	return user, isNew, jwtToken, nil
 }
 
 func (h *Handler) HandleMe(w http.ResponseWriter, r *http.Request) {
