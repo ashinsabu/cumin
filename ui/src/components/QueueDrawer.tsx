@@ -301,6 +301,13 @@ type BeltItemProps = {
 
 function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchive, isDragOver, dragging, onDragStart, onDragOver, onDrop, onDragEnd }: BeltItemProps) {
   const isFirst = index === 0
+  const [done, setDone] = useState(false)
+
+  const handleDone = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setDone(true)
+    setTimeout(() => onArchive(), 350)
+  }
 
   return (
     <div
@@ -329,7 +336,7 @@ function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchiv
               {isFirst && !expanded && (
                 <span className="inline-block text-[10px] font-bold text-accent uppercase tracking-widest mb-1">Next up</span>
               )}
-              <p className="text-sm text-ink leading-snug">{item.title}</p>
+              <p className={`text-sm leading-snug transition-all duration-300 ${done ? 'line-through text-ghost' : 'text-ink'}`}>{item.title}</p>
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                 <PriorityBadge p={item.priority} />
                 {item.estimate_minutes && (
@@ -343,12 +350,21 @@ function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchiv
               </div>
               <AgeBar createdAt={item.created_at} />
             </div>
-            <button
-              onClick={(e) => { e.stopPropagation(); onArchive() }}
-              className="shrink-0 mt-0.5 text-base w-6 h-6 flex items-center justify-center rounded text-ghost hover:text-accent hover:bg-accent/10 transition-colors leading-none"
-            >
-              ×
-            </button>
+            <div className="flex items-center gap-0.5 shrink-0 mt-0.5">
+              <button
+                onClick={handleDone}
+                title="Mark done"
+                className={`w-6 h-6 flex items-center justify-center rounded transition-colors text-sm leading-none ${done ? 'text-green-500' : 'text-ghost hover:text-green-500 hover:bg-green-500/10'}`}
+              >
+                ✓
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onArchive() }}
+                className="w-6 h-6 flex items-center justify-center rounded text-ghost hover:text-accent hover:bg-accent/10 transition-colors text-base leading-none"
+              >
+                ×
+              </button>
+            </div>
           </div>
           <AnimatePresence initial={false}>
             {expanded && (
