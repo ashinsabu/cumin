@@ -39,16 +39,25 @@ export function Sidebar({ views, activeId, onNavigate }: SidebarProps) {
             {group.label && (
               <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-ghost/60">{group.label}</p>
             )}
-            {views.filter(v => group.ids.includes(v.id)).map((nav) => (
-              <button key={nav.id} onClick={() => onNavigate(nav.id)}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-[var(--c-radius-card)] text-sm font-medium mb-0.5 transition-colors ${
-                  activeId === nav.id
-                    ? 'nav-item-active bg-accent/10 text-accent'
-                    : 'text-dim hover:bg-surface hover:text-ink'
-                }`}>
-                <span className="text-sm">{nav.icon}</span>{nav.label}
-              </button>
-            ))}
+            {views.filter(v => group.ids.includes(v.id)).map((nav) => {
+              const isPlaceholder = nav.id === 'dashboards'
+              return (
+                <button key={nav.id}
+                  onClick={isPlaceholder ? undefined : () => onNavigate(nav.id)}
+                  disabled={isPlaceholder}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-[var(--c-radius-card)] text-sm font-medium mb-0.5 transition-colors ${
+                    isPlaceholder
+                      ? 'text-ghost/40 cursor-default'
+                      : activeId === nav.id
+                        ? 'nav-item-active bg-accent/10 text-accent'
+                        : 'text-dim hover:bg-surface hover:text-ink'
+                  }`}>
+                  <span className="text-sm">{nav.icon}</span>
+                  <span className="flex-1 text-left">{nav.label}</span>
+                  {isPlaceholder && <span className="text-[9px] font-semibold tracking-wide text-ghost/40 uppercase">soon</span>}
+                </button>
+              )
+            })}
           </div>
         ))}
       </nav>
