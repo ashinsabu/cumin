@@ -16,10 +16,10 @@ export function StatusDurationBar({ minutes }: { minutes: number | undefined }) 
 
   return (
     <div className="flex items-center gap-2 w-full">
-      <div className="flex-1 h-1.5 rounded-full overflow-hidden bg-line">
+      <div className="flex-1 h-2 rounded-full overflow-hidden bg-line">
         <div className="h-full rounded-full transition-all" style={{ width: `${width}%`, backgroundColor: color }} />
       </div>
-      <span className="text-xs font-semibold shrink-0" style={{ color }}>
+      <span className="text-sm font-bold shrink-0" style={{ color }}>
         {formatDuration(minutes)}
       </span>
     </div>

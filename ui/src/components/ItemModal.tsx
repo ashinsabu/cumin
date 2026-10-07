@@ -30,7 +30,6 @@ export function ItemModal({ item, onClose }: { item: Item; onClose: () => void }
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [deleting, setDeleting] = useState(false)
 
   const priorityConfig = PRIORITY[item.priority] ?? PRIORITY[4]
   const sprints = item.sprints ?? []
@@ -76,16 +75,10 @@ export function ItemModal({ item, onClose }: { item: Item; onClose: () => void }
     }
   }
 
-  async function handleDelete() {
-    setDeleting(true)
-    try {
-      await deleteItem(item.id)
-      selectItem(null)
-      onClose()
-    } catch {
-      setDeleting(false)
-      setShowDeleteConfirm(false)
-    }
+  function handleDelete() {
+    deleteItem(item.id)
+    selectItem(null)
+    onClose()
   }
 
   const priorities = [
@@ -203,9 +196,9 @@ export function ItemModal({ item, onClose }: { item: Item; onClose: () => void }
               <span className="text-xs text-dim">Move to trash?</span>
               <div className="flex gap-2">
                 <button type="button" onClick={() => setShowDeleteConfirm(false)} className="px-3 py-1.5 text-xs rounded-[var(--c-radius-card)] text-dim hover:bg-line">Cancel</button>
-                <button type="button" onClick={handleDelete} disabled={deleting}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-[var(--c-radius-card)] bg-red-500 text-white hover:opacity-90 disabled:opacity-40">
-                  {deleting ? 'Deleting…' : 'Delete'}
+                <button type="button" onClick={handleDelete}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-[var(--c-radius-card)] bg-red-500 text-white hover:opacity-90">
+                  Delete
                 </button>
               </div>
             </div>

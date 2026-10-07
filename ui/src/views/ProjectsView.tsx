@@ -68,13 +68,10 @@ export function ProjectsView() {
     }
   }
 
-  async function handleConfirmDelete() {
+  function handleConfirmDelete() {
     if (!confirmDelete) return
-    try {
-      await deleteProject(confirmDelete.id)
-    } finally {
-      setConfirmDelete(null)
-    }
+    deleteProject(confirmDelete.id)
+    setConfirmDelete(null)
   }
 
   return (

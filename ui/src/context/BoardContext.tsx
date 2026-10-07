@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
+import { useToast } from './ToastContext'
 import { useSearchParams } from 'react-router-dom'
 import type { Item, Status, Epic, Sprint, Board, Project } from '../types'
 
@@ -72,6 +73,16 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   const [selectedItem, setSelectedItem] = useState<Item | null>(null)
   const [selectedEpic, setSelectedEpic] = useState<Epic | null>(null)
   const [searchParams, setSearchParams] = useSearchParams()
+
+  const { push: pushToast } = useToast()
+
+  const itemsRef = useRef<Item[]>([])
+  const epicsRef = useRef<Epic[]>([])
+  const projectsRef = useRef<Project[]>([])
+
+  useEffect(() => { itemsRef.current = items }, [items])
+  useEffect(() => { epicsRef.current = epics }, [epics])
+  useEffect(() => { projectsRef.current = projects }, [projects])
 
   const fetchAll = useCallback(async () => {
     try {
@@ -194,18 +205,21 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   }, [fetchAll])
 
   const deleteItem = useCallback(async (id: string): Promise<void> => {
-    setItems((prev) => prev.filter((i) => i.id !== id))
-    try {
-      const res = await fetch(`${API}/api/items/${id}`, { method: 'DELETE', credentials: 'include' })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || 'Failed to delete item')
-      }
-    } catch (err) {
-      await fetchAll()
-      throw err
+    const snapshot = itemsRef.current.find(i => i.id === id)
+    setItems(prev => prev.filter(i => i.id !== id))
+    const res = await fetch(`${API}/api/items/${id}`, { method: 'DELETE', credentials: 'include' })
+    if (!res.ok) {
+      if (snapshot) setItems(prev => [...prev, snapshot])
+      return
     }
-  }, [fetchAll])
+    pushToast({
+      message: snapshot?.title ? `"${snapshot.title}" deleted` : 'Item deleted',
+      undo: snapshot ? async () => {
+        setItems(prev => [...prev, snapshot])
+        await fetch(`${API}/api/items/${id}/restore`, { method: 'POST', credentials: 'include' })
+      } : undefined,
+    })
+  }, [pushToast])
 
   const createProject = useCallback(async (payload: CreateProjectPayload): Promise<Project> => {
     const res = await fetch(`${API}/api/projects`, {
@@ -224,20 +238,25 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const deleteProject = useCallback(async (id: string): Promise<void> => {
-    // Optimistically remove project and its items immediately
-    setProjects((prev) => prev.filter((p) => p.id !== id))
-    setItems((prev) => prev.filter((i) => i.project_id !== id))
-    try {
-      const res = await fetch(`${API}/api/projects/${id}`, { method: 'DELETE', credentials: 'include' })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || 'Failed to delete project')
-      }
-    } catch (err) {
-      await fetchAll()
-      throw err
+    const projSnap = projectsRef.current.find(p => p.id === id)
+    const itemsSnap = itemsRef.current.filter(i => i.project_id === id)
+    setProjects(prev => prev.filter(p => p.id !== id))
+    setItems(prev => prev.filter(i => i.project_id !== id))
+    const res = await fetch(`${API}/api/projects/${id}`, { method: 'DELETE', credentials: 'include' })
+    if (!res.ok) {
+      if (projSnap) setProjects(prev => [...prev, projSnap])
+      setItems(prev => [...prev, ...itemsSnap])
+      return
     }
-  }, [fetchAll])
+    pushToast({
+      message: projSnap?.name ? `"${projSnap.name}" deleted` : 'Project deleted',
+      undo: projSnap ? async () => {
+        setProjects(prev => [...prev, projSnap])
+        setItems(prev => [...prev, ...itemsSnap])
+        await fetch(`${API}/api/projects/${id}/restore`, { method: 'POST', credentials: 'include' })
+      } : undefined,
+    })
+  }, [pushToast])
 
   const createEpic = useCallback(async (payload: CreateEpicPayload): Promise<Epic> => {
     const res = await fetch(`${API}/api/epics`, {
@@ -256,19 +275,25 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const deleteEpic = useCallback(async (id: string): Promise<void> => {
-    setEpics((prev) => prev.filter((e) => e.id !== id))
-    setItems((prev) => prev.filter((i) => i.epic_id !== id))
-    try {
-      const res = await fetch(`${API}/api/epics/${id}`, { method: 'DELETE', credentials: 'include' })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || 'Failed to delete epic')
-      }
-    } catch (err) {
-      await fetchAll()
-      throw err
+    const epicSnap = epicsRef.current.find(e => e.id === id)
+    const itemsSnap = itemsRef.current.filter(i => i.epic_id === id)
+    setEpics(prev => prev.filter(e => e.id !== id))
+    setItems(prev => prev.filter(i => i.epic_id !== id))
+    const res = await fetch(`${API}/api/epics/${id}`, { method: 'DELETE', credentials: 'include' })
+    if (!res.ok) {
+      if (epicSnap) setEpics(prev => [...prev, epicSnap])
+      setItems(prev => [...prev, ...itemsSnap])
+      return
     }
-  }, [fetchAll])
+    pushToast({
+      message: epicSnap?.name ? `"${epicSnap.name}" deleted` : 'Epic deleted',
+      undo: epicSnap ? async () => {
+        setEpics(prev => [...prev, epicSnap])
+        setItems(prev => [...prev, ...itemsSnap])
+        await fetch(`${API}/api/epics/${id}/restore`, { method: 'POST', credentials: 'include' })
+      } : undefined,
+    })
+  }, [pushToast])
 
   return (
     <BoardContext.Provider value={{

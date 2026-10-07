@@ -36,7 +36,6 @@ export function EpicModal({ epic, onClose }: { epic: Epic; onClose: () => void }
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [deleting, setDeleting] = useState(false)
   const [showQuickAdd, setShowQuickAdd] = useState(false)
 
   const epicItems = items.filter((i) => i.epic_id === epic.id)
@@ -81,16 +80,10 @@ export function EpicModal({ epic, onClose }: { epic: Epic; onClose: () => void }
     }
   }
 
-  async function handleDelete() {
-    setDeleting(true)
-    try {
-      await deleteEpic(epic.id)
-      selectEpic(null)
-      onClose()
-    } catch {
-      setDeleting(false)
-      setShowDeleteConfirm(false)
-    }
+  function handleDelete() {
+    deleteEpic(epic.id)
+    selectEpic(null)
+    onClose()
   }
 
   if (mode === 'minimized') {
@@ -251,9 +244,9 @@ export function EpicModal({ epic, onClose }: { epic: Epic; onClose: () => void }
               <div className="flex gap-2">
                 <button type="button" onClick={() => setShowDeleteConfirm(false)}
                   className="px-3 py-1.5 text-xs rounded text-dim hover:bg-line transition-colors">Cancel</button>
-                <button type="button" onClick={handleDelete} disabled={deleting}
-                  className="px-3 py-1.5 text-xs font-semibold rounded bg-red-500 text-white hover:opacity-90 disabled:opacity-40 transition-opacity">
-                  {deleting ? 'Deleting…' : 'Confirm Delete'}
+                <button type="button" onClick={handleDelete}
+                  className="px-3 py-1.5 text-xs font-semibold rounded bg-red-500 text-white hover:opacity-90 transition-opacity">
+                  Confirm Delete
                 </button>
               </div>
             </div>
