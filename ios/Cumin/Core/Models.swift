@@ -70,6 +70,7 @@ struct Project: Codable, Equatable, Identifiable {
     let name: String
     let prefix: String
     let color: String
+    let description: String
 }
 
 // List endpoint wrappers: { "statuses": [...] } etc.

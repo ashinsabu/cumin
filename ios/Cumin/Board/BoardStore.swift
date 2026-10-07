@@ -10,8 +10,39 @@ final class BoardStore {
     private(set) var items: [Item] = []
     private(set) var epics: [Epic] = []
     private(set) var projects: [Project] = []
-    /// Most recently deleted item, kept briefly so it can be restored (web: undo toast).
-    private(set) var recentlyDeleted: Item?
+    /// Last thing deleted, kept briefly so it can be restored (web: undo toast).
+    private(set) var recentlyDeleted: Deleted?
+
+    enum Deleted: Equatable {
+        case item(Item)
+        case epic(Epic)
+        case project(Project)
+
+        var label: String {
+            switch self {
+            case .item(let item): "\"\(item.title)\" deleted"
+            case .epic(let epic): "Epic \"\(epic.name)\" deleted"
+            case .project(let project): "Project \"\(project.name)\" deleted"
+            }
+        }
+
+        var id: String {
+            switch self {
+            case .item(let item): item.id
+            case .epic(let epic): epic.id
+            case .project(let project): project.id
+            }
+        }
+
+        /// The server restores the epic/project together with the items deleted with it.
+        fileprivate var restorePath: String {
+            switch self {
+            case .item(let item): "/api/items/\(item.id)/restore"
+            case .epic(let epic): "/api/epics/\(epic.id)/restore"
+            case .project(let project): "/api/projects/\(project.id)/restore"
+            }
+        }
+    }
     private(set) var activeSprint: Sprint?
     private(set) var isLoading = false
     private(set) var hasLoaded = false
@@ -165,7 +196,7 @@ final class BoardStore {
         localEdits += 1
         do {
             let _: APIClient.Empty = try await api.send("DELETE", "/api/items/\(itemID)", body: Optional<APIClient.Empty>.none)
-            recentlyDeleted = removed
+            recentlyDeleted = .item(removed)
         } catch {
             items.insert(removed, at: min(i, items.count))
             errorMessage = "Couldn't delete \"\(removed.title)\": \(error.localizedDescription)"
@@ -173,20 +204,94 @@ final class BoardStore {
     }
 
     func undoDelete() async {
-        guard let item = recentlyDeleted else { return }
+        guard let deleted = recentlyDeleted else { return }
         recentlyDeleted = nil
         localEdits += 1
-        items.append(item)
+        if case .item(let item) = deleted { items.append(item) }
         do {
-            let _: APIClient.Empty = try await api.post("/api/items/\(item.id)/restore", body: APIClient.Empty())
-            await resync()
+            let _: APIClient.Empty = try await api.post(deleted.restorePath, body: APIClient.Empty())
         } catch {
-            items.removeAll { $0.id == item.id }
-            errorMessage = "Couldn't restore \"\(item.title)\": \(error.localizedDescription)"
+            errorMessage = "Couldn't restore: \(error.localizedDescription)"
         }
+        await resync()
     }
 
     func dismissUndo() { recentlyDeleted = nil }
+
+    // MARK: - Epics (ports of CreateEpicModal / EpicModal)
+
+    struct NewEpic: Encodable {
+        var name: String
+        var type: String
+        var color: String
+        var description: String?
+        /// RFC 3339, e.g. "2026-11-01T00:00:00Z" (web sends the date at midnight UTC).
+        var deadline: String?
+    }
+
+    func createEpic(_ new: NewEpic) async throws {
+        let epic: Epic = try await api.post("/api/epics", body: new)
+        localEdits += 1
+        epics.append(epic)
+        await resync()
+    }
+
+    struct EpicChanges: Encodable {
+        var name: String
+        var description: String
+    }
+
+    func updateEpic(_ epicID: String, _ changes: EpicChanges) async throws {
+        let _: APIClient.Empty = try await api.send("PATCH", "/api/epics/\(epicID)", body: changes)
+        localEdits += 1
+        await resync()
+    }
+
+    /// Deletes the epic and (server-side) its items; undoable.
+    func deleteEpic(_ epicID: String) async {
+        guard let epic = epics.first(where: { $0.id == epicID }) else { return }
+        localEdits += 1
+        epics.removeAll { $0.id == epicID }
+        items.removeAll { $0.epicId == epicID }
+        do {
+            let _: APIClient.Empty = try await api.send("DELETE", "/api/epics/\(epicID)", body: Optional<APIClient.Empty>.none)
+            recentlyDeleted = .epic(epic)
+        } catch {
+            errorMessage = "Couldn't delete epic: \(error.localizedDescription)"
+        }
+        await resync()
+    }
+
+    // MARK: - Projects (port of ProjectsView)
+
+    struct NewProject: Encodable {
+        var name: String
+        var prefix: String
+        var color: String
+        var description: String
+    }
+
+    func createProject(_ new: NewProject) async throws {
+        let project: Project = try await api.post("/api/projects", body: new)
+        localEdits += 1
+        projects.append(project)
+        await resync()
+    }
+
+    /// Deletes the project and (server-side) its items; undoable.
+    func deleteProject(_ projectID: String) async {
+        guard let project = projects.first(where: { $0.id == projectID }) else { return }
+        localEdits += 1
+        projects.removeAll { $0.id == projectID }
+        items.removeAll { $0.projectId == projectID }
+        do {
+            let _: APIClient.Empty = try await api.send("DELETE", "/api/projects/\(projectID)", body: Optional<APIClient.Empty>.none)
+            recentlyDeleted = .project(project)
+        } catch {
+            errorMessage = "Couldn't delete project: \(error.localizedDescription)"
+        }
+        await resync()
+    }
 
     /// After our own change succeeds, pull the server's view (enriched fields, positions, IDs).
     private func resync() async {

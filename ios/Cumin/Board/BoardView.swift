@@ -46,7 +46,7 @@ struct BoardView: View {
                     .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $isCreating) { CreateItemView() }
-            .overlay(alignment: .bottom) { undoBanner }
+
             .task {
                 if !store.hasLoaded { await store.load() }
                 #if DEBUG
@@ -107,34 +107,6 @@ struct BoardView: View {
             }
             .font(Theme.mono(.caption2))
             .foregroundStyle(Theme.dim)
-        }
-    }
-
-    /// Web parity: "Item deleted · Undo" toast, hidden after a few seconds.
-    @ViewBuilder
-    private var undoBanner: some View {
-        if let deleted = store.recentlyDeleted {
-            HStack(spacing: 12) {
-                Text("\"\(deleted.title)\" deleted")
-                    .font(Theme.mono(.footnote))
-                    .lineLimit(1)
-                    .foregroundStyle(Theme.ink)
-                Spacer()
-                Button("Undo") { Task { await store.undoDelete() } }
-                    .accessibilityIdentifier("undo-button")
-                    .font(Theme.mono(.footnote, weight: .bold))
-                    .foregroundStyle(Theme.accent)
-            }
-            .padding(12)
-            .background(Theme.raised)
-            .overlay(Rectangle().stroke(Theme.line, lineWidth: 1))
-            .padding(.horizontal, 16)
-            .padding(.bottom, 8)
-            .transition(.move(edge: .bottom).combined(with: .opacity))
-            .task(id: deleted.id) {
-                try? await Task.sleep(for: .seconds(5))
-                if !Task.isCancelled { withAnimation { store.dismissUndo() } }
-            }
         }
     }
 
