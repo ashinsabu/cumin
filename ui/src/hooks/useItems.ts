@@ -55,14 +55,33 @@ export function useMoveItem() {
         method: 'POST',
         body: JSON.stringify({ status_id: statusId }),
       }),
+    onMutate: async ({ id, statusId }) => {
+      // Cancel any in-flight refetches so they don't overwrite the optimistic update.
+      await qc.cancelQueries({ queryKey: itemKeys.all })
+      // Snapshot for rollback on error.
+      const snapshot = qc.getQueriesData<Item[]>({ queryKey: itemKeys.all })
+      // Apply optimistic update immediately.
+      qc.setQueriesData<Item[]>({ queryKey: itemKeys.all }, (old = []) =>
+        old.map((i) => (i.id === id ? { ...i, status_id: statusId } : i)),
+      )
+      return { snapshot }
+    },
     onSuccess: (updatedItem) => {
-      // Immediately patch the moved item so the card never snaps back visually.
+      // Replace optimistic data with authoritative server response.
       qc.setQueriesData<Item[]>({ queryKey: itemKeys.all }, (old = []) =>
         old.map((i) => (i.id === updatedItem.id ? updatedItem : i)),
       )
-      // Background-refresh all items so every card's time_in_status stays current.
-      // setQueriesData above means the moved item won't re-render on this refetch
-      // (structural sharing sees no diff).
+    },
+    onError: (_err, _vars, ctx) => {
+      // Roll back to pre-mutation state.
+      if (ctx?.snapshot) {
+        for (const [key, data] of ctx.snapshot) {
+          qc.setQueryData(key, data)
+        }
+      }
+    },
+    onSettled: () => {
+      // Background refresh to get fresh time_in_status for all cards.
       qc.invalidateQueries({ queryKey: itemKeys.all })
     },
   })
