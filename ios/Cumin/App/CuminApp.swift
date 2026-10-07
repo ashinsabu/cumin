@@ -60,21 +60,23 @@ struct MainTabView: View {
     }
 
     var body: some View {
+        // Mirrors the web sidebar: Board, Items, then the Queue (the web's drawer) and More for the rest.
         TabView(selection: $selectedTab) {
             NavigationStack { BoardView() }
                 .tabItem { Label("Board", systemImage: "rectangle.split.3x1") }.tag(0)
-            NavigationStack { ItemListView(kind: .backlog) }
-                .tabItem { Label("Backlog", systemImage: "list.bullet") }.tag(1)
+            NavigationStack { ItemsView() }
+                .tabItem { Label("Items", systemImage: "square.grid.2x2") }.tag(1)
             if queue.isEnabled {
                 NavigationStack { QueueView() }
                     .tabItem { Label("Queue", systemImage: "tray.full") }.tag(2)
                     // Red count of entries whose deadline day has passed.
                     .badge(queue.overdueCount)
             }
-            NavigationStack { ItemListView(kind: .all) }
-                .tabItem { Label("Items", systemImage: "square.grid.2x2") }.tag(3)
-            MoreView(user: user)
-                .tabItem { Label("More", systemImage: "ellipsis") }.tag(4)
+            MoreView(user: user) { filters in
+                ItemFilters.apply(filters)
+                selectedTab = 1
+            }
+            .tabItem { Label("More", systemImage: "ellipsis") }.tag(3)
         }
         // Load the queue up front so the overdue badge is right before the tab is opened.
         .task { await queue.load() }
@@ -88,11 +90,14 @@ struct MainTabView: View {
     }
 }
 
-/// Web sidebar's "Insights" and "Organize" groups plus Account.
+/// The rest of the web sidebar, in its order: My Views, Organize, Insights — plus Account.
 struct MoreView: View {
     enum Route: Hashable { case dashboard, epics, projects, account }
 
+    @Environment(BoardStore.self) private var store
     let user: User
+    /// Opens Items with a saved view's filters (web: clicking a view in the sidebar).
+    let openView: (SavedView.Filters) -> Void
     @State private var path: [Route] = []
     /// Set by Account when the theme changes: the app rebuilds, so reopen Account afterwards.
     @AppStorage("more.reopenAccount") private var reopenAccount = false
@@ -100,17 +105,33 @@ struct MoreView: View {
     var body: some View {
         NavigationStack(path: $path) {
             List {
-                Section {
-                    NavigationLink(value: Route.dashboard) { Label("Dashboard", systemImage: "chart.bar") }
-                } header: {
-                    SectionHeader("Insights")
+                if !store.views.isEmpty {
+                    Section {
+                        ForEach(store.views) { view in
+                            Button { openView(view.filters) } label: {
+                                Label(view.name, systemImage: "bookmark")
+                            }
+                            .foregroundStyle(Theme.ink)
+                            .swipeActions {
+                                Button("Delete", role: .destructive) { Task { await store.deleteView(view.id) } }
+                            }
+                        }
+                    } header: {
+                        SectionHeader("My Views")
+                    }
+                    .listRowBackground(Theme.surface)
                 }
-                .listRowBackground(Theme.surface)
                 Section {
                     NavigationLink(value: Route.epics) { Label("Epics", systemImage: "scope") }
                     NavigationLink(value: Route.projects) { Label("Projects", systemImage: "square.stack.3d.up") }
                 } header: {
                     SectionHeader("Organize")
+                }
+                .listRowBackground(Theme.surface)
+                Section {
+                    NavigationLink(value: Route.dashboard) { Label("Dashboards", systemImage: "chart.bar") }
+                } header: {
+                    SectionHeader("Insights")
                 }
                 .listRowBackground(Theme.surface)
                 Section {

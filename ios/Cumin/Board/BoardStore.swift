@@ -10,6 +10,8 @@ final class BoardStore {
     private(set) var items: [Item] = []
     private(set) var epics: [Epic] = []
     private(set) var projects: [Project] = []
+    /// "My Views": saved filter presets shared with the web (GET/POST/DELETE /api/views).
+    private(set) var views: [SavedView] = []
     /// Last thing deleted, kept briefly so it can be restored (web: undo toast).
     private(set) var recentlyDeleted: Deleted?
 
@@ -98,6 +100,7 @@ final class BoardStore {
         let items: [Item]
         let epics: [Epic]
         let projects: [Project]
+        let views: [SavedView]
         let sprint: Sprint?
     }
 
@@ -107,6 +110,7 @@ final class BoardStore {
         async let items: ItemList = api.get("/api/items")
         async let epics: EpicList = api.get("/api/epics")
         async let projects: ProjectList = api.get("/api/projects")
+        async let views = savedViewsOrEmpty()
         async let sprint = activeSprintOrNil()
         return try await Snapshot(
             board: board,
@@ -114,6 +118,7 @@ final class BoardStore {
             items: items.items ?? [],
             epics: epics.epics ?? [],
             projects: projects.projects ?? [],
+            views: await views,
             sprint: sprint
         )
     }
@@ -125,6 +130,7 @@ final class BoardStore {
         if items != s.items { items = s.items }
         if epics != s.epics { epics = s.epics }
         if projects != s.projects { projects = s.projects }
+        if views != s.views { views = s.views.sorted { $0.position < $1.position } }
         if activeSprint != s.sprint { activeSprint = s.sprint }
     }
 
@@ -293,6 +299,30 @@ final class BoardStore {
             errorMessage = "Couldn't delete project: \(error.localizedDescription)"
         }
         await resync()
+    }
+
+    // MARK: - Saved views (port of useSavedViews)
+
+    /// Older servers don't have /api/views; treat that as "no views" rather than failing the board.
+    private func savedViewsOrEmpty() async -> [SavedView] {
+        ((try? await api.get("/api/views")) as SavedViewList?)?.views ?? []
+    }
+
+    func createView(name: String, filters: SavedView.Filters) async throws {
+        struct Body: Encodable { let name: String; let filters: SavedView.Filters }
+        let view: SavedView = try await api.post("/api/views", body: Body(name: name, filters: filters))
+        views.append(view)
+    }
+
+    func deleteView(_ id: String) async {
+        let removed = views.filter { $0.id == id }
+        views.removeAll { $0.id == id }
+        do {
+            let _: APIClient.Empty = try await api.send("DELETE", "/api/views/\(id)", body: Optional<APIClient.Empty>.none)
+        } catch {
+            views.append(contentsOf: removed)
+            errorMessage = "Couldn't delete view: \(error.localizedDescription)"
+        }
     }
 
     /// After our own change succeeds, pull the server's view (enriched fields, positions, IDs).
