@@ -1,0 +1,4 @@
+// iOS OAuth client (Google Cloud project "cumin-ios", bundle ID com.ashinsabu.cumin).
+// Client IDs are not secrets; the prod server accepts this one via GOOGLE_MOBILE_CLIENT_IDS.
+GOOGLE_IOS_CLIENT_ID = 1034142533781-jfut7bjrcdib432j7mtg4sphi53eb9ir.apps.googleusercontent.com
+GOOGLE_REVERSED_CLIENT_ID = com.googleusercontent.apps.1034142533781-jfut7bjrcdib432j7mtg4sphi53eb9ir
