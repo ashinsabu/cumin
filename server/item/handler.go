@@ -2,6 +2,7 @@ package item
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/ashinsabu/cumin/server/auth"
 	"github.com/ashinsabu/cumin/server/board"
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 )
 
 type CreateRequest struct {
@@ -65,6 +67,7 @@ func (h *Handler) Routes(r chi.Router) {
 	r.Get("/api/items/{id}", api.HandleNoBody(h.Get))
 	r.Patch("/api/items/{id}", api.Handle(h.Update))
 	r.Delete("/api/items/{id}", api.HandleDelete(h.Delete))
+	r.Post("/api/items/{id}/restore", api.HandleDelete(h.Restore))
 	r.Post("/api/items/{id}/move", api.Handle(h.Move))
 	r.Put("/api/items/reorder", api.Handle(h.Reorder))
 	r.Get("/api/items/{id}/transitions", api.HandleNoBody(h.Transitions))
@@ -248,6 +251,21 @@ func (h *Handler) Delete(ctx context.Context) error {
 	}
 
 	return h.store.SoftDelete(ctx, it.ID)
+}
+
+func (h *Handler) Restore(ctx context.Context) error {
+	id := api.URLParam(ctx, "id")
+	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	if err != nil {
+		return api.NotFound("board not found")
+	}
+	if err := h.store.Restore(ctx, id, b.ID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return api.NotFound("item not found")
+		}
+		return api.Internal("failed to restore item")
+	}
+	return nil
 }
 
 func (h *Handler) Move(ctx context.Context, req MoveRequest) (*Item, error) {

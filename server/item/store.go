@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -314,4 +315,18 @@ func (s *Store) Transitions(ctx context.Context, itemID string) ([]StatusTransit
 		out = append(out, t)
 	}
 	return out, nil
+}
+
+func (s *Store) Restore(ctx context.Context, id, boardID string) error {
+	tag, err := s.DB.Exec(ctx, `
+		UPDATE items SET deleted_at = NULL
+		WHERE id = $1 AND board_id = $2 AND deleted_at IS NOT NULL
+	`, id, boardID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
+	return nil
 }

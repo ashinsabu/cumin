@@ -20,6 +20,16 @@ type Config struct {
 	AllowedOrigins string `envconfig:"ALLOWED_ORIGINS"`
 	Env            string `envconfig:"ENV" default:"development"`
 	AuthDisabled   bool   `envconfig:"AUTH_DISABLED" default:"false"`
+	FeatureFlags   string `envconfig:"FEATURE_FLAGS"`
+}
+
+func (c Config) IsFeatureEnabled(flag string) bool {
+	for _, f := range strings.Split(c.FeatureFlags, ",") {
+		if strings.TrimSpace(f) == flag {
+			return true
+		}
+	}
+	return false
 }
 
 func Load() Config {

@@ -14,9 +14,11 @@ import (
 	"github.com/ashinsabu/cumin/server/config"
 	"github.com/ashinsabu/cumin/server/db"
 	"github.com/ashinsabu/cumin/server/epic"
+	"github.com/ashinsabu/cumin/server/flags"
 	"github.com/ashinsabu/cumin/server/item"
 	applogger "github.com/ashinsabu/cumin/server/logger"
 	"github.com/ashinsabu/cumin/server/project"
+	"github.com/ashinsabu/cumin/server/queue"
 	"github.com/ashinsabu/cumin/server/sprint"
 	"github.com/ashinsabu/cumin/server/trash"
 	"github.com/ashinsabu/cumin/server/version"
@@ -58,6 +60,7 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(version.Get().JSON())
 	})
+	r.Get("/api/flags", flags.NewHandler(cfg).ServeHTTP)
 	oauthHandler := newAuthHandler(cfg, pool)
 	r.Get("/api/auth/google/login", oauthHandler.HandleLogin)
 	r.Get("/api/auth/google/callback", oauthHandler.HandleCallback)
@@ -113,6 +116,7 @@ func registerDomainRoutes(r chi.Router, pool *pgxpool.Pool) {
 	sprint.NewHandler(sprintStore, boardStore).Routes(r)
 	item.NewHandler(itemStore, boardStore).Routes(r)
 	trash.NewHandler(projectStore, epicStore, boardStore).Routes(r)
+	queue.NewHandler(&queue.Store{DB: pool}, boardStore).Routes(r)
 }
 
 // startPurgeWorker hard-deletes soft-deleted rows older than 30 days, running daily.
