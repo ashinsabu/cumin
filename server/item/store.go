@@ -81,15 +81,47 @@ func scanItemBase(row interface{ Scan(...any) error }) (*Item, error) {
 	return &it, nil
 }
 
-func (s *Store) List(ctx context.Context, boardID string, sprintID *string) ([]Item, error) {
+// FilterParams controls optional server-side filtering for item list queries.
+// Nil pointer fields are ignored (no filter applied for that dimension).
+type FilterParams struct {
+	SprintID  *string // filter to specific sprint
+	ProjectID *string // filter to specific project
+	EpicID    *string // filter to specific epic
+	StatusID  *string // filter to specific status
+	Priority  *int    // filter to specific priority level
+	HideDone  bool    // exclude items whose status has is_done=true
+}
+
+func (s *Store) List(ctx context.Context, boardID string, f FilterParams) ([]Item, error) {
 	query := `SELECT ` + itemEnrichedCols + ` FROM items i LEFT JOIN epics e ON i.epic_id = e.id ` + itemLateralJoin + ` WHERE i.board_id = $1 AND i.deleted_at IS NULL`
 	args := []any{boardID}
+	n := 2 // next placeholder index
 
-	if sprintID != nil {
-		query += ` AND i.sprint_id = $2`
-		args = append(args, *sprintID)
+	add := func(clause string, val any) {
+		query += fmt.Sprintf(clause, n)
+		args = append(args, val)
+		n++
 	}
-	query += ` ORDER BY i.position, i.created_at`
+
+	if f.SprintID != nil {
+		add(` AND i.sprint_id = $%d`, *f.SprintID)
+	}
+	if f.ProjectID != nil {
+		add(` AND i.project_id = $%d`, *f.ProjectID)
+	}
+	if f.EpicID != nil {
+		add(` AND i.epic_id = $%d`, *f.EpicID)
+	}
+	if f.StatusID != nil {
+		add(` AND i.status_id = $%d`, *f.StatusID)
+	}
+	if f.Priority != nil {
+		add(` AND i.priority = $%d`, *f.Priority)
+	}
+	if f.HideDone {
+		query += ` AND i.status_id NOT IN (SELECT id FROM statuses WHERE board_id = $1 AND is_done = true)`
+	}
+	query += ` ORDER BY i.priority, i.position, i.created_at`
 
 	rows, err := s.DB.Query(ctx, query, args...)
 	if err != nil {

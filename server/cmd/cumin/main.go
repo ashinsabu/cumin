@@ -23,6 +23,7 @@ import (
 	"github.com/ashinsabu/cumin/server/queue"
 	"github.com/ashinsabu/cumin/server/sprint"
 	"github.com/ashinsabu/cumin/server/trash"
+	"github.com/ashinsabu/cumin/server/views"
 	"github.com/ashinsabu/cumin/server/version"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -153,6 +154,7 @@ func registerDomainRoutes(r chi.Router, pool *pgxpool.Pool, cfg config.Config) {
 		item.NewHandler(itemStore, boardStore).Routes(r)
 		trash.NewHandler(projectStore, epicStore, boardStore).Routes(r)
 		queue.NewHandler(&queue.Store{DB: pool}, boardStore).Routes(r)
+		views.NewHandler(&views.Store{DB: pool}, boardStore).Routes(r)
 		r.Get("/api/events", hub.NewHandler(h, cfg.IsFeatureEnabled("realtime")).Events)
 	})
 }

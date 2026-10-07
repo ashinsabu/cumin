@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/ashinsabu/cumin/server/api"
@@ -89,12 +90,29 @@ func (h *Handler) listHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var sprintID *string
-	if sid := r.URL.Query().Get("sprint_id"); sid != "" {
-		sprintID = &sid
-	}
+	q := r.URL.Query()
+	f := FilterParams{}
 
-	items, err := h.store.List(r.Context(), b.ID, sprintID)
+	if sid := q.Get("sprint_id"); sid != "" {
+		f.SprintID = &sid
+	}
+	if pid := q.Get("project_id"); pid != "" {
+		f.ProjectID = &pid
+	}
+	if eid := q.Get("epic_id"); eid != "" {
+		f.EpicID = &eid
+	}
+	if sid := q.Get("status_id"); sid != "" {
+		f.StatusID = &sid
+	}
+	if pr := q.Get("priority"); pr != "" {
+		if p, err := strconv.Atoi(pr); err == nil {
+			f.Priority = &p
+		}
+	}
+	f.HideDone = q.Get("hide_done") == "true"
+
+	items, err := h.store.List(r.Context(), b.ID, f)
 	if err != nil {
 		api.WriteError(w, api.Internal("failed to list items"))
 		return
@@ -411,7 +429,7 @@ func (h *Handler) Reorder(ctx context.Context, req ReorderRequest) (*ListRespons
 		return nil, api.Internal("reorder failed")
 	}
 
-	items, err := h.store.List(ctx, b.ID, nil)
+	items, err := h.store.List(ctx, b.ID, FilterParams{})
 	if err != nil {
 		return nil, api.Internal("failed to list items after reorder")
 	}
