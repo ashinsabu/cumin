@@ -40,7 +40,7 @@ struct EpicsView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        Group {
             List {
                 ForEach(rows, id: \.epic.id) { row in
                     EpicRow(stats: row)

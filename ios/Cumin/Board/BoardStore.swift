@@ -49,6 +49,8 @@ final class BoardStore {
     var errorMessage: String?
 
     private let api: APIClient
+    /// For feature extensions (e.g. trash) that live outside this file.
+    var apiClient: APIClient { api }
     /// Bumped on every local change, so a background refresh that started earlier can't undo it.
     private var localEdits = 0
     private var isRefreshing = false

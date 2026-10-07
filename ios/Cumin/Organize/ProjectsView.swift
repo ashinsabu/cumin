@@ -29,7 +29,7 @@ struct ProjectsView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        Group {
             List {
                 ForEach(rows, id: \.project.id) { row in
                     ProjectRow(project: row.project, itemCount: row.count)
