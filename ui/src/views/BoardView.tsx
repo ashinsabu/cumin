@@ -54,6 +54,18 @@ export function BoardView() {
                           : tint
                       }`}
                     >
+                      {columnItems.length === 0 && !snapshot.isDraggingOver && (
+                        <div className="flex flex-col items-center justify-center flex-1 gap-1 py-6 text-center">
+                          {status.is_initial ? (
+                            <>
+                              <span className="text-xs text-ghost">No items yet</span>
+                              <span className="text-xs text-ghost/60">Use + New item to get started</span>
+                            </>
+                          ) : (
+                            <span className="text-xs text-ghost">Drop items here</span>
+                          )}
+                        </div>
+                      )}
                       {columnItems.map((item, index) => (
                         <Draggable key={item.id} draggableId={item.id} index={index}>
                           {(provided, snapshot) => (

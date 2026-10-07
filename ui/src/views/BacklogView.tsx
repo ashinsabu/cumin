@@ -181,8 +181,15 @@ export function BacklogView() {
             })}
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-sm text-ghost">
-                  No backlog items{activeFilters > 0 ? ' matching filters' : ''}
+                <td colSpan={7} className="px-4 py-12 text-center">
+                  {backlogItems.length === 0 ? (
+                    <div className="flex flex-col items-center gap-1.5">
+                      <span className="text-sm text-ghost">Your backlog is empty</span>
+                      <span className="text-xs text-ghost/60">Items not assigned to a sprint appear here — use + New item to add one</span>
+                    </div>
+                  ) : (
+                    <span className="text-sm text-ghost">No items match the current filters</span>
+                  )}
                 </td>
               </tr>
             )}

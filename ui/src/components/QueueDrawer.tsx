@@ -5,6 +5,7 @@ const beltSpring = { type: 'spring', damping: 28, stiffness: 380, mass: 0.8 } as
 import { useQueue } from '../context/QueueContext'
 import { useBoard } from '../context/BoardContext'
 import { parseEstimate, formatEstimate } from '../hooks/useFormat'
+import { FilterSelect } from './FilterSelect'
 import type { QueueItem } from '../types'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -96,18 +97,14 @@ function ConvertSheet({ item, onClose, onConverted }: ConvertSheetProps) {
     }
   }
 
+  const projectOptions = projects.map((p) => ({ value: p.id, label: p.name }))
+  const epicOptions = [{ value: '', label: 'No epic' }, ...epics.map((e) => ({ value: e.id, label: e.name }))]
+
   return (
     <div className="mt-3 pt-3 border-t border-line space-y-2">
       <p className="text-xs font-semibold text-dim uppercase tracking-wide">Convert to item</p>
-      <select value={projectId} onChange={(e) => setProjectId(e.target.value)}
-        className="w-full text-sm bg-surface border border-line rounded-[var(--c-radius-card)] px-2.5 py-2 text-ink">
-        {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-      </select>
-      <select value={epicId} onChange={(e) => setEpicId(e.target.value)}
-        className="w-full text-sm bg-surface border border-line rounded-[var(--c-radius-card)] px-2.5 py-2 text-dim">
-        <option value="">No epic</option>
-        {epics.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
-      </select>
+      <FilterSelect value={projectId} onChange={setProjectId} options={projectOptions} fullWidth />
+      <FilterSelect value={epicId} onChange={setEpicId} options={epicOptions} fullWidth />
       {initialStatus && <p className="text-xs text-ghost">Status: {initialStatus.name} · Priority &amp; estimate carried over</p>}
       <div className="flex gap-2">
         <button onClick={onClose} className="flex-1 text-sm py-2 rounded-[var(--c-radius-card)] border border-line text-dim hover:bg-surface">Cancel</button>
@@ -488,17 +485,17 @@ function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: Qu
           <span className="text-xs px-1.5 py-0.5 rounded bg-accent/10 text-accent font-bold">{urgentCount}</span>
         )}
         <div className="flex items-center gap-1.5 ml-auto">
-          <select
+          <FilterSelect
             value={sortAlgo}
-            onChange={(e) => onSortChange(e.target.value as SortAlgo)}
-            className="text-xs bg-surface border border-line rounded px-2 py-1 text-dim focus:outline-none"
-          >
-            <option value="auto">Auto</option>
-            <option value="priority">Priority</option>
-            <option value="deadline">Deadline</option>
-            <option value="shortest">Shortest</option>
-            <option value="custom">Custom</option>
-          </select>
+            onChange={(v) => onSortChange(v as SortAlgo)}
+            options={[
+              { value: 'auto', label: 'Auto' },
+              { value: 'priority', label: 'Priority' },
+              { value: 'deadline', label: 'Deadline' },
+              { value: 'shortest', label: 'Shortest' },
+              { value: 'custom', label: 'Custom' },
+            ]}
+          />
           <button
             onClick={() => { setShowNew(true); setExpandedId(null) }}
             title="Add to queue"
