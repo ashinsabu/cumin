@@ -52,7 +52,11 @@ jobs:
         run: npm install -g @railway/cli
 
       - name: Deploy
-        run: railway up --service cumin --detach
+        run: |
+          railway up --service cumin --detach \
+            --build-arg "VERSION=${{ github.ref_name }}" \
+            --build-arg "RAILWAY_GIT_COMMIT_SHA=${{ github.sha }}" \
+            --build-arg "RAILWAY_GIT_BRANCH=main"
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
