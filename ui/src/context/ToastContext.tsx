@@ -86,7 +86,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ push, dismiss }}>
       {children}
-      <ToastRenderer toasts={toasts} onUndo={undo} onDismiss={dismiss} />
+      <ToastRenderer toasts={toasts} onUndo={undo} onDismiss={(entry) => dismiss(entry.id)} />
     </ToastContext.Provider>
   )
 }
