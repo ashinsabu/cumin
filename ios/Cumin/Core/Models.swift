@@ -79,3 +79,22 @@ struct StatusList: Decodable { let statuses: [Status]? }
 struct ItemList: Decodable { let items: [Item]? }
 struct EpicList: Decodable { let epics: [Epic]? }
 struct ProjectList: Decodable { let projects: [Project]? }
+
+/// Mirrors server/views SavedView. `filters` matches the web's ViewFilters JSON.
+struct SavedView: Codable, Equatable, Identifiable {
+    struct Filters: Codable, Equatable {
+        var projectId: String?
+        var epicId: String?
+        var statusId: String?
+        var priority: Int?
+        var hideDone: Bool?
+
+        var isEmpty: Bool { self == Filters() }
+    }
+
+    let id: String
+    let name: String
+    let filters: Filters
+    let position: Int
+}
+struct SavedViewList: Decodable { let views: [SavedView]? }

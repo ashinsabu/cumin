@@ -13,13 +13,8 @@ struct CuminApp: App {
 
     var body: some Scene {
         WindowGroup {
-            // Stable container: the session restore runs once, not on every theme rebuild below.
-            ZStack {
-                RootView()
-                    // Theme tokens are read statically, so rebuild everything when the preset changes.
-                    .id(preset)
-                    .tint(Theme.accent)
-            }
+            RootView()
+                .tint(Theme.accent)
             .onChange(of: preset) { ThemeChrome.apply() }
             .environment(auth)
             .preferredColorScheme(appearance.colorScheme)
@@ -50,6 +45,7 @@ struct MainTabView: View {
     @State private var board: BoardStore
     @State private var queue: QueueStore
     @SceneStorage("selectedTab") private var selectedTab = 0
+    @AppStorage(ThemePreset.storageKey) private var preset = ThemePreset.cyber
     @Environment(\.scenePhase) private var scenePhase
 
     init(user: User, api: APIClient) {
@@ -60,22 +56,28 @@ struct MainTabView: View {
     }
 
     var body: some View {
+        // Mirrors the web sidebar: Board, Items, then the Queue (the web's drawer) and More for the rest.
         TabView(selection: $selectedTab) {
             NavigationStack { BoardView() }
                 .tabItem { Label("Board", systemImage: "rectangle.split.3x1") }.tag(0)
-            NavigationStack { ItemListView(kind: .backlog) }
-                .tabItem { Label("Backlog", systemImage: "list.bullet") }.tag(1)
+            NavigationStack { ItemsView() }
+                .tabItem { Label("Items", systemImage: "square.grid.2x2") }.tag(1)
             if queue.isEnabled {
                 NavigationStack { QueueView() }
                     .tabItem { Label("Queue", systemImage: "tray.full") }.tag(2)
                     // Red count of entries whose deadline day has passed.
                     .badge(queue.overdueCount)
             }
-            NavigationStack { ItemListView(kind: .all) }
-                .tabItem { Label("Items", systemImage: "square.grid.2x2") }.tag(3)
-            MoreView(user: user)
-                .tabItem { Label("More", systemImage: "ellipsis") }.tag(4)
+            MoreView(user: user) { filters in
+                ItemFilters.apply(filters)
+                selectedTab = 1
+            }
+            .tabItem { Label("More", systemImage: "ellipsis") }.tag(3)
         }
+        // Theme tokens are read statically, so rebuild the screens when the preset changes.
+        // Only the tabs rebuild: the stores above survive, so data doesn't reload.
+        .id(preset)
+        .tint(Theme.accent)
         // Load the queue up front so the overdue badge is right before the tab is opened.
         .task { await queue.load() }
         .onChange(of: scenePhase) { _, phase in
@@ -88,11 +90,22 @@ struct MainTabView: View {
     }
 }
 
-/// Web sidebar's "Insights" and "Organize" groups plus Account.
+/// The rest of the web sidebar, in its order: My Views, Organize, Insights — plus Account.
 struct MoreView: View {
     enum Route: Hashable { case dashboard, epics, projects, account }
 
+    @Environment(BoardStore.self) private var store
     let user: User
+    /// Opens Items with a saved view's filters (web: clicking a view in the sidebar).
+    let openView: (SavedView.Filters) -> Void
+
+    init(user: User, openView: @escaping (SavedView.Filters) -> Void) {
+        self.user = user
+        self.openView = openView
+        // After a theme change the tabs rebuild; start already on Account (no push animation).
+        let reopen = UserDefaults.standard.bool(forKey: "more.reopenAccount")
+        _path = State(initialValue: reopen ? [.account] : [])
+    }
     @State private var path: [Route] = []
     /// Set by Account when the theme changes: the app rebuilds, so reopen Account afterwards.
     @AppStorage("more.reopenAccount") private var reopenAccount = false
@@ -100,17 +113,33 @@ struct MoreView: View {
     var body: some View {
         NavigationStack(path: $path) {
             List {
-                Section {
-                    NavigationLink(value: Route.dashboard) { Label("Dashboard", systemImage: "chart.bar") }
-                } header: {
-                    SectionHeader("Insights")
+                if !store.views.isEmpty {
+                    Section {
+                        ForEach(store.views) { view in
+                            Button { openView(view.filters) } label: {
+                                Label(view.name, systemImage: "bookmark")
+                            }
+                            .foregroundStyle(Theme.ink)
+                            .swipeActions {
+                                Button("Delete", role: .destructive) { Task { await store.deleteView(view.id) } }
+                            }
+                        }
+                    } header: {
+                        SectionHeader("My Views")
+                    }
+                    .listRowBackground(Theme.surface)
                 }
-                .listRowBackground(Theme.surface)
                 Section {
                     NavigationLink(value: Route.epics) { Label("Epics", systemImage: "scope") }
                     NavigationLink(value: Route.projects) { Label("Projects", systemImage: "square.stack.3d.up") }
                 } header: {
                     SectionHeader("Organize")
+                }
+                .listRowBackground(Theme.surface)
+                Section {
+                    NavigationLink(value: Route.dashboard) { Label("Dashboards", systemImage: "chart.bar") }
+                } header: {
+                    SectionHeader("Insights")
                 }
                 .listRowBackground(Theme.surface)
                 Section {
@@ -132,13 +161,11 @@ struct MoreView: View {
             .navigationTitle("More")
             .navigationBarTitleDisplayMode(.inline)
             .task {
-                // Navigate once the rebuilt stack is on screen. The root can rebuild more than once,
-                // so only clear the flag from an instance that wasn't torn down.
+                // Clear the flag from the instance that stays on screen (the root can rebuild twice).
                 guard reopenAccount else { return }
-                try? await Task.sleep(for: .milliseconds(100))
+                try? await Task.sleep(for: .milliseconds(300))
                 guard !Task.isCancelled else { return }
                 reopenAccount = false
-                path = [.account]
             }
         }
     }
