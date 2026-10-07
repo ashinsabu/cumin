@@ -156,7 +156,8 @@ struct BoardView: View {
     }
 }
 
-private struct SelectedItem: Identifiable {
+/// Wraps an item ID for `.sheet(item:)`.
+struct SelectedItem: Identifiable {
     let id: String
 }
 
