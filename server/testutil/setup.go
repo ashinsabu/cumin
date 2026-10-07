@@ -15,6 +15,7 @@ import (
 	"github.com/ashinsabu/cumin/server/board"
 	"github.com/ashinsabu/cumin/server/db"
 	"github.com/ashinsabu/cumin/server/epic"
+	"github.com/ashinsabu/cumin/server/hub"
 	"github.com/ashinsabu/cumin/server/item"
 	"github.com/ashinsabu/cumin/server/project"
 	"github.com/ashinsabu/cumin/server/queue"
@@ -33,6 +34,7 @@ const (
 type TestEnv struct {
 	Server       *httptest.Server
 	DB           *pgxpool.Pool
+	Hub          *hub.InMemoryHub
 	BoardID      string
 	ProjectID    string
 	EpicID       string
@@ -133,6 +135,11 @@ func Setup() (*TestEnv, error) {
 	sprintStore := &sprint.Store{DB: pool}
 	itemStore := &item.Store{DB: pool}
 
+	// Wire hub middleware in the same order as main.go.
+	h := hub.New()
+	r.Use(board.ContextMiddleware(boardStore))
+	r.Use(hub.NotifyMiddleware(h))
+
 	board.NewHandler(boardStore).Routes(r)
 	project.NewHandler(projectStore, boardStore).Routes(r)
 	epic.NewHandler(epicStore, boardStore).Routes(r)
@@ -140,12 +147,15 @@ func Setup() (*TestEnv, error) {
 	item.NewHandler(itemStore, boardStore).Routes(r)
 	trash.NewHandler(projectStore, epicStore, boardStore).Routes(r)
 	queue.NewHandler(&queue.Store{DB: pool}, boardStore).Routes(r)
+	// SSE enabled=true in tests
+	r.Get("/api/events", hub.NewHandler(h, true).Events)
 
 	server := httptest.NewServer(r)
 
 	return &TestEnv{
 		Server:       server,
 		DB:           pool,
+		Hub:          h,
 		BoardID:      boardID,
 		ProjectID:    projectID,
 		EpicID:       epicID,

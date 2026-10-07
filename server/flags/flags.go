@@ -3,10 +3,12 @@ package flags
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
 
 	"github.com/ashinsabu/cumin/server/config"
 )
+
+// allFeatures lists every named feature. Add new features here.
+var allFeatures = []string{"queue", "realtime"}
 
 type Handler struct {
 	cfg config.Config
@@ -16,7 +18,8 @@ func NewHandler(cfg config.Config) *Handler {
 	return &Handler{cfg: cfg}
 }
 
-// ServeHTTP returns the current feature flag states.
+// ServeHTTP returns the enabled state of all known features.
+// Features are enabled by default; set FEATURE_DISABLED=true to kill them.
 //
 // @Summary      Get feature flags
 // @Tags         meta
@@ -24,12 +27,9 @@ func NewHandler(cfg config.Config) *Handler {
 // @Success      200  {object}  map[string]bool
 // @Router       /api/flags [get]
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	out := map[string]bool{}
-	for _, f := range strings.Split(h.cfg.FeatureFlags, ",") {
-		f = strings.TrimSpace(f)
-		if f != "" {
-			out[f] = true
-		}
+	out := make(map[string]bool, len(allFeatures))
+	for _, f := range allFeatures {
+		out[f] = h.cfg.IsFeatureEnabled(f)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(out)

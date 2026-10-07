@@ -16,6 +16,7 @@ import (
 	swaggerDocs "github.com/ashinsabu/cumin/server/docs"
 	"github.com/ashinsabu/cumin/server/epic"
 	"github.com/ashinsabu/cumin/server/flags"
+	"github.com/ashinsabu/cumin/server/hub"
 	"github.com/ashinsabu/cumin/server/item"
 	applogger "github.com/ashinsabu/cumin/server/logger"
 	"github.com/ashinsabu/cumin/server/project"
@@ -104,7 +105,7 @@ func main() {
 			r.Get("/api/auth/me", oauthHandler.HandleMe)
 			r.Post("/api/auth/logout", oauthHandler.HandleLogout)
 
-			registerDomainRoutes(r, pool)
+			registerDomainRoutes(r, pool, cfg)
 		})
 	})
 
@@ -139,20 +140,29 @@ func swaggerJSONHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(swaggerDocs.JSON)
 }
 
-func registerDomainRoutes(r chi.Router, pool *pgxpool.Pool) {
+func registerDomainRoutes(r chi.Router, pool *pgxpool.Pool, cfg config.Config) {
 	boardStore := &board.Store{DB: pool}
 	projectStore := &project.Store{DB: pool}
 	epicStore := &epic.Store{DB: pool}
 	sprintStore := &sprint.Store{DB: pool}
 	itemStore := &item.Store{DB: pool}
+	h := hub.New()
 
-	board.NewHandler(boardStore).Routes(r)
-	project.NewHandler(projectStore, boardStore).Routes(r)
-	epic.NewHandler(epicStore, boardStore).Routes(r)
-	sprint.NewHandler(sprintStore, boardStore).Routes(r)
-	item.NewHandler(itemStore, boardStore).Routes(r)
-	trash.NewHandler(projectStore, epicStore, boardStore).Routes(r)
-	queue.NewHandler(&queue.Store{DB: pool}, boardStore).Routes(r)
+	// Sub-group so board context + notify middleware are added before any routes,
+	// avoiding chi's "middleware must be defined before routes" panic.
+	r.Group(func(r chi.Router) {
+		r.Use(board.ContextMiddleware(boardStore))
+		r.Use(hub.NotifyMiddleware(h))
+
+		board.NewHandler(boardStore).Routes(r)
+		project.NewHandler(projectStore, boardStore).Routes(r)
+		epic.NewHandler(epicStore, boardStore).Routes(r)
+		sprint.NewHandler(sprintStore, boardStore).Routes(r)
+		item.NewHandler(itemStore, boardStore).Routes(r)
+		trash.NewHandler(projectStore, epicStore, boardStore).Routes(r)
+		queue.NewHandler(&queue.Store{DB: pool}, boardStore).Routes(r)
+		r.Get("/api/events", hub.NewHandler(h, cfg.IsFeatureEnabled("realtime")).Events)
+	})
 }
 
 // startPurgeWorker hard-deletes soft-deleted rows older than 30 days, running daily.

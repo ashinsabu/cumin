@@ -22,6 +22,7 @@ type QueueItem struct {
 	Position        int        `json:"position"`
 	UrgencyScore    float64    `json:"urgency_score"`
 	PromotedItemID  *string    `json:"promoted_item_id"`
+	CompletedAt     *time.Time `json:"completed_at"`
 	CreatedAt       time.Time  `json:"created_at"`
 }
 
@@ -52,13 +53,13 @@ func urgencyScore(title string, createdAt time.Time, deadline *time.Time, priori
 	return ageScore + deadlineScore + kwScore + priorityScore
 }
 
-const listCols = `id, board_id, created_by, title, COALESCE(notes,''), deadline, priority, estimate_minutes, position, promoted_item_id, created_at`
+const listCols = `id, board_id, created_by, title, COALESCE(notes,''), deadline, priority, estimate_minutes, position, promoted_item_id, completed_at, created_at`
 
 func (s *Store) List(ctx context.Context, boardID string) ([]QueueItem, error) {
 	rows, err := s.DB.Query(ctx, `
 		SELECT `+listCols+`
 		FROM queue_items
-		WHERE board_id = $1 AND deleted_at IS NULL AND promoted_item_id IS NULL
+		WHERE board_id = $1 AND deleted_at IS NULL AND promoted_item_id IS NULL AND completed_at IS NULL
 		ORDER BY position ASC
 	`, boardID)
 	if err != nil {
@@ -69,7 +70,7 @@ func (s *Store) List(ctx context.Context, boardID string) ([]QueueItem, error) {
 	var out []QueueItem
 	for rows.Next() {
 		var q QueueItem
-		if err := rows.Scan(&q.ID, &q.BoardID, &q.CreatedBy, &q.Title, &q.Notes, &q.Deadline, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CreatedAt); err != nil {
+		if err := rows.Scan(&q.ID, &q.BoardID, &q.CreatedBy, &q.Title, &q.Notes, &q.Deadline, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CompletedAt, &q.CreatedAt); err != nil {
 			return nil, err
 		}
 		q.UrgencyScore = urgencyScore(q.Title, q.CreatedAt, q.Deadline, q.Priority)
@@ -90,7 +91,7 @@ func (s *Store) Create(ctx context.Context, boardID, createdBy, title, notes str
 		    COALESCE((SELECT MAX(position)+1 FROM queue_items WHERE board_id=$1 AND deleted_at IS NULL), 0))
 		RETURNING `+listCols+`
 	`, boardID, createdBy, title, notes, deadline, priority, estimateMinutes).Scan(
-		&q.ID, &q.BoardID, &q.CreatedBy, &q.Title, &q.Notes, &q.Deadline, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CreatedAt)
+		&q.ID, &q.BoardID, &q.CreatedBy, &q.Title, &q.Notes, &q.Deadline, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CompletedAt, &q.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +106,7 @@ func (s *Store) Update(ctx context.Context, id, boardID, title, notes string, de
 		WHERE id=$1 AND board_id=$2 AND deleted_at IS NULL AND promoted_item_id IS NULL
 		RETURNING `+listCols+`
 	`, id, boardID, title, notes, deadline, priority, estimateMinutes).Scan(
-		&q.ID, &q.BoardID, &q.CreatedBy, &q.Title, &q.Notes, &q.Deadline, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CreatedAt)
+		&q.ID, &q.BoardID, &q.CreatedBy, &q.Title, &q.Notes, &q.Deadline, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CompletedAt, &q.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -120,12 +121,52 @@ func (s *Store) Revive(ctx context.Context, id, boardID string) (*QueueItem, err
 		    COALESCE((SELECT MAX(position)+1 FROM queue_items WHERE board_id=$2 AND deleted_at IS NULL), 0)
 		WHERE id = $1 AND board_id = $2 AND deleted_at IS NULL
 		RETURNING `+listCols+`
-	`, id, boardID).Scan(&q.ID, &q.BoardID, &q.CreatedBy, &q.Title, &q.Notes, &q.Deadline, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CreatedAt)
+	`, id, boardID).Scan(&q.ID, &q.BoardID, &q.CreatedBy, &q.Title, &q.Notes, &q.Deadline, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CompletedAt, &q.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
 	q.UrgencyScore = urgencyScore(q.Title, q.CreatedAt, q.Deadline, q.Priority)
 	return &q, nil
+}
+
+func (s *Store) Complete(ctx context.Context, id, boardID string) (*QueueItem, error) {
+	var q QueueItem
+	err := s.DB.QueryRow(ctx, `
+		UPDATE queue_items SET completed_at = NOW()
+		WHERE id = $1 AND board_id = $2 AND deleted_at IS NULL AND completed_at IS NULL
+		RETURNING `+listCols+`
+	`, id, boardID).Scan(&q.ID, &q.BoardID, &q.CreatedBy, &q.Title, &q.Notes, &q.Deadline, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CompletedAt, &q.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	q.UrgencyScore = urgencyScore(q.Title, q.CreatedAt, q.Deadline, q.Priority)
+	return &q, nil
+}
+
+func (s *Store) History(ctx context.Context, boardID string) ([]QueueItem, error) {
+	rows, err := s.DB.Query(ctx, `
+		SELECT `+listCols+`
+		FROM queue_items
+		WHERE board_id = $1 AND completed_at IS NOT NULL AND deleted_at IS NULL
+		ORDER BY completed_at DESC
+		LIMIT 100
+	`, boardID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []QueueItem
+	for rows.Next() {
+		var q QueueItem
+		if err := rows.Scan(&q.ID, &q.BoardID, &q.CreatedBy, &q.Title, &q.Notes, &q.Deadline, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CompletedAt, &q.CreatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, q)
+	}
+	if out == nil {
+		out = []QueueItem{}
+	}
+	return out, nil
 }
 
 func (s *Store) Archive(ctx context.Context, id, boardID string) error {
