@@ -27,6 +27,8 @@ export function BoardView() {
 
   function handleDragEnd(result: DropResult) {
     if (!result.destination) return
+    // onMutate inside useMoveItem handles the optimistic cache update synchronously
+    // (with cancelQueries + snapshot rollback on error).
     moveItem.mutate({ id: result.draggableId, statusId: result.destination.droppableId })
   }
 

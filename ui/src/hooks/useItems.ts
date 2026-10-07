@@ -51,11 +51,40 @@ export function useMoveItem() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, statusId }: { id: string; statusId: string }) =>
-      apiFetch(`/api/items/${id}/move`, {
+      apiFetch<Item>(`/api/items/${id}/move`, {
         method: 'POST',
         body: JSON.stringify({ status_id: statusId }),
       }),
-    onSuccess: () => {
+    onMutate: ({ id, statusId }) => {
+      // Snapshot for rollback on error.
+      const snapshot = qc.getQueriesData<Item[]>({ queryKey: itemKeys.all })
+      // Apply optimistic update SYNCHRONOUSLY — same call stack as handleDragEnd,
+      // before @hello-pangea/dnd releases the dragged card. If this were async
+      // (await cancelQueries first), the update would land in the next microtask
+      // tick after dnd has already re-rendered with the old position → flicker.
+      qc.setQueriesData<Item[]>({ queryKey: itemKeys.all }, (old = []) =>
+        old.map((i) => (i.id === id ? { ...i, status_id: statusId } : i)),
+      )
+      // Best-effort cancel of any in-flight refetch (fire-and-forget, don't block).
+      void qc.cancelQueries({ queryKey: itemKeys.all })
+      return { snapshot }
+    },
+    onSuccess: (updatedItem) => {
+      // Replace optimistic data with authoritative server response.
+      qc.setQueriesData<Item[]>({ queryKey: itemKeys.all }, (old = []) =>
+        old.map((i) => (i.id === updatedItem.id ? updatedItem : i)),
+      )
+    },
+    onError: (_err, _vars, ctx) => {
+      // Roll back to pre-mutation state.
+      if (ctx?.snapshot) {
+        for (const [key, data] of ctx.snapshot) {
+          qc.setQueryData(key, data)
+        }
+      }
+    },
+    onSettled: () => {
+      // Background refresh to get fresh time_in_status for all cards.
       qc.invalidateQueries({ queryKey: itemKeys.all })
     },
   })

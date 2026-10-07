@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/ashinsabu/cumin/server/api"
-	"github.com/ashinsabu/cumin/server/auth"
 	"github.com/ashinsabu/cumin/server/board"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
@@ -84,7 +83,7 @@ func (h *Handler) Routes(r chi.Router) {
 // @Security     CookieAuth
 // @Router       /api/items [get]
 func (h *Handler) listHTTP(w http.ResponseWriter, r *http.Request) {
-	b, err := h.boardStore.GetByUser(r.Context(), auth.UserIDFromContext(r.Context()))
+	b, err := board.GetOrFetch(r.Context(), h.boardStore)
 	if err != nil {
 		api.WriteError(w, api.NotFound("board not found"))
 		return
@@ -116,7 +115,7 @@ func (h *Handler) listHTTP(w http.ResponseWriter, r *http.Request) {
 // @Security     CookieAuth
 // @Router       /api/items/backlog [get]
 func (h *Handler) Backlog(ctx context.Context) (*ListResponse, error) {
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil {
 		return nil, api.NotFound("board not found")
 	}
@@ -142,7 +141,7 @@ func (h *Handler) Backlog(ctx context.Context) (*ListResponse, error) {
 // @Security     CookieAuth
 // @Router       /api/items/{id} [get]
 func (h *Handler) Get(ctx context.Context) (*Item, error) {
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil {
 		return nil, api.NotFound("board not found")
 	}
@@ -167,7 +166,7 @@ func (h *Handler) Get(ctx context.Context) (*Item, error) {
 // @Security     CookieAuth
 // @Router       /api/items [post]
 func (h *Handler) Create(ctx context.Context, req CreateRequest) (*Item, error) {
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil {
 		return nil, api.NotFound("board not found")
 	}
@@ -239,7 +238,7 @@ type updateParsed struct {
 // @Security     CookieAuth
 // @Router       /api/items/{id} [patch]
 func (h *Handler) Update(ctx context.Context, req UpdateRequest) (*Item, error) {
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil {
 		return nil, api.NotFound("board not found")
 	}
@@ -302,7 +301,7 @@ func (h *Handler) Update(ctx context.Context, req UpdateRequest) (*Item, error) 
 // @Security     CookieAuth
 // @Router       /api/items/{id} [delete]
 func (h *Handler) Delete(ctx context.Context) error {
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil {
 		return api.NotFound("board not found")
 	}
@@ -326,7 +325,7 @@ func (h *Handler) Delete(ctx context.Context) error {
 // @Router       /api/items/{id}/restore [post]
 func (h *Handler) Restore(ctx context.Context) error {
 	id := api.URLParam(ctx, "id")
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil {
 		return api.NotFound("board not found")
 	}
@@ -353,7 +352,7 @@ func (h *Handler) Restore(ctx context.Context) error {
 // @Security     CookieAuth
 // @Router       /api/items/{id}/move [post]
 func (h *Handler) Move(ctx context.Context, req MoveRequest) (*Item, error) {
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil {
 		return nil, api.NotFound("board not found")
 	}
@@ -399,7 +398,7 @@ func (h *Handler) Move(ctx context.Context, req MoveRequest) (*Item, error) {
 // @Security     CookieAuth
 // @Router       /api/items/reorder [put]
 func (h *Handler) Reorder(ctx context.Context, req ReorderRequest) (*ListResponse, error) {
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil {
 		return nil, api.NotFound("board not found")
 	}
@@ -433,7 +432,7 @@ func (h *Handler) Reorder(ctx context.Context, req ReorderRequest) (*ListRespons
 // @Security     CookieAuth
 // @Router       /api/items/{id}/transitions [get]
 func (h *Handler) Transitions(ctx context.Context) (*TransitionsResponse, error) {
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil {
 		return nil, api.NotFound("board not found")
 	}

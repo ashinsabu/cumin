@@ -75,7 +75,7 @@ type HistoryResponse struct {
 }
 
 func (h *Handler) History(ctx context.Context) (*HistoryResponse, error) {
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil {
 		return nil, api.NotFound("board not found")
 	}
@@ -88,7 +88,7 @@ func (h *Handler) History(ctx context.Context) (*HistoryResponse, error) {
 
 func (h *Handler) Complete(ctx context.Context) (*QueueItem, error) {
 	id := api.URLParam(ctx, "id")
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil {
 		return nil, api.NotFound("board not found")
 	}
@@ -100,7 +100,7 @@ func (h *Handler) Complete(ctx context.Context) (*QueueItem, error) {
 }
 
 func (h *Handler) List(ctx context.Context) (*ListResponse, error) {
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil {
 		return nil, api.NotFound("board not found")
 	}
@@ -127,7 +127,7 @@ func (h *Handler) Create(ctx context.Context, req CreateRequest) (*QueueItem, er
 	if req.Title == "" {
 		return nil, api.BadRequest("title required")
 	}
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil {
 		return nil, api.NotFound("board not found")
 	}
@@ -154,7 +154,7 @@ func (h *Handler) Create(ctx context.Context, req CreateRequest) (*QueueItem, er
 // @Router       /api/queue/{id} [patch]
 func (h *Handler) Update(ctx context.Context, req UpdateRequest) (*QueueItem, error) {
 	id := api.URLParam(ctx, "id")
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil {
 		return nil, api.NotFound("board not found")
 	}
@@ -179,7 +179,7 @@ func (h *Handler) Update(ctx context.Context, req UpdateRequest) (*QueueItem, er
 // @Router       /api/queue/{id} [delete]
 func (h *Handler) Archive(ctx context.Context) error {
 	id := api.URLParam(ctx, "id")
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil {
 		return api.NotFound("board not found")
 	}
@@ -200,7 +200,7 @@ func (h *Handler) Archive(ctx context.Context) error {
 // @Security     CookieAuth
 // @Router       /api/queue/reorder [put]
 func (h *Handler) Reorder(ctx context.Context, req ReorderRequest) (*struct{}, error) {
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil {
 		return nil, api.NotFound("board not found")
 	}
@@ -222,7 +222,7 @@ func (h *Handler) Reorder(ctx context.Context, req ReorderRequest) (*struct{}, e
 // @Router       /api/queue/{id}/revive [post]
 func (h *Handler) Revive(ctx context.Context) (*QueueItem, error) {
 	id := api.URLParam(ctx, "id")
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil {
 		return nil, api.NotFound("board not found")
 	}
@@ -251,7 +251,7 @@ func (h *Handler) Promote(ctx context.Context, req PromoteRequest) (*PromoteResu
 	if req.ProjectID == "" || req.StatusID == "" {
 		return nil, api.BadRequest("project_id and status_id required")
 	}
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil {
 		return nil, api.NotFound("board not found")
 	}

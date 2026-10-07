@@ -49,12 +49,19 @@ func (h *Handler) Events(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no") // disable Railway/nginx proxy buffering
+	w.WriteHeader(http.StatusOK)
+	// Flush headers + initial retry directive immediately so the browser's EventSource
+	// considers the connection established before any event fires. Without this, Railway's
+	// reverse proxy may buffer the response and the client never sees a 200.
+	fmt.Fprintf(w, "retry: 5000\n\n")
+	flusher.Flush()
 
 	ch, unsub := h.hub.Subscribe(boardID)
 	defer unsub()
 
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(15 * time.Second)
 	defer ticker.Stop()
 
 	for {
