@@ -55,15 +55,18 @@ export function useMoveItem() {
         method: 'POST',
         body: JSON.stringify({ status_id: statusId }),
       }),
-    onMutate: async ({ id, statusId }) => {
-      // Cancel any in-flight refetches so they don't overwrite the optimistic update.
-      await qc.cancelQueries({ queryKey: itemKeys.all })
+    onMutate: ({ id, statusId }) => {
       // Snapshot for rollback on error.
       const snapshot = qc.getQueriesData<Item[]>({ queryKey: itemKeys.all })
-      // Apply optimistic update immediately.
+      // Apply optimistic update SYNCHRONOUSLY — same call stack as handleDragEnd,
+      // before @hello-pangea/dnd releases the dragged card. If this were async
+      // (await cancelQueries first), the update would land in the next microtask
+      // tick after dnd has already re-rendered with the old position → flicker.
       qc.setQueriesData<Item[]>({ queryKey: itemKeys.all }, (old = []) =>
         old.map((i) => (i.id === id ? { ...i, status_id: statusId } : i)),
       )
+      // Best-effort cancel of any in-flight refetch (fire-and-forget, don't block).
+      void qc.cancelQueries({ queryKey: itemKeys.all })
       return { snapshot }
     },
     onSuccess: (updatedItem) => {
