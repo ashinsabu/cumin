@@ -39,7 +39,7 @@ struct ItemDetailView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Theme.raised)
-        .presentationBackground(Theme.raised)
+        .presentationBackground(Theme.sheetBackground)
         .tint(Theme.accent)
         .onAppear(perform: loadFields)
     }
@@ -54,7 +54,7 @@ struct ItemDetailView: View {
                 VStack(spacing: 18) {
                     if let description = item.description, !description.isEmpty {
                         Text(description)
-                            .font(Theme.mono(.footnote))
+                            .font(Theme.font(.footnote))
                             .foregroundStyle(Theme.dim)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -62,7 +62,7 @@ struct ItemDetailView: View {
                     // Too many chips for a side-by-side row on a phone: label above, chips full width.
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Status")
-                            .font(Theme.mono(.subheadline))
+                            .font(Theme.font(.subheadline))
                             .foregroundStyle(Theme.dim)
                         StatusPicker(statuses: store.statuses, selectedID: item.statusId) { status in
                             Task { await store.move(itemID: item.id, to: status.id) }
@@ -79,7 +79,7 @@ struct ItemDetailView: View {
                     if let sprints = item.sprints, !sprints.isEmpty {
                         row("Sprints") {
                             Text(sprints.joined(separator: " · "))
-                                .font(Theme.mono(.caption))
+                                .font(Theme.font(.caption))
                                 .foregroundStyle(Theme.dim)
                                 .multilineTextAlignment(.trailing)
                         }
@@ -100,7 +100,7 @@ struct ItemDetailView: View {
             HStack(spacing: 8) {
                 PriorityBadge(priority: item.priority)
                 Text(item.displayId)
-                    .font(Theme.mono(.subheadline, weight: .medium))
+                    .font(Theme.code(.subheadline, weight: .medium))
                     .foregroundStyle(Theme.dim)
                 Spacer()
                 Button { dismiss() } label: {
@@ -113,7 +113,7 @@ struct ItemDetailView: View {
                 .buttonStyle(.plain)
             }
             TextField("Item title", text: $title, axis: .vertical)
-                .font(Theme.mono(.title3, weight: .bold))
+                .font(Theme.font(.title3, weight: .bold))
                 .foregroundStyle(Theme.ink)
         }
         .padding(.horizontal, 20)
@@ -138,6 +138,7 @@ struct ItemDetailView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
                 .background(Color.red)
+                .themedClip(.card)
             } else {
                 Button("Delete") { confirmDelete = true }
                     .foregroundStyle(Theme.dim)
@@ -157,12 +158,13 @@ struct ItemDetailView: View {
                         .padding(.horizontal, 14)
                         .padding(.vertical, 6)
                         .background(Theme.accent)
+                        .themedClip(.card)
                         .disabled(isSaving || title.trimmingCharacters(in: .whitespaces).isEmpty || estimateInvalid)
                         .opacity(isSaving ? 0.5 : 1)
                 }
             }
         }
-        .font(Theme.mono(.footnote))
+        .font(Theme.font(.footnote))
         .buttonStyle(.plain)
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
@@ -173,7 +175,7 @@ struct ItemDetailView: View {
     private func row(_ label: String, @ViewBuilder content: () -> some View) -> some View {
         HStack(alignment: .center, spacing: 12) {
             Text(label)
-                .font(Theme.mono(.subheadline))
+                .font(Theme.font(.subheadline))
                 .foregroundStyle(Theme.dim)
                 .frame(width: 96, alignment: .leading)
             HStack { Spacer(minLength: 0); content() }
@@ -194,13 +196,13 @@ struct ItemDetailView: View {
                 Spacer()
                 Image(systemName: "chevron.down").font(.caption)
             }
-            .font(Theme.mono(.subheadline))
+            .font(Theme.font(.subheadline))
             .foregroundStyle(active ? Theme.accent : Theme.dim)
             .padding(.horizontal, 12)
             .padding(.vertical, 9)
             .frame(maxWidth: 200)
             .background(active ? Theme.accent.opacity(0.08) : Theme.surface)
-            .overlay(Rectangle().stroke(active ? Theme.accent : Theme.line, lineWidth: 1))
+            .themedBorder(active ? Theme.accent : Theme.line)
         }
         .accessibilityIdentifier("epic-menu")
     }
@@ -209,13 +211,13 @@ struct ItemDetailView: View {
         HStack(spacing: 8) {
             // Hint sits beside the box so the row stays one line tall.
             if estimateInvalid {
-                Text("2h, 30m, 2d").font(.caption2).foregroundStyle(.red)
+                Text("2h, 30m, 2d").font(Theme.font(.caption2)).foregroundStyle(.red)
             } else if let minutes = parsedEstimate {
-                Text("= \(Format.estimate(minutes))").font(.caption2).foregroundStyle(Theme.ghost)
+                Text("= \(Format.estimate(minutes))").font(Theme.font(.caption2)).foregroundStyle(Theme.ghost)
             }
             TextField("e.g. 2h, 30m, 2d", text: $estimateRaw)
                 .accessibilityIdentifier("estimate-field")
-                .font(Theme.mono(.subheadline))
+                .font(Theme.font(.subheadline))
                 .foregroundStyle(Theme.ink)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
@@ -223,7 +225,7 @@ struct ItemDetailView: View {
                 .padding(.vertical, 8)
                 .frame(maxWidth: 140)
                 .background(Theme.surface)
-                .overlay(Rectangle().stroke(estimateInvalid ? Color.red : Theme.line, lineWidth: 1))
+                .themedBorder(estimateInvalid ? Color.red : Theme.line)
         }
     }
 
@@ -266,10 +268,11 @@ struct PriorityBadge: View {
     var body: some View {
         let style = PriorityStyle.of(priority)
         Text(style.label)
-            .font(Theme.mono(.caption, weight: .heavy))
+            .font(Theme.font(.caption, weight: .heavy))
             .padding(.horizontal, 5)
             .padding(.vertical, 2)
             .background(style.bg)
+            .themedClip()
             .foregroundStyle(style.color)
     }
 }
@@ -286,12 +289,12 @@ struct PriorityPicker: View {
                 let selected = p == priority
                 Button { priority = p } label: {
                     Text("P\(p)")
-                        .font(Theme.mono(.caption, weight: .bold))
+                        .font(Theme.font(.caption, weight: .bold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 6)
                         .foregroundStyle(selected ? color : Theme.dim)
                         .background(selected ? color.opacity(0.12) : .clear)
-                        .overlay(Rectangle().stroke(selected ? color : Theme.line, lineWidth: 1))
+                        .themedBorder(selected ? color : Theme.line)
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("priority-P\(p)")
@@ -320,13 +323,13 @@ private struct StatusPicker: View {
                 let color = status.isDone ? Color(hex: "#34d399") : Theme.accent
                 Button { if !selected { onSelect(status) } } label: {
                     Text(status.name)
-                        .font(Theme.mono(.caption, weight: .semibold))
+                        .font(Theme.font(.caption, weight: .semibold))
                         .fixedSize()
                         .padding(.horizontal, 9)
                         .padding(.vertical, 6)
                         .foregroundStyle(selected ? color : Theme.dim)
                         .background(selected ? color.opacity(0.12) : Theme.line)
-                        .overlay(Rectangle().stroke(selected ? color.opacity(0.35) : .clear, lineWidth: 1))
+                        .themedBorder(selected ? color.opacity(0.35) : .clear)
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("status-chip-\(status.name)")

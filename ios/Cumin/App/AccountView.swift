@@ -1,11 +1,12 @@
 import SwiftUI
 
 /// Port of ui/src/views/AccountView.tsx: Profile, Appearance, Recently Deleted, Sign out.
-/// Appearance offers light/dark/system; the web's three theme presets aren't ported yet (the app uses "cyber").
+/// Appearance: the web's three theme presets plus light/dark/system.
 struct AccountView: View {
     @Environment(AuthService.self) private var auth
     @Environment(BoardStore.self) private var store
     @AppStorage(Appearance.storageKey) private var appearance = Appearance.system
+    @AppStorage(ThemePreset.storageKey) private var preset = ThemePreset.cyber
 
     let user: User
 
@@ -16,13 +17,13 @@ struct AccountView: View {
 
     var body: some View {
         List {
-            Section("Profile") {
+            Section {
                 HStack(spacing: 14) {
                     AsyncImage(url: URL(string: user.avatarUrl)) { image in
                         image.resizable().scaledToFill()
                     } placeholder: {
                         Text(initials)
-                            .font(.headline.bold())
+                            .font(Theme.font(.headline, weight: .bold))
                             .foregroundStyle(.white)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .background(Theme.accent)
@@ -30,30 +31,48 @@ struct AccountView: View {
                     .frame(width: 52, height: 52)
                     .clipShape(Circle())
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(user.displayName).font(Theme.mono(.subheadline, weight: .semibold)).foregroundStyle(Theme.ink)
-                        Text(user.email).font(Theme.mono(.caption)).foregroundStyle(Theme.dim)
+                        Text(user.displayName).font(Theme.font(.subheadline, weight: .semibold)).foregroundStyle(Theme.ink)
+                        Text(user.email).font(Theme.font(.caption)).foregroundStyle(Theme.dim)
                     }
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("ID PREFIX").font(Theme.mono(.caption2, weight: .semibold)).foregroundStyle(Theme.ghost)
-                    Text(user.idPrefix).font(Theme.mono(.subheadline, weight: .semibold)).foregroundStyle(Theme.ink)
-                    Text("Item IDs: \(user.idPrefix)-1, \(user.idPrefix)-2, …").font(Theme.mono(.caption2)).foregroundStyle(Theme.ghost)
+                    Text("ID PREFIX").font(Theme.font(.caption2, weight: .semibold)).foregroundStyle(Theme.ghost)
+                    Text(user.idPrefix).font(Theme.code(.subheadline, weight: .semibold)).foregroundStyle(Theme.ink)
+                    Text("Item IDs: \(user.idPrefix)-1, \(user.idPrefix)-2, …").font(Theme.font(.caption2)).foregroundStyle(Theme.ghost)
                 }
+            } header: {
+                SectionHeader("Profile")
             }
             .listRowBackground(Theme.surface)
 
-            Section("Appearance") {
-                Picker("Mode", selection: $appearance) {
-                    ForEach(Appearance.allCases) { Text($0.label).tag($0) }
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("THEME").font(Theme.font(.caption2, weight: .semibold)).foregroundStyle(Theme.ghost)
+                    Picker("Theme", selection: Binding(get: { preset }, set: { newValue in
+                        // The app rebuilds on a theme change; come back to this screen afterwards.
+                        UserDefaults.standard.set(true, forKey: "more.reopenAccount")
+                        preset = newValue
+                    })) {
+                        ForEach(ThemePreset.allCases) { Text($0.name).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
                 }
-                .pickerStyle(.segmented)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("MODE").font(Theme.font(.caption2, weight: .semibold)).foregroundStyle(Theme.ghost)
+                    Picker("Mode", selection: $appearance) {
+                        ForEach(Appearance.allCases) { Text($0.label).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                }
+            } header: {
+                SectionHeader("Appearance")
             }
             .listRowBackground(Theme.surface)
 
             Section {
                 if let trash {
                     if trash.isEmpty {
-                        Text("Nothing in trash.").font(Theme.mono(.footnote)).foregroundStyle(Theme.ghost)
+                        Text("Nothing in trash.").font(Theme.font(.footnote)).foregroundStyle(Theme.ghost)
                     }
                     ForEach(trash.projects) { p in
                         trashRow(color: p.color, title: "\(p.name)  \(p.prefix)", kind: "Project", deletedAt: p.deletedAt, count: p.itemCount) {
@@ -67,23 +86,26 @@ struct AccountView: View {
                     }
                     if !trash.isEmpty {
                         Button("Empty trash", role: .destructive) { confirmEmpty = true }
-                            .font(Theme.mono(.footnote, weight: .medium))
+                            .font(Theme.font(.footnote, weight: .medium))
                     }
                 } else {
                     ProgressView()
                 }
                 if let trashError {
-                    Text(trashError).font(.footnote).foregroundStyle(.red)
+                    Text(trashError).font(Theme.font(.footnote)).foregroundStyle(.red)
                 }
             } header: {
-                Text("Recently Deleted")
+                SectionHeader("Recently Deleted")
             } footer: {
                 Text("Deleted projects and epics are permanently removed after 30 days.")
+                    .font(Theme.font(.caption2))
+                    .foregroundStyle(Theme.ghost)
             }
             .listRowBackground(Theme.surface)
 
             Section {
                 Button("Sign out", role: .destructive) { auth.signOut() }
+                    .font(Theme.font(.body, weight: .medium))
             }
             .listRowBackground(Theme.surface)
         }
@@ -113,9 +135,9 @@ struct AccountView: View {
         return HStack(spacing: 10) {
             Circle().fill(Color(hex: color)).frame(width: 8, height: 8)
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(Theme.mono(.footnote, weight: .medium)).foregroundStyle(Theme.ink)
+                Text(title).font(Theme.font(.footnote, weight: .medium)).foregroundStyle(Theme.ink)
                 Text("\(kind) · deleted \(ago) · \(count) items · purges in \(purgeIn)d")
-                    .font(Theme.mono(.caption2)).foregroundStyle(Theme.ghost)
+                    .font(Theme.font(.caption2)).foregroundStyle(Theme.ghost)
             }
             Spacer()
             Button(restoring == id ? "…" : "Restore") {
@@ -125,7 +147,7 @@ struct AccountView: View {
                     restoring = nil
                 }
             }
-            .font(Theme.mono(.caption, weight: .medium))
+            .font(Theme.font(.caption, weight: .medium))
             .buttonStyle(.bordered)
             .disabled(restoring != nil)
         }

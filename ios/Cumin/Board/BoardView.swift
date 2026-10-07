@@ -96,7 +96,7 @@ struct BoardView: View {
     private var header: some View {
         VStack(spacing: 1) {
             Text(store.board?.name ?? "Board")
-                .font(Theme.mono(.headline, weight: .bold))
+                .font(Theme.font(.headline, weight: .bold))
                 .foregroundStyle(Theme.ink)
             Group {
                 if let sprint = store.activeSprint {
@@ -105,7 +105,7 @@ struct BoardView: View {
                     Text("No active sprint · \(store.items.count) items")
                 }
             }
-            .font(Theme.mono(.caption2))
+            .font(Theme.font(.caption2))
             .foregroundStyle(Theme.dim)
         }
     }
@@ -145,14 +145,15 @@ private struct BoardColumn: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Text(status.name.uppercased())
-                    .font(Theme.mono(.caption, weight: .bold))
+                    .font(Theme.font(.caption, weight: .bold))
                     .tracking(1)
                     .foregroundStyle(Theme.dim)
                 Text("\(items.count)")
-                    .font(Theme.mono(.caption2, weight: .medium))
+                    .font(Theme.font(.caption2, weight: .medium))
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(Theme.line)
+                    .themedClip()
                     .foregroundStyle(Theme.dim)
             }
             .padding(.horizontal, 4)
@@ -169,7 +170,7 @@ private struct BoardColumn: View {
                     }
                     if items.isEmpty {
                         Text("Drop items here")
-                            .font(Theme.mono(.caption))
+                            .font(Theme.font(.caption))
                             .foregroundStyle(Theme.ghost)
                             .frame(maxWidth: .infinity, minHeight: 80)
                     }
@@ -179,7 +180,7 @@ private struct BoardColumn: View {
             .scrollIndicators(.hidden)
             .frame(maxHeight: .infinity, alignment: .top)
             .background(isTargeted ? Theme.accent.opacity(0.06) : tint.opacity(0.08))
-            .overlay(Rectangle().stroke(isTargeted ? Theme.accent.opacity(0.3) : tint.opacity(0.15), lineWidth: 1))
+            .themedBorder(isTargeted ? Theme.accent.opacity(0.3) : tint.opacity(0.15))
             .dropDestination(for: String.self) { ids, _ in
                 guard let id = ids.first else { return false }
                 Task { await store.move(itemID: id, to: status.id) }

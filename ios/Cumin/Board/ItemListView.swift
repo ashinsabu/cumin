@@ -90,7 +90,7 @@ struct ItemListView: View {
             }
             if rows.isEmpty && store.hasLoaded {
                 Text(emptyText)
-                    .font(Theme.mono(.footnote))
+                    .font(Theme.font(.footnote))
                     .foregroundStyle(Theme.ghost)
                     .frame(maxWidth: .infinity, minHeight: 80)
                     .listRowBackground(Theme.canvas)
@@ -167,12 +167,12 @@ struct ItemListView: View {
                         priorityFilter = -1
                         statusFilter = ""
                     }
-                    .font(Theme.mono(.caption))
+                    .font(Theme.font(.caption))
                     .foregroundStyle(Theme.accent)
                 }
 
                 Text("\(rows.count) · \(Format.estimate(rows.reduce(0) { $0 + ($1.estimateMinutes ?? 0) }))")
-                    .font(Theme.mono(.caption2))
+                    .font(Theme.font(.caption2))
                     .foregroundStyle(Theme.ghost)
                     .padding(.leading, 4)
             }
@@ -197,42 +197,43 @@ private struct ItemListRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
                 Text(item.displayId)
-                    .font(Theme.mono(.caption, weight: .medium))
+                    .font(Theme.code(.caption, weight: .medium))
                     .foregroundStyle(Theme.accent)
                 Text(priority.label)
-                    .font(Theme.mono(.caption, weight: .bold))
+                    .font(Theme.font(.caption, weight: .bold))
                     .foregroundStyle(priority.color)
                 if showCreated, let created = item.createdAt {
                     Text(created.formatted(.dateTime.day().month(.abbreviated)))
-                        .font(Theme.mono(.caption2))
+                        .font(Theme.font(.caption2))
                         .foregroundStyle(Theme.ghost)
                 }
                 Spacer()
                 Text(statusName)
-                    .font(Theme.mono(.caption2, weight: .semibold))
+                    .font(Theme.font(.caption2, weight: .semibold))
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(Theme.line)
+                    .themedClip()
                     .foregroundStyle(Theme.ink.opacity(0.8))
             }
 
             Text(item.title)
-                .font(Theme.mono(.subheadline, weight: .medium))
+                .font(Theme.font(.subheadline, weight: .medium))
                 .foregroundStyle(Theme.ink)
 
             HStack(spacing: 10) {
                 if let name = item.epicName {
                     let color = Color(hex: item.epicColor ?? "#6b7280")
                     Text(name)
-                        .font(Theme.mono(.caption2, weight: .semibold))
+                        .font(Theme.font(.caption2, weight: .semibold))
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .foregroundStyle(color)
                         .background(color.opacity(0.09))
-                        .overlay(Rectangle().stroke(color.opacity(0.15), lineWidth: 1))
+                        .themedBorder(color.opacity(0.15), radius: .badge)
                 }
                 Text(item.estimateMinutes.map(Format.estimate) ?? "—")
-                    .font(Theme.mono(.caption, weight: .semibold))
+                    .font(Theme.font(.caption, weight: .semibold))
                     .foregroundStyle(Theme.ink.opacity(0.8))
                 Spacer(minLength: 12)
                 StatusDurationBar(minutes: item.timeInStatusMinutes, estimateMinutes: item.estimateMinutes)

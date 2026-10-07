@@ -29,7 +29,7 @@ struct ItemCard: View {
             HStack(alignment: .top, spacing: 8) {
                 PriorityBadge(priority: item.priority)
                 Text(item.title)
-                    .font(Theme.mono(.subheadline, weight: .medium))
+                    .font(Theme.font(.subheadline, weight: .medium))
                     .foregroundStyle(Theme.ink)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -38,20 +38,21 @@ struct ItemCard: View {
                 HStack(spacing: 6) {
                     if let name = item.epicName, let color = epicColor {
                         Text(name.uppercased())
-                            .font(Theme.mono(.caption2, weight: .semibold))
+                            .font(Theme.font(.caption2, weight: .semibold))
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
                             .foregroundStyle(color)
                             .background(color.opacity(0.10))
-                            .overlay(Rectangle().stroke(color.opacity(0.19), lineWidth: 1))
+                            .themedBorder(color.opacity(0.19), radius: .badge)
                     }
                     if isOverdue, let deadline = item.deadline {
                         Text("⚠ \(deadline)")
-                            .font(Theme.mono(.caption2, weight: .medium))
+                            .font(Theme.font(.caption2, weight: .medium))
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
                             .foregroundStyle(Color(hex: "#f87171"))
                             .background(Color.red.opacity(0.10))
+                            .themedClip()
                     }
                 }
             }
@@ -61,19 +62,20 @@ struct ItemCard: View {
             HStack {
                 if let estimate = item.estimateMinutes {
                     Text(Format.estimate(estimate))
-                        .font(Theme.mono(.caption, weight: .semibold))
+                        .font(Theme.font(.caption, weight: .semibold))
                         .foregroundStyle(Theme.ink.opacity(0.8))
                 }
                 if spillCount > 0 {
                     Text("↻\(spillCount)")
-                        .font(Theme.mono(.caption2, weight: .medium))
+                        .font(Theme.font(.caption2, weight: .medium))
                         .padding(.horizontal, 4)
                         .foregroundStyle(spillCount >= 2 ? spillColor : Theme.dim)
                         .background(spillColor.opacity(0.12))
+                        .themedClip()
                 }
                 Spacer()
                 Text(item.displayId)
-                    .font(Theme.mono(.caption, weight: .medium))
+                    .font(Theme.code(.caption, weight: .medium))
                     .foregroundStyle(Theme.dim)
             }
         }
@@ -81,10 +83,10 @@ struct ItemCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.surface)
         .background(epicColor?.opacity(0.10) ?? .clear)
-        .overlay(Rectangle().stroke(epicColor?.opacity(0.21) ?? Theme.line, lineWidth: 1))
         .overlay(alignment: .leading) {
             Rectangle().fill(spillColor).frame(width: 3)
         }
+        .themedBorder(epicColor?.opacity(0.21) ?? Theme.line)
         .contentShape(Rectangle())
     }
 
@@ -115,11 +117,11 @@ struct StatusDurationBar: View {
                 }
                 .frame(height: 6)
                 Text(Format.duration(minutes))
-                    .font(Theme.mono(.footnote, weight: .bold))
+                    .font(Theme.font(.footnote, weight: .bold))
                     .foregroundStyle(minutes == 0 ? Theme.ghost : color)
             }
         } else {
-            Text("—").font(.caption).foregroundStyle(Theme.ghost)
+            Text("—").font(Theme.font(.caption)).foregroundStyle(Theme.ghost)
         }
     }
 

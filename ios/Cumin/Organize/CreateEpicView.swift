@@ -28,7 +28,7 @@ struct CreateEpicView: View {
             HStack {
                 Button("Cancel") { dismiss() }.foregroundStyle(Theme.dim)
                 Spacer()
-                Text("New Epic").font(Theme.mono(.headline, weight: .semibold)).foregroundStyle(Theme.ink)
+                Text("New Epic").font(Theme.font(.headline, weight: .semibold)).foregroundStyle(Theme.ink)
                 Spacer()
                 Button(isSaving ? "Creating…" : "Create") { Task { await submit() } }
                     .fontWeight(.semibold)
@@ -36,7 +36,7 @@ struct CreateEpicView: View {
                     .disabled(isSaving || trimmedName.isEmpty)
                     .accessibilityIdentifier("create-epic")
             }
-            .font(Theme.mono(.subheadline))
+            .font(Theme.font(.subheadline))
             .buttonStyle(.plain)
             .padding(20)
 
@@ -57,12 +57,12 @@ struct CreateEpicView: View {
                                 let selected = type == value
                                 Button { type = value } label: {
                                     Text(label)
-                                        .font(Theme.mono(.caption, weight: .medium))
+                                        .font(Theme.font(.caption, weight: .medium))
                                         .frame(maxWidth: .infinity)
                                         .padding(.vertical, 8)
                                         .foregroundStyle(selected ? .white : Theme.dim)
                                         .background(selected ? Theme.accent : Theme.surface)
-                                        .overlay(Rectangle().stroke(selected ? Theme.accent : Theme.line, lineWidth: 1))
+                                        .themedBorder(selected ? Theme.accent : Theme.line)
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -81,7 +81,7 @@ struct CreateEpicView: View {
 
                     FormField(label: "Deadline") {
                         Toggle(isOn: $hasDeadline.animation()) {
-                            Text(hasDeadline ? "Set" : "None").font(Theme.mono(.subheadline)).foregroundStyle(Theme.ink)
+                            Text(hasDeadline ? "Set" : "None").font(Theme.font(.subheadline)).foregroundStyle(Theme.ink)
                         }
                         if hasDeadline {
                             DatePicker("Deadline", selection: $deadline, displayedComponents: .date)
@@ -91,14 +91,14 @@ struct CreateEpicView: View {
                     }
 
                     if let error {
-                        Text(error).font(.footnote).foregroundStyle(.red)
+                        Text(error).font(Theme.font(.footnote)).foregroundStyle(.red)
                     }
                 }
                 .padding(20)
             }
         }
         .background(Theme.raised)
-        .presentationBackground(Theme.raised)
+        .presentationBackground(Theme.sheetBackground)
         .tint(Theme.accent)
         .onAppear { nameFocused = true }
     }

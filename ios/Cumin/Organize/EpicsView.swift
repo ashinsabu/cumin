@@ -51,7 +51,7 @@ struct EpicsView: View {
                 }
                 if rows.isEmpty && store.hasLoaded {
                     Text("No epics found.")
-                        .font(Theme.mono(.footnote))
+                        .font(Theme.font(.footnote))
                         .foregroundStyle(Theme.ghost)
                         .frame(maxWidth: .infinity, minHeight: 80)
                         .listRowBackground(Theme.canvas)
@@ -101,7 +101,7 @@ struct EpicsView: View {
 
             Spacer(minLength: 0)
             Text("\(rows.count) epics")
-                .font(Theme.mono(.caption2))
+                .font(Theme.font(.caption2))
                 .foregroundStyle(Theme.ghost)
         }
         .padding(.vertical, 6)
@@ -117,7 +117,7 @@ private struct EpicRow: View {
             HStack(spacing: 8) {
                 Circle().fill(color).frame(width: 10, height: 10)
                 Text(stats.epic.name)
-                    .font(Theme.mono(.subheadline, weight: .semibold))
+                    .font(Theme.font(.subheadline, weight: .semibold))
                     .foregroundStyle(Theme.ink)
                 Spacer()
                 EpicTypeBadge(type: stats.epic.type)
@@ -130,7 +130,7 @@ private struct EpicRow: View {
                 Text("\(stats.progress)%").foregroundStyle(Theme.dim).frame(width: 36, alignment: .trailing)
                 DeadlineChip(daysLeft: stats.daysLeft).frame(minWidth: 52, alignment: .trailing)
             }
-            .font(Theme.mono(.caption, weight: .medium))
+            .font(Theme.font(.caption, weight: .medium))
         }
         .padding(.vertical, 6)
     }
@@ -147,12 +147,12 @@ struct FilterChip: View {
             Text(text).lineLimit(1)
             Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
         }
-        .font(Theme.mono(.caption, weight: .medium))
+        .font(Theme.font(.caption, weight: .medium))
         .foregroundStyle(active ? Theme.accent : Theme.dim)
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
         .background(active ? Theme.accent.opacity(0.1) : Theme.surface)
-        .overlay(Rectangle().stroke(active ? Theme.accent.opacity(0.4) : Theme.line, lineWidth: 1))
+        .themedBorder(active ? Theme.accent.opacity(0.4) : Theme.line)
     }
 }
 
@@ -173,7 +173,7 @@ struct SortMenu<Key: Hashable & Identifiable & RawRepresentable>: View where Key
                 .foregroundStyle(Theme.dim)
                 .frame(width: 30, height: 26)
                 .background(Theme.surface)
-                .overlay(Rectangle().stroke(Theme.line, lineWidth: 1))
+                .themedBorder(Theme.line)
                 .accessibilityLabel("Sort by \(selection.rawValue)")
         }
     }

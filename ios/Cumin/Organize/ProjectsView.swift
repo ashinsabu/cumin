@@ -44,7 +44,7 @@ struct ProjectsView: View {
                 }
                 if rows.isEmpty && store.hasLoaded {
                     Text("No projects yet.")
-                        .font(Theme.mono(.footnote))
+                        .font(Theme.font(.footnote))
                         .foregroundStyle(Theme.ghost)
                         .frame(maxWidth: .infinity, minHeight: 80)
                         .listRowBackground(Theme.canvas)
@@ -57,7 +57,7 @@ struct ProjectsView: View {
                 HStack {
                     SortMenu(keys: SortKey.allCases, selection: $sortKey, ascending: $sortAscending)
                     Spacer()
-                    Text("\(store.projects.count) projects").font(Theme.mono(.caption2)).foregroundStyle(Theme.ghost)
+                    Text("\(store.projects.count) projects").font(Theme.font(.caption2)).foregroundStyle(Theme.ghost)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 6)
@@ -97,23 +97,24 @@ private struct ProjectRow: View {
         let color = Color(hex: project.color)
         HStack(alignment: .top, spacing: 12) {
             Text(project.prefix)
-                .font(Theme.mono(.footnote, weight: .bold))
+                .font(Theme.code(.footnote, weight: .bold))
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
                 .foregroundStyle(color)
                 .background(color.opacity(0.1))
+                .themedClip()
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Circle().fill(color).frame(width: 9, height: 9)
-                    Text(project.name).font(Theme.mono(.subheadline, weight: .semibold)).foregroundStyle(Theme.ink)
+                    Text(project.name).font(Theme.font(.subheadline, weight: .semibold)).foregroundStyle(Theme.ink)
                 }
                 Text(project.description.isEmpty ? "—" : project.description)
-                    .font(Theme.mono(.caption))
+                    .font(Theme.font(.caption))
                     .foregroundStyle(Theme.dim)
                     .lineLimit(2)
             }
             Spacer()
-            Text("\(itemCount) items").font(Theme.mono(.caption, weight: .medium)).foregroundStyle(Theme.ink.opacity(0.8))
+            Text("\(itemCount) items").font(Theme.font(.caption, weight: .medium)).foregroundStyle(Theme.ink.opacity(0.8))
         }
         .padding(.vertical, 6)
     }
@@ -143,7 +144,7 @@ struct CreateProjectView: View {
             HStack {
                 Button("Cancel") { dismiss() }.foregroundStyle(Theme.dim)
                 Spacer()
-                Text("New project").font(Theme.mono(.headline, weight: .semibold)).foregroundStyle(Theme.ink)
+                Text("New project").font(Theme.font(.headline, weight: .semibold)).foregroundStyle(Theme.ink)
                 Spacer()
                 Button(isSaving ? "Creating…" : "Create") { Task { await submit() } }
                     .fontWeight(.semibold)
@@ -151,7 +152,7 @@ struct CreateProjectView: View {
                     .disabled(!canCreate)
                     .accessibilityIdentifier("create-project")
             }
-            .font(Theme.mono(.subheadline))
+            .font(Theme.font(.subheadline))
             .buttonStyle(.plain)
             .padding(20)
 
@@ -180,14 +181,14 @@ struct CreateProjectView: View {
                     TextField("Optional", text: $description).textFieldStyle(BoxedTextFieldStyle())
                 }
                 if let error {
-                    Text(error).font(.footnote).foregroundStyle(.red)
+                    Text(error).font(Theme.font(.footnote)).foregroundStyle(.red)
                 }
                 Spacer()
             }
             .padding(20)
         }
         .background(Theme.raised)
-        .presentationBackground(Theme.raised)
+        .presentationBackground(Theme.sheetBackground)
         .tint(Theme.accent)
         .onAppear { nameFocused = true }
     }
