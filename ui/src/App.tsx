@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { useFlags } from './context/FlagsContext'
+import { QueueDrawer, QueueMobileTrigger, QueueMobileSheet } from './components/QueueDrawer'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { pageTransition } from './lib/motionVariants'
@@ -33,6 +35,10 @@ function AppShell() {
   const { user, loading } = useAuth()
   const { items, activeSprint, selectedItem, selectItem } = useBoard()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [queueOpen, setQueueOpen] = useState(() => localStorage.getItem('queue_open') !== 'false')
+  const [mobileQueueOpen, setMobileQueueOpen] = useState(false)
+  const { isEnabled } = useFlags()
+  const queueEnabled = isEnabled('queue')
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -74,13 +80,16 @@ function AppShell() {
             <button onClick={() => setMobileNavOpen(true)} className="md:hidden p-1.5 rounded-[var(--c-radius-card)] text-dim hover:bg-line">☰</button>
             <span className="text-sm font-semibold text-ink">{activeLabel}</span>
           </div>
-          {activeId !== 'account' && (
-            <div className="text-xs px-2.5 py-1.5 rounded-[var(--c-radius-card)] bg-line text-dim">
-              {activeSprint
-                ? <>{activeSprint.name} · {activeSprint.start_date.slice(5)} – {activeSprint.end_date.slice(5)} · <span className="font-semibold text-ink/80">{items.length} items · {formatEstimate(items.reduce((s, i) => s + (i.estimate_minutes || 0), 0))} planned</span></>
-                : <span className="font-semibold">No active sprint</span>}
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {activeId !== 'account' && (
+              <div className="text-xs px-2.5 py-1.5 rounded-[var(--c-radius-card)] bg-line text-dim">
+                {activeSprint
+                  ? <>{activeSprint.name} · {activeSprint.start_date.slice(5)} – {activeSprint.end_date.slice(5)} · <span className="font-semibold text-ink/80">{items.length} items · {formatEstimate(items.reduce((s, i) => s + (i.estimate_minutes || 0), 0))} planned</span></>
+                  : <span className="font-semibold">No active sprint</span>}
+              </div>
+            )}
+            {queueEnabled && <QueueMobileTrigger onToggle={() => setMobileQueueOpen(true)} />}
+          </div>
         </header>
 
         <ErrorBoundary fallback={
@@ -113,7 +122,10 @@ function AppShell() {
         </ErrorBoundary>
       </div>
 
+      {queueEnabled && <QueueDrawer open={queueOpen} onToggle={() => setQueueOpen((v) => { localStorage.setItem('queue_open', String(!v)); return !v })} />}
+
       {selectedItem && <ItemModal item={selectedItem} onClose={() => selectItem(null)} />}
+      {queueEnabled && <QueueMobileSheet open={mobileQueueOpen} onClose={() => setMobileQueueOpen(false)} />}
     </div>
   )
 }

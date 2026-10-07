@@ -72,3 +72,18 @@ export type NavEntry = {
   label: string
   icon: string
 }
+
+export type QueueItem = {
+  id: string
+  board_id: string
+  created_by: string
+  title: string
+  notes: string
+  deadline: string | null
+  priority: number
+  estimate_minutes: number | null
+  position: number
+  urgency_score: number
+  promoted_item_id: string | null
+  created_at: string
+}

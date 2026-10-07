@@ -45,3 +45,10 @@ export const pageTransition: Variants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.16, ease: 'easeOut' } },
   exit:    { opacity: 0, y: -3, transition: { duration: 0.1, ease: 'easeIn' } },
 }
+
+// Toast: slide in from right edge
+export const toastSlide: Variants = {
+  hidden:  { opacity: 0, x: 40, scale: 0.96 },
+  visible: { opacity: 1, x: 0,  scale: 1, transition: spring },
+  exit:    { opacity: 0, x: 40, transition: { ...snap, duration: 0.12 } },
+}
