@@ -51,14 +51,22 @@ jobs:
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 
-      - name: Deploy
-        run: |
-          railway up --service cumin --detach \
-            --build-arg "VERSION=${{ github.ref_name }}" \
-            --build-arg "RAILWAY_GIT_COMMIT_SHA=${{ github.sha }}" \
-            --build-arg "RAILWAY_GIT_BRANCH=main"
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      - name: Set version env vars on Railway service
+      # railway up (CLI deploy) can't inject Dockerfile ARGs directly.
+      # We set VERSION/GIT_COMMIT/GIT_BRANCH as Railway service variables so
+      # version.Get() picks them up at runtime via os.Getenv fallback.
+      run: |
+        railway variables set --service cumin \
+          "VERSION=${{ github.ref_name }}" \
+          "GIT_COMMIT=$(echo ${{ github.sha }} | cut -c1-7)" \
+          "GIT_BRANCH=main" || true
+      env:
+        RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+    - name: Deploy
+      run: railway up --service cumin --detach
+      env:
+        RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
   deploy-frontend:
     name: Deploy frontend (Firebase)
