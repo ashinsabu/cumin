@@ -48,12 +48,15 @@ struct RootView: View {
 struct MainTabView: View {
     let user: User
     @State private var board: BoardStore
+    @State private var queue: QueueStore
     @SceneStorage("selectedTab") private var selectedTab = 0
+    @Environment(\.scenePhase) private var scenePhase
 
     init(user: User, api: APIClient) {
         self.user = user
-        // Recreated on every sign-in, so a new account never sees the previous one's board.
+        // Recreated on every sign-in, so a new account never sees the previous one's data.
         _board = State(initialValue: BoardStore(api: api))
+        _queue = State(initialValue: QueueStore(api: api))
     }
 
     var body: some View {
@@ -62,22 +65,32 @@ struct MainTabView: View {
                 .tabItem { Label("Board", systemImage: "rectangle.split.3x1") }.tag(0)
             NavigationStack { ItemListView(kind: .backlog) }
                 .tabItem { Label("Backlog", systemImage: "list.bullet") }.tag(1)
+            if queue.isEnabled {
+                NavigationStack { QueueView() }
+                    .tabItem { Label("Queue", systemImage: "tray.full") }.tag(2)
+                    // Red count of entries whose deadline day has passed.
+                    .badge(queue.overdueCount)
+            }
             NavigationStack { ItemListView(kind: .all) }
-                .tabItem { Label("Items", systemImage: "square.grid.2x2") }.tag(2)
-            NavigationStack { DashboardView() }
-                .tabItem { Label("Dashboard", systemImage: "chart.bar") }.tag(3)
+                .tabItem { Label("Items", systemImage: "square.grid.2x2") }.tag(3)
             MoreView(user: user)
                 .tabItem { Label("More", systemImage: "ellipsis") }.tag(4)
         }
+        // Load the queue up front so the overdue badge is right before the tab is opened.
+        .task { await queue.load() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await queue.load() } }
+        }
         .overlay(alignment: .bottom) { UndoBanner().padding(.bottom, 56) }
         .environment(board)
+        .environment(queue)
         .tint(Theme.accent)
     }
 }
 
-/// Web sidebar's "Organize" group plus Account.
+/// Web sidebar's "Insights" and "Organize" groups plus Account.
 struct MoreView: View {
-    enum Route: Hashable { case epics, projects, account }
+    enum Route: Hashable { case dashboard, epics, projects, account }
 
     let user: User
     @State private var path: [Route] = []
@@ -87,6 +100,12 @@ struct MoreView: View {
     var body: some View {
         NavigationStack(path: $path) {
             List {
+                Section {
+                    NavigationLink(value: Route.dashboard) { Label("Dashboard", systemImage: "chart.bar") }
+                } header: {
+                    SectionHeader("Insights")
+                }
+                .listRowBackground(Theme.surface)
                 Section {
                     NavigationLink(value: Route.epics) { Label("Epics", systemImage: "scope") }
                     NavigationLink(value: Route.projects) { Label("Projects", systemImage: "square.stack.3d.up") }
@@ -101,6 +120,7 @@ struct MoreView: View {
             }
             .navigationDestination(for: Route.self) { route in
                 switch route {
+                case .dashboard: DashboardView()
                 case .epics: EpicsView()
                 case .projects: ProjectsView()
                 case .account: AccountView(user: user)
