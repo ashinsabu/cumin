@@ -30,6 +30,12 @@ final class AuthService {
 
     /// On launch: if we have a saved token, check it's still valid with /api/auth/me.
     func restoreSession() async {
+        #if DEBUG
+        // Simulator screenshots: launch with `-debugToken <jwt>` to skip Google sign-in.
+        if let token = UserDefaults.standard.string(forKey: "debugToken") {
+            keychain.write(token, for: tokenKey)
+        }
+        #endif
         guard let token = keychain.read(tokenKey) else {
             state = .signedOut
             return

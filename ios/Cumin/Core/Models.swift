@@ -65,7 +65,15 @@ struct Item: Codable, Equatable, Identifiable {
     var sprints: [String]?
 }
 
+struct Project: Codable, Equatable, Identifiable {
+    let id: String
+    let name: String
+    let prefix: String
+    let color: String
+}
+
 // List endpoint wrappers: { "statuses": [...] } etc.
 struct StatusList: Decodable { let statuses: [Status]? }
 struct ItemList: Decodable { let items: [Item]? }
 struct EpicList: Decodable { let epics: [Epic]? }
+struct ProjectList: Decodable { let projects: [Project]? }

@@ -6,6 +6,7 @@ enum Theme {
     static let canvas = Color(light: "#f5f4f2", dark: "#09090b")
     static let surface = Color(light: "#ffffff", dark: "#111113")
     static let raised = Color(light: "#ffffff", dark: "#161618")
+    static let panel = Color(light: "#f0eeec", dark: "#0c0c0e")
     static let line = Color(light: "#e2e0de", dark: "#1e1e24")
     static let ink = Color(light: "#0c0c0e", dark: "#fafafa")
     static let dim = Color(light: "#6b7280", dark: "#a1a1aa")
