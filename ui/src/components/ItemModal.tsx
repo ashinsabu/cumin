@@ -3,6 +3,9 @@ import { motion } from 'framer-motion'
 import { fade, modalScale } from '../lib/motionVariants'
 import type { Item } from '../types'
 import { useBoard } from '../context/BoardContext'
+import { useUpdateItem, useMoveItem } from '../hooks/useItems'
+import { useBoardStatuses } from '../hooks/useBoardQueries'
+import { useEpics } from '../hooks/useEpics'
 import { useAuth } from '../context/AuthContext'
 import { PRIORITY } from '../constants'
 import { formatEstimate, parseEstimate } from '../hooks/useFormat'
@@ -19,7 +22,11 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 }
 
 export function ItemModal({ item, onClose }: { item: Item; onClose: () => void }) {
-  const { statuses, epics, moveItem, updateItem, deleteItem, selectItem } = useBoard()
+  const { deleteItem, selectItem } = useBoard()
+  const { data: statuses = [] } = useBoardStatuses()
+  const { data: epics = [] } = useEpics()
+  const updateItemMutation = useUpdateItem()
+  const moveItemMutation = useMoveItem()
   const { user } = useAuth()
 
   const [title, setTitle] = useState(item.title)
@@ -61,11 +68,14 @@ export function ItemModal({ item, onClose }: { item: Item; onClose: () => void }
     }
     setSaving(true); setSaveError('')
     try {
-      await updateItem(item.id, {
-        title: title.trim(),
-        priority,
-        estimate_minutes: estimateRaw.trim() ? parseEstimate(estimateRaw) : null,
-        ...(epicId === '__none__' ? { clear_epic: true } : { epic_id: epicId }),
+      await updateItemMutation.mutateAsync({
+        id: item.id,
+        payload: {
+          title: title.trim(),
+          priority,
+          estimate_minutes: estimateRaw.trim() ? parseEstimate(estimateRaw) : null,
+          ...(epicId === '__none__' ? { clear_epic: true } : { epic_id: epicId }),
+        },
       })
       onClose()
     } catch (err: any) {
@@ -127,7 +137,7 @@ export function ItemModal({ item, onClose }: { item: Item; onClose: () => void }
           <Row label="Status">
             <div className="flex items-center gap-1.5 flex-wrap justify-end">
               {statuses.map((s) => (
-                <button key={s.id} type="button" onClick={() => s.id !== item.status_id && moveItem(item.id, s.id)}
+                <button key={s.id} type="button" onClick={() => s.id !== item.status_id && moveItemMutation.mutate({ id: item.id, statusId: s.id })}
                   className={`text-xs font-semibold px-2.5 py-1 rounded transition-colors ${
                     s.id === item.status_id
                       ? s.is_done ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-accent/15 text-accent border border-accent/30'
@@ -177,7 +187,7 @@ export function ItemModal({ item, onClose }: { item: Item; onClose: () => void }
           </Row>
 
           <Row label="Time in status">
-            <div className="w-40"><StatusDurationBar minutes={item.time_in_status_minutes} /></div>
+            <div className="w-40"><StatusDurationBar minutes={item.time_in_status_minutes} estimateMinutes={item.estimate_minutes} /></div>
           </Row>
 
           {sprints.length > 0 && (

@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { Item } from '../../types'
-import { useBoard } from '../../context/BoardContext'
+import { useBoardStatuses } from '../../hooks/useBoardQueries'
+import { useMoveItem } from '../../hooks/useItems'
 import { popover } from '../../lib/motionVariants'
 
 interface Props {
@@ -10,7 +11,8 @@ interface Props {
 }
 
 export function ItemStatusBadge({ item, editable = true }: Props) {
-  const { statuses, moveItem } = useBoard()
+  const { data: statuses = [] } = useBoardStatuses()
+  const moveItemMutation = useMoveItem()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const s = statuses.find((st) => st.id === item.status_id)
@@ -51,7 +53,7 @@ export function ItemStatusBadge({ item, editable = true }: Props) {
               <button
                 key={st.id}
                 type="button"
-                onClick={() => { moveItem(item.id, st.id); setOpen(false) }}
+                onClick={() => { moveItemMutation.mutate({ id: item.id, statusId: st.id }); setOpen(false) }}
                 className={`w-full text-left px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-surface ${
                   st.id === item.status_id ? 'text-accent' : 'text-ink'
                 }`}

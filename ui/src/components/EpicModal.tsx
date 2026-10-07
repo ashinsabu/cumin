@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
+import { useQueryClient } from '@tanstack/react-query'
 import type { Epic } from '../types'
 import { useBoard } from '../context/BoardContext'
+import { useItems, itemKeys } from '../hooks/useItems'
+import { useBoardStatuses } from '../hooks/useBoardQueries'
+import { useUpdateEpic, epicKeys } from '../hooks/useEpics'
 import { formatEstimate } from '../hooks/useFormat'
 import { ItemRow } from './item/ItemRow'
 import { QuickAddItem } from './item/QuickAddItem'
 import { fade, slideRight, slideUp } from '../lib/motionVariants'
-
-const API = import.meta.env.VITE_API_URL ?? ''
 
 type PanelMode = 'open' | 'minimized'
 
@@ -28,7 +30,11 @@ const TYPE_STYLES: Record<string, string> = {
 
 
 export function EpicModal({ epic, onClose }: { epic: Epic; onClose: () => void }) {
-  const { items, statuses, deleteEpic, selectEpic, selectItem, refresh } = useBoard()
+  const { deleteEpic, selectEpic, selectItem } = useBoard()
+  const { data: items = [] } = useItems()
+  const { data: statuses = [] } = useBoardStatuses()
+  const updateEpicMutation = useUpdateEpic()
+  const qc = useQueryClient()
 
   const [mode, setMode] = useState<PanelMode>('open')
   const [name, setName] = useState(epic.name)
@@ -62,17 +68,10 @@ export function EpicModal({ epic, onClose }: { epic: Epic; onClose: () => void }
     if (!name.trim()) return
     setSaving(true); setSaveError('')
     try {
-      const res = await fetch(`${API}/api/epics/${epic.id}`, {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), description }),
+      await updateEpicMutation.mutateAsync({
+        id: epic.id,
+        payload: { name: name.trim(), description },
       })
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}))
-        throw new Error(d.error || 'Save failed')
-      }
-      refresh()
     } catch (err: any) {
       setSaveError(err.message)
     } finally {
@@ -84,6 +83,12 @@ export function EpicModal({ epic, onClose }: { epic: Epic; onClose: () => void }
     deleteEpic(epic.id)
     selectEpic(null)
     onClose()
+  }
+
+  function handleQuickAddDone() {
+    setShowQuickAdd(false)
+    qc.invalidateQueries({ queryKey: itemKeys.all })
+    qc.invalidateQueries({ queryKey: epicKeys.all })
   }
 
   if (mode === 'minimized') {
@@ -214,7 +219,7 @@ export function EpicModal({ epic, onClose }: { epic: Epic; onClose: () => void }
 
           <div className="border-t border-line">
             {showQuickAdd && (
-              <QuickAddItem epicId={epic.id} onDone={() => { setShowQuickAdd(false); refresh() }} />
+              <QuickAddItem epicId={epic.id} onDone={handleQuickAddDone} />
             )}
             {epicItems.length > 0 ? (
               epicItems.map((item) => (

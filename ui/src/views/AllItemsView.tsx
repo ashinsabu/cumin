@@ -1,5 +1,8 @@
 import { useState, useMemo } from 'react'
 import { useBoard } from '../context/BoardContext'
+import { useItems } from '../hooks/useItems'
+import { useEpics } from '../hooks/useEpics'
+import { useBoardStatuses } from '../hooks/useBoardQueries'
 import { usePersistentState } from '../hooks/usePersistentState'
 import { PRIORITY } from '../constants'
 import { formatEstimate } from '../hooks/useFormat'
@@ -40,7 +43,10 @@ function SortIcon({ col, sortKey, sortDir }: { col: string; sortKey: SortKey; so
 const SORTABLE_COLS = new Set(['id', 'title', 'epic', 'estimate', 'created', 'status', 'priority', 'in_status'])
 
 export function AllItemsView() {
-  const { items, statuses, epics: epicList, selectItem } = useBoard()
+  const { selectItem } = useBoard()
+  const { data: items = [] } = useItems()
+  const { data: statuses = [] } = useBoardStatuses()
+  const { data: epicList = [] } = useEpics()
   const [search, setSearch] = useState('')
   const [filters, setFilters] = usePersistentState<{ epic: string; priority: string; status: string }>('cumin:items:filters', { epic: 'all', priority: 'all', status: 'all' })
 
@@ -167,7 +173,7 @@ export function AllItemsView() {
       case 'priority':
         return <span className="text-sm font-bold" style={{ color: priority.color }}>{priority.label}</span>
       case 'in_status':
-        return <div className="w-full"><StatusDurationBar minutes={item.time_in_status_minutes} /></div>
+        return <div className="w-full"><StatusDurationBar minutes={item.time_in_status_minutes} estimateMinutes={item.estimate_minutes} /></div>
       default:
         return null
     }

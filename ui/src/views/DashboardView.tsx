@@ -1,15 +1,20 @@
-import { useBoard } from '../context/BoardContext'
+import { useItems } from '../hooks/useItems'
+import { useEpics } from '../hooks/useEpics'
+import { useBoardStatuses, useBoardData } from '../hooks/useBoardQueries'
 import { formatEstimate } from '../hooks/useFormat'
 import { StatusDurationBar } from '../components/StatusDurationBar'
 import { StatCard } from '../components/StatCard'
 
 export function DashboardView() {
-  const { items, statuses, epics, board, loading } = useBoard()
+  const { data: items = [] } = useItems()
+  const { data: statuses = [] } = useBoardStatuses()
+  const { data: epics = [] } = useEpics()
+  const { data: board, isLoading } = useBoardData()
 
-  if (loading || !board) {
+  if (isLoading || !board) {
     return (
       <div className="flex-1 flex items-center justify-center text-dim">
-        <span className="text-sm">{loading ? 'Loading…' : 'Board unavailable'}</span>
+        <span className="text-sm">{isLoading ? 'Loading…' : 'Board unavailable'}</span>
       </div>
     )
   }
@@ -104,7 +109,7 @@ export function DashboardView() {
                 <span className="text-sm font-mono font-medium text-dim">{item.display_id}</span>
                 <span className="text-sm font-medium text-ink/80">{item.title}</span>
               </div>
-              <div className="w-28"><StatusDurationBar minutes={item.time_in_status_minutes} /></div>
+              <div className="w-28"><StatusDurationBar minutes={item.time_in_status_minutes} estimateMinutes={item.estimate_minutes} /></div>
             </div>
           ))}
         </div>

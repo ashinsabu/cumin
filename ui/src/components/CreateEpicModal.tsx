@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { useBoard } from '../context/BoardContext'
+import { useCreateEpic } from '../hooks/useEpics'
 import type { CreateEpicPayload } from '../context/BoardContext'
 import { fade, modalScale } from '../lib/motionVariants'
 
@@ -17,7 +17,7 @@ const TYPE_OPTIONS: { value: CreateEpicPayload['type']; label: string }[] = [
 ]
 
 export function CreateEpicModal({ onClose }: { onClose: () => void }) {
-  const { createEpic } = useBoard()
+  const createEpicMutation = useCreateEpic()
   const [name, setName] = useState('')
   const [type, setType] = useState<CreateEpicPayload['type']>('goal')
   const [color, setColor] = useState(PRESET_COLORS[0])
@@ -31,7 +31,7 @@ export function CreateEpicModal({ onClose }: { onClose: () => void }) {
     if (!name.trim()) return
     setSaving(true); setError('')
     try {
-      await createEpic({
+      await createEpicMutation.mutateAsync({
         name: name.trim(),
         type,
         color,

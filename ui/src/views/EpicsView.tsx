@@ -1,5 +1,8 @@
 import { useMemo } from 'react'
 import { useBoard } from '../context/BoardContext'
+import { useItems } from '../hooks/useItems'
+import { useEpics } from '../hooks/useEpics'
+import { useBoardStatuses } from '../hooks/useBoardQueries'
 import { formatEstimate } from '../hooks/useFormat'
 import { FilterSelect } from '../components/FilterSelect'
 import { SearchInput } from '../components/SearchInput'
@@ -24,7 +27,10 @@ function SortIcon({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; s
 }
 
 export function EpicsView() {
-  const { items, statuses, epics, selectEpic, selectedEpic } = useBoard()
+  const { selectEpic, selectedEpic } = useBoard()
+  const { data: items = [] } = useItems()
+  const { data: statuses = [] } = useBoardStatuses()
+  const { data: epics = [] } = useEpics()
   const [search, setSearch] = usePersistentState('cumin:epics:search', '')
   const [typeFilter, setTypeFilter] = usePersistentState('cumin:epics:typeFilter', 'all')
   const [sortKey, setSortKey] = usePersistentState<SortKey>('cumin:epics:sortKey', 'name')

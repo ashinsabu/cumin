@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { useBoard } from '../../context/BoardContext'
+import { useCreateItem } from '../../hooks/useItems'
+import { useProjects } from '../../hooks/useProjects'
 
 interface Props {
   epicId?: string | null
@@ -10,7 +11,8 @@ interface Props {
 }
 
 export function QuickAddItem({ epicId, projectId, onDone, placeholder }: Props) {
-  const { createItem, projects } = useBoard()
+  const createItemMutation = useCreateItem()
+  const { data: projects = [] } = useProjects()
   const [title, setTitle] = useState('')
   const [saving, setSaving] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -24,7 +26,7 @@ export function QuickAddItem({ epicId, projectId, onDone, placeholder }: Props) 
     if (!title.trim() || !resolvedProjectId) return
     setSaving(true)
     try {
-      await createItem({
+      await createItemMutation.mutateAsync({
         title: title.trim(),
         project_id: resolvedProjectId,
         epic_id: epicId ?? null,

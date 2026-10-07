@@ -60,7 +60,6 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(version.Get().JSON())
 	})
-	r.Get("/api/flags", flags.NewHandler(cfg).ServeHTTP)
 	oauthHandler := newAuthHandler(cfg, pool)
 	r.Get("/api/auth/google/login", oauthHandler.HandleLogin)
 	r.Get("/api/auth/google/callback", oauthHandler.HandleCallback)
@@ -76,6 +75,9 @@ func main() {
 		// Explicit OPTIONS handler so chi routes preflights through the CORS middleware
 		// instead of returning 405 before middleware runs.
 		r.Options("/*", func(w http.ResponseWriter, r *http.Request) {})
+
+		// Public XHR — no auth, but needs CORS for browser fetch
+		r.Get("/api/flags", flags.NewHandler(cfg).ServeHTTP)
 
 		// Protected routes
 		r.Group(func(r chi.Router) {

@@ -46,7 +46,7 @@ export function ItemCard({ item }: { item: Item }) {
       </div>
 
       <div className="mb-1.5">
-        <StatusDurationBar minutes={item.time_in_status_minutes} />
+        <StatusDurationBar minutes={item.time_in_status_minutes} estimateMinutes={item.estimate_minutes} />
       </div>
 
       <div className="flex items-center justify-between">

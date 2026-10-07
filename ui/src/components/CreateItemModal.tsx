@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
-import { useBoard } from '../context/BoardContext'
+import { useCreateItem } from '../hooks/useItems'
+import { useEpics } from '../hooks/useEpics'
+import { useProjects } from '../hooks/useProjects'
 import { FilterSelect } from './FilterSelect'
 import { parseEstimate } from '../hooks/useFormat'
 
@@ -9,7 +11,9 @@ type Props = {
 }
 
 export function CreateItemModal({ onClose, onCreated }: Props) {
-  const { projects, epics, createItem } = useBoard()
+  const { data: projects = [] } = useProjects()
+  const { data: epics = [] } = useEpics()
+  const createItemMutation = useCreateItem()
   const [title, setTitle] = useState('')
   const [projectId, setProjectId] = useState(projects[0]?.id ?? '')
   const [epicId, setEpicId] = useState('')
@@ -48,7 +52,7 @@ export function CreateItemModal({ onClose, onCreated }: Props) {
     setError('')
     setEstimateError('')
     try {
-      const item = await createItem({
+      const item = await createItemMutation.mutateAsync({
         title: title.trim(),
         project_id: projectId,
         epic_id: epicId || null,

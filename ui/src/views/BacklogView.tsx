@@ -1,5 +1,8 @@
 import { useState, useMemo } from 'react'
 import { useBoard } from '../context/BoardContext'
+import { useItems } from '../hooks/useItems'
+import { useEpics } from '../hooks/useEpics'
+import { useBoardStatuses } from '../hooks/useBoardQueries'
 import { usePersistentState } from '../hooks/usePersistentState'
 import { PRIORITY } from '../constants'
 import { formatEstimate } from '../hooks/useFormat'
@@ -18,7 +21,10 @@ function SortIcon({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; s
 }
 
 export function BacklogView() {
-  const { items, statuses, epics: epicList, selectItem } = useBoard()
+  const { selectItem } = useBoard()
+  const { data: items = [] } = useItems()
+  const { data: statuses = [] } = useBoardStatuses()
+  const { data: epicList = [] } = useEpics()
   const [search, setSearch] = useState('')
   const [filters, setFilters] = usePersistentState<{ epic: string; priority: string }>('cumin:backlog:filters', { epic: 'all', priority: 'all' })
   const [showCreate, setShowCreate] = useState(false)
@@ -174,22 +180,15 @@ export function BacklogView() {
                     <span className="text-sm font-bold" style={{ color: priority.color }}>{priority.label}</span>
                   </td>
                   <td className="px-4 py-2.5">
-                    <div className="w-full"><StatusDurationBar minutes={item.time_in_status_minutes} /></div>
+                    <div className="w-full"><StatusDurationBar minutes={item.time_in_status_minutes} estimateMinutes={item.estimate_minutes} /></div>
                   </td>
                 </tr>
               )
             })}
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-12 text-center">
-                  {backlogItems.length === 0 ? (
-                    <div className="flex flex-col items-center gap-1.5">
-                      <span className="text-sm text-ghost">Your backlog is empty</span>
-                      <span className="text-xs text-ghost/60">Items not assigned to a sprint appear here — use + New item to add one</span>
-                    </div>
-                  ) : (
-                    <span className="text-sm text-ghost">No items match the current filters</span>
-                  )}
+                <td colSpan={7} className="px-4 py-8 text-center text-sm text-ghost">
+                  No backlog items{activeFilters > 0 ? ' matching filters' : ''}
                 </td>
               </tr>
             )}

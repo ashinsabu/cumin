@@ -1,10 +1,16 @@
-import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useToast } from './ToastContext'
 import { useSearchParams } from 'react-router-dom'
-import type { Item, Status, Epic, Sprint, Board, Project } from '../types'
+import { apiFetch } from '../lib/api'
+import { itemKeys } from '../hooks/useItems'
+import { epicKeys } from '../hooks/useEpics'
+import { projectKeys } from '../hooks/useProjects'
+import type { Item, Epic } from '../types'
 
 const API = import.meta.env.VITE_API_URL ?? ''
 
+// Re-export payload types so existing import sites don't break
 export type CreateItemPayload = {
   title: string
   project_id: string
@@ -38,102 +44,45 @@ export type UpdateItemPayload = {
 }
 
 type BoardContextValue = {
-  board: Board | null
-  items: Item[]
-  statuses: Status[]
-  epics: Epic[]
-  projects: Project[]
-  activeSprint: Sprint | null
-  loading: boolean
-  moveItem: (itemId: string, toStatusId: string) => void
-  createItem: (payload: CreateItemPayload) => Promise<Item>
-  updateItem: (id: string, payload: UpdateItemPayload) => Promise<void>
-  deleteItem: (id: string) => Promise<void>
-  createProject: (payload: CreateProjectPayload) => Promise<Project>
-  deleteProject: (id: string) => Promise<void>
-  createEpic: (payload: CreateEpicPayload) => Promise<Epic>
-  deleteEpic: (id: string) => Promise<void>
   selectedItem: Item | null
   selectItem: (item: Item | null) => void
   selectedEpic: Epic | null
   selectEpic: (epic: Epic | null) => void
-  refresh: () => void
+  deleteItem: (id: string) => Promise<void>
+  deleteEpic: (id: string) => Promise<void>
+  deleteProject: (id: string) => Promise<void>
 }
 
 const BoardContext = createContext<BoardContextValue | null>(null)
 
 export function BoardProvider({ children }: { children: ReactNode }) {
-  const [board, setBoard] = useState<Board | null>(null)
-  const [items, setItems] = useState<Item[]>([])
-  const [statuses, setStatuses] = useState<Status[]>([])
-  const [epics, setEpics] = useState<Epic[]>([])
-  const [projects, setProjects] = useState<Project[]>([])
-  const [activeSprint, setActiveSprint] = useState<Sprint | null>(null)
-  const [loading, setLoading] = useState(true)
   const [selectedItem, setSelectedItem] = useState<Item | null>(null)
   const [selectedEpic, setSelectedEpic] = useState<Epic | null>(null)
   const [searchParams, setSearchParams] = useSearchParams()
 
   const { push: pushToast } = useToast()
+  const qc = useQueryClient()
 
-  const itemsRef = useRef<Item[]>([])
-  const epicsRef = useRef<Epic[]>([])
-  const projectsRef = useRef<Project[]>([])
-
-  useEffect(() => { itemsRef.current = items }, [items])
-  useEffect(() => { epicsRef.current = epics }, [epics])
-  useEffect(() => { projectsRef.current = projects }, [projects])
-
-  const fetchAll = useCallback(async () => {
-    try {
-      const opts = { credentials: 'include' as const }
-      const [boardRes, statusRes, epicRes, sprintRes, itemRes, projectRes] = await Promise.all([
-        fetch(`${API}/api/board`, opts),
-        fetch(`${API}/api/board/statuses`, opts),
-        fetch(`${API}/api/epics`, opts),
-        fetch(`${API}/api/sprints/active`, opts),
-        fetch(`${API}/api/items`, opts),
-        fetch(`${API}/api/projects`, opts),
-      ])
-
-      if (boardRes.ok) setBoard(await boardRes.json())
-      if (statusRes.ok) {
-        const data = await statusRes.json()
-        setStatuses(data.statuses || [])
-      }
-      if (epicRes.ok) {
-        const data = await epicRes.json()
-        setEpics(data.epics || [])
-      }
-      if (sprintRes.ok) setActiveSprint(await sprintRes.json())
-      if (itemRes.ok) {
-        const data = await itemRes.json()
-        setItems(data.items || [])
-      }
-      if (projectRes.ok) {
-        const data = await projectRes.json()
-        setProjects(data.projects || [])
-      }
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => { fetchAll() }, [fetchAll])
-
+  // Sync selectedItem with URL ?item= param
   useEffect(() => {
     const itemParam = searchParams.get('item')
-    if (itemParam) {
-      const found = items.find((i) => i.display_id === itemParam)
-      if (found) {
-        setSelectedItem(found)
-      } else {
-        setSearchParams((prev) => { prev.delete('item'); return prev }, { replace: true })
-      }
-    } else {
+    if (!itemParam) {
       setSelectedItem(null)
+      return
     }
-  }, [searchParams, items])
+    // Find the item across all item caches
+    const allItemQueries = qc.getQueriesData<Item[]>({ queryKey: itemKeys.all })
+    let found: Item | undefined
+    for (const [, data] of allItemQueries) {
+      found = data?.find((i) => i.display_id === itemParam)
+      if (found) break
+    }
+    if (found) {
+      setSelectedItem(found)
+    } else {
+      setSearchParams((prev) => { prev.delete('item'); return prev }, { replace: true })
+    }
+  }, [searchParams])
 
   const selectItem = useCallback((item: Item | null) => {
     setSelectedItem(item)
@@ -147,177 +96,127 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     }, { replace: true })
   }, [setSearchParams])
 
-  const moveItem = useCallback(async (itemId: string, toStatusId: string) => {
-    setItems((prev) =>
-      prev.map((item) =>
-        item.id === itemId ? { ...item, status_id: toStatusId } : item
-      )
-    )
-    await fetch(`${API}/api/items/${itemId}/move`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status_id: toStatusId }),
-    })
+  const selectEpic = useCallback((epic: Epic | null) => {
+    setSelectedEpic(epic)
   }, [])
 
-  const createItem = useCallback(async (payload: CreateItemPayload): Promise<Item> => {
-    const res = await fetch(`${API}/api/items`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      throw new Error(err.error || 'Failed to create item')
-    }
-    const item: Item = await res.json()
-    setItems((prev) => [...prev, item])
-    return item
-  }, [])
-
-  const updateItem = useCallback(async (id: string, payload: UpdateItemPayload): Promise<void> => {
-    setItems((prev) => prev.map((i) => {
-      if (i.id !== id) return i
-      const merged = { ...i, ...payload }
-      if (payload.clear_epic) { merged.epic_id = null; merged.epic_name = undefined; merged.epic_color = undefined }
-      if (payload.status_id && payload.status_id !== i.status_id) { merged.time_in_status_minutes = 0 }
-      return merged
-    }))
-    try {
-      const res = await fetch(`${API}/api/items/${id}`, {
-        method: 'PATCH',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || 'Failed to update item')
-      }
-      const updated: Item = await res.json()
-      setItems((prev) => prev.map((i) => i.id === id ? updated : i))
-    } catch (err) {
-      await fetchAll()
-      throw err
-    }
-  }, [fetchAll])
+  // ── Undo-delete wrappers ──────────────────────────────────────────────────
 
   const deleteItem = useCallback(async (id: string): Promise<void> => {
-    const snapshot = itemsRef.current.find(i => i.id === id)
-    setItems(prev => prev.filter(i => i.id !== id))
+    // Snapshot from cache before optimistic removal
+    const allItemQueries = qc.getQueriesData<Item[]>({ queryKey: itemKeys.all })
+    let snapshot: Item | undefined
+    for (const [, data] of allItemQueries) {
+      snapshot = data?.find((i) => i.id === id)
+      if (snapshot) break
+    }
+
+    // Optimistic removal from all item caches
+    qc.setQueriesData<Item[]>({ queryKey: itemKeys.all }, (old) =>
+      old?.filter((i) => i.id !== id),
+    )
+
     const res = await fetch(`${API}/api/items/${id}`, { method: 'DELETE', credentials: 'include' })
     if (!res.ok) {
-      if (snapshot) setItems(prev => [...prev, snapshot])
+      qc.invalidateQueries({ queryKey: itemKeys.all })
       return
     }
+
     pushToast({
       message: snapshot?.title ? `"${snapshot.title}" deleted` : 'Item deleted',
-      undo: snapshot ? async () => {
-        setItems(prev => [...prev, snapshot])
-        await fetch(`${API}/api/items/${id}/restore`, { method: 'POST', credentials: 'include' })
-      } : undefined,
+      undo: snapshot
+        ? async () => {
+            await apiFetch(`/api/items/${id}/restore`, { method: 'POST' })
+            qc.invalidateQueries({ queryKey: itemKeys.all })
+          }
+        : undefined,
     })
-  }, [pushToast])
-
-  const createProject = useCallback(async (payload: CreateProjectPayload): Promise<Project> => {
-    const res = await fetch(`${API}/api/projects`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      throw new Error(err.error || 'Failed to create project')
-    }
-    const project: Project = await res.json()
-    setProjects((prev) => [...prev, project])
-    return project
-  }, [])
-
-  const deleteProject = useCallback(async (id: string): Promise<void> => {
-    const projSnap = projectsRef.current.find(p => p.id === id)
-    const itemsSnap = itemsRef.current.filter(i => i.project_id === id)
-    setProjects(prev => prev.filter(p => p.id !== id))
-    setItems(prev => prev.filter(i => i.project_id !== id))
-    const res = await fetch(`${API}/api/projects/${id}`, { method: 'DELETE', credentials: 'include' })
-    if (!res.ok) {
-      if (projSnap) setProjects(prev => [...prev, projSnap])
-      setItems(prev => [...prev, ...itemsSnap])
-      return
-    }
-    pushToast({
-      message: projSnap?.name ? `"${projSnap.name}" deleted` : 'Project deleted',
-      undo: projSnap ? async () => {
-        setProjects(prev => [...prev, projSnap])
-        setItems(prev => [...prev, ...itemsSnap])
-        await fetch(`${API}/api/projects/${id}/restore`, { method: 'POST', credentials: 'include' })
-      } : undefined,
-    })
-  }, [pushToast])
-
-  const createEpic = useCallback(async (payload: CreateEpicPayload): Promise<Epic> => {
-    const res = await fetch(`${API}/api/epics`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      throw new Error(err.error || 'Failed to create epic')
-    }
-    const epic: Epic = await res.json()
-    setEpics((prev) => [...prev, epic])
-    return epic
-  }, [])
+  }, [qc, pushToast])
 
   const deleteEpic = useCallback(async (id: string): Promise<void> => {
-    const epicSnap = epicsRef.current.find(e => e.id === id)
-    const itemsSnap = itemsRef.current.filter(i => i.epic_id === id)
-    setEpics(prev => prev.filter(e => e.id !== id))
-    setItems(prev => prev.filter(i => i.epic_id !== id))
+    // Snapshot from cache
+    const allEpicQueries = qc.getQueriesData<Epic[]>({ queryKey: epicKeys.all })
+    let epicSnap: Epic | undefined
+    for (const [, data] of allEpicQueries) {
+      epicSnap = data?.find((e) => e.id === id)
+      if (epicSnap) break
+    }
+
+    // Optimistic removal
+    qc.setQueriesData<Epic[]>({ queryKey: epicKeys.all }, (old) =>
+      old?.filter((e) => e.id !== id),
+    )
+    qc.setQueriesData<Item[]>({ queryKey: itemKeys.all }, (old) =>
+      old?.filter((i) => i.epic_id !== id),
+    )
+
     const res = await fetch(`${API}/api/epics/${id}`, { method: 'DELETE', credentials: 'include' })
     if (!res.ok) {
-      if (epicSnap) setEpics(prev => [...prev, epicSnap])
-      setItems(prev => [...prev, ...itemsSnap])
+      qc.invalidateQueries({ queryKey: epicKeys.all })
+      qc.invalidateQueries({ queryKey: itemKeys.all })
       return
     }
+
     pushToast({
       message: epicSnap?.name ? `"${epicSnap.name}" deleted` : 'Epic deleted',
-      undo: epicSnap ? async () => {
-        setEpics(prev => [...prev, epicSnap])
-        setItems(prev => [...prev, ...itemsSnap])
-        await fetch(`${API}/api/epics/${id}/restore`, { method: 'POST', credentials: 'include' })
-      } : undefined,
+      undo: epicSnap
+        ? async () => {
+            await apiFetch(`/api/epics/${id}/restore`, { method: 'POST' })
+            qc.invalidateQueries({ queryKey: epicKeys.all })
+            qc.invalidateQueries({ queryKey: itemKeys.all })
+          }
+        : undefined,
     })
-  }, [pushToast])
+  }, [qc, pushToast])
+
+  const deleteProject = useCallback(async (id: string): Promise<void> => {
+    // Snapshot from cache
+    const allProjectQueries = qc.getQueriesData<any[]>({ queryKey: projectKeys.all })
+    let projSnap: any
+    for (const [, data] of allProjectQueries) {
+      projSnap = data?.find((p: any) => p.id === id)
+      if (projSnap) break
+    }
+
+    // Optimistic removal
+    qc.setQueriesData<any[]>({ queryKey: projectKeys.all }, (old) =>
+      old?.filter((p) => p.id !== id),
+    )
+    qc.setQueriesData<Item[]>({ queryKey: itemKeys.all }, (old) =>
+      old?.filter((i) => i.project_id !== id),
+    )
+
+    const res = await fetch(`${API}/api/projects/${id}`, { method: 'DELETE', credentials: 'include' })
+    if (!res.ok) {
+      qc.invalidateQueries({ queryKey: projectKeys.all })
+      qc.invalidateQueries({ queryKey: itemKeys.all })
+      return
+    }
+
+    pushToast({
+      message: projSnap?.name ? `"${projSnap.name}" deleted` : 'Project deleted',
+      undo: projSnap
+        ? async () => {
+            await apiFetch(`/api/projects/${id}/restore`, { method: 'POST' })
+            qc.invalidateQueries({ queryKey: projectKeys.all })
+            qc.invalidateQueries({ queryKey: itemKeys.all })
+          }
+        : undefined,
+    })
+  }, [qc, pushToast])
 
   return (
-    <BoardContext.Provider value={{
-      board,
-      items,
-      statuses,
-      epics,
-      projects,
-      activeSprint,
-      loading,
-      moveItem,
-      createItem,
-      updateItem,
-      deleteItem,
-      createProject,
-      deleteProject,
-      createEpic,
-      deleteEpic,
-      selectedItem,
-      selectItem,
-      selectedEpic,
-      selectEpic: setSelectedEpic,
-      refresh: fetchAll,
-    }}>
+    <BoardContext.Provider
+      value={{
+        selectedItem,
+        selectItem,
+        selectedEpic,
+        selectEpic,
+        deleteItem,
+        deleteEpic,
+        deleteProject,
+      }}
+    >
       {children}
     </BoardContext.Provider>
   )

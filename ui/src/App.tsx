@@ -6,6 +6,8 @@ import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-
 import { pageTransition } from './lib/motionVariants'
 import { useAuth } from './context/AuthContext'
 import { useBoard } from './context/BoardContext'
+import { useItems } from './hooks/useItems'
+import { useActiveSprint } from './hooks/useSprints'
 import { Sidebar, MobileNav } from './components/Sidebar'
 import { ItemModal } from './components/ItemModal'
 import { LoginPage } from './components/LoginPage'
@@ -33,7 +35,9 @@ const NAV_VIEWS: NavEntry[] = [
 
 function AppShell() {
   const { user, loading } = useAuth()
-  const { items, activeSprint, selectedItem, selectItem } = useBoard()
+  const { selectedItem, selectItem } = useBoard()
+  const { data: items = [] } = useItems()
+  const { data: activeSprint } = useActiveSprint()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [queueOpen, setQueueOpen] = useState(() => localStorage.getItem('queue_open') !== 'false')
   const [mobileQueueOpen, setMobileQueueOpen] = useState(false)

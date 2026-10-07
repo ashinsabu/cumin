@@ -1,5 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useBoard } from '../context/BoardContext'
+import { useItems } from '../hooks/useItems'
+import { useProjects, useCreateProject } from '../hooks/useProjects'
 import { usePersistentState } from '../hooks/usePersistentState'
 import type { Project } from '../types'
 
@@ -15,7 +17,10 @@ function SortIcon({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; s
 }
 
 export function ProjectsView() {
-  const { projects, items, createProject, deleteProject } = useBoard()
+  const { deleteProject } = useBoard()
+  const { data: projects = [] } = useProjects()
+  const { data: items = [] } = useItems()
+  const createProjectMutation = useCreateProject()
   const [showCreate, setShowCreate] = useState(false)
   const [form, setForm] = useState({ name: '', prefix: '', color: PRESET_COLORS[0], description: '' })
   const [error, setError] = useState('')
@@ -58,7 +63,7 @@ export function ProjectsView() {
     if (!form.name || !form.prefix) { setError('Name and prefix are required'); return }
     setSubmitting(true)
     try {
-      await createProject({ name: form.name, prefix: form.prefix, color: form.color, description: form.description })
+      await createProjectMutation.mutateAsync({ name: form.name, prefix: form.prefix, color: form.color, description: form.description })
       setShowCreate(false)
       setForm({ name: '', prefix: '', color: PRESET_COLORS[0], description: '' })
     } catch (err: any) {

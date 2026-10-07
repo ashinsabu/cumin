@@ -1,5 +1,7 @@
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd'
 import { useBoard } from '../context/BoardContext'
+import { useItems, useMoveItem } from '../hooks/useItems'
+import { useBoardStatuses } from '../hooks/useBoardQueries'
 import { ItemCard } from '../components/ItemCard'
 import type { Status } from '../types'
 
@@ -18,11 +20,14 @@ function columnTint(status: Status, middleIdx: number): string {
 }
 
 export function BoardView() {
-  const { items, statuses, moveItem, selectItem } = useBoard()
+  const { selectItem } = useBoard()
+  const { data: items = [] } = useItems()
+  const { data: statuses = [] } = useBoardStatuses()
+  const moveItem = useMoveItem()
 
   function handleDragEnd(result: DropResult) {
     if (!result.destination) return
-    moveItem(result.draggableId, result.destination.droppableId)
+    moveItem.mutate({ id: result.draggableId, statusId: result.destination.droppableId })
   }
 
   return (
@@ -54,18 +59,6 @@ export function BoardView() {
                           : tint
                       }`}
                     >
-                      {columnItems.length === 0 && !snapshot.isDraggingOver && (
-                        <div className="flex flex-col items-center justify-center flex-1 gap-1 py-6 text-center">
-                          {status.is_initial ? (
-                            <>
-                              <span className="text-xs text-ghost">No items yet</span>
-                              <span className="text-xs text-ghost/60">Use + New item to get started</span>
-                            </>
-                          ) : (
-                            <span className="text-xs text-ghost">Drop items here</span>
-                          )}
-                        </div>
-                      )}
                       {columnItems.map((item, index) => (
                         <Draggable key={item.id} draggableId={item.id} index={index}>
                           {(provided, snapshot) => (

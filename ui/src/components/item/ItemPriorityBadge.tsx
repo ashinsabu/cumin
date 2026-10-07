@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import type { Item } from '../../types'
 import { PRIORITY } from '../../constants'
-import { useBoard } from '../../context/BoardContext'
+import { useUpdateItem } from '../../hooks/useItems'
 import { popover } from '../../lib/motionVariants'
 
 interface Props {
@@ -11,7 +11,7 @@ interface Props {
 }
 
 export function ItemPriorityBadge({ item, editable = true }: Props) {
-  const { updateItem } = useBoard()
+  const updateItemMutation = useUpdateItem()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const p = PRIORITY[item.priority] ?? PRIORITY[4]
@@ -53,7 +53,7 @@ export function ItemPriorityBadge({ item, editable = true }: Props) {
               <button
                 key={val}
                 type="button"
-                onClick={() => { updateItem(item.id, { priority: Number(val) }); setOpen(false) }}
+                onClick={() => { updateItemMutation.mutate({ id: item.id, payload: { priority: Number(val) } }); setOpen(false) }}
                 className={`w-full text-left px-3 py-1.5 text-xs font-bold transition-colors hover:bg-surface ${
                   item.priority === Number(val) ? 'opacity-100' : 'opacity-70'
                 }`}
