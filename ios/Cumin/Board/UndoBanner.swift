@@ -8,18 +8,18 @@ struct UndoBanner: View {
         if let deleted = store.recentlyDeleted {
             HStack(spacing: 12) {
                 Text(deleted.label)
-                    .font(Theme.mono(.footnote))
+                    .font(Theme.font(.footnote))
                     .lineLimit(1)
                     .foregroundStyle(Theme.ink)
                 Spacer()
                 Button("Undo") { Task { await store.undoDelete() } }
-                    .font(Theme.mono(.footnote, weight: .bold))
+                    .font(Theme.font(.footnote, weight: .bold))
                     .foregroundStyle(Theme.accent)
                     .accessibilityIdentifier("undo-button")
             }
             .padding(12)
             .background(Theme.raised)
-            .overlay(Rectangle().stroke(Theme.line, lineWidth: 1))
+            .themedBorder(Theme.line)
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
             .transition(.move(edge: .bottom).combined(with: .opacity))

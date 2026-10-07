@@ -36,6 +36,8 @@ targets:
       path: Cumin/Info.plist
       properties:
         CFBundleDisplayName: Cumin
+        # Bundled Geist / Geist Mono (OFL) for the Cyber and Glass themes.
+        UIAppFonts: [Geist-Regular.ttf, Geist-Medium.ttf, Geist-SemiBold.ttf, Geist-Bold.ttf, Geist-Black.ttf, GeistMono-Regular.ttf, GeistMono-Medium.ttf, GeistMono-SemiBold.ttf, GeistMono-Bold.ttf, GeistMono-Black.ttf]
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         # Read by GIDSignIn automatically.

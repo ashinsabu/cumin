@@ -23,7 +23,7 @@ struct CreateItemView: View {
             Form {
                 Section {
                     TextField("Item title", text: $title, axis: .vertical)
-                        .font(Theme.mono(.body))
+                        .font(Theme.font(.body))
                         .focused($titleFocused)
                         .accessibilityIdentifier("new-title")
                 }
@@ -44,30 +44,35 @@ struct CreateItemView: View {
                     }
                 }
 
-                Section("Priority") {
+                Section {
                     PriorityPicker(priority: $priority)
+                } header: {
+                    SectionHeader("Priority")
                 }
 
                 Section {
                     TextField("e.g. 2h, 30m, 1h30m, 2d", text: $estimateRaw)
                         .accessibilityIdentifier("new-estimate")
-                        .font(Theme.mono(.body))
+                        .font(Theme.font(.body))
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 } header: {
-                    Text("Estimate (optional)")
+                    SectionHeader("Estimate (optional)")
                 } footer: {
                     if estimateInvalid {
                         Text("Use formats like 2h, 30m, 1h30m, 2d").foregroundStyle(.red)
                     } else if let minutes = parsedEstimate {
-                        Text("= \(Format.estimate(minutes))")
+                        Text("= \(Format.estimate(minutes))").font(Theme.font(.caption)).foregroundStyle(Theme.ghost)
                     }
                 }
 
                 if let error {
-                    Section { Text(error).foregroundStyle(.red).font(.footnote) }
+                    Section { Text(error).foregroundStyle(.red).font(Theme.font(.footnote)) }
                 }
             }
+            .font(Theme.font(.body))
+            .foregroundStyle(Theme.ink)
+            .listRowBackground(Theme.surface)
             .scrollContentBackground(.hidden)
             .background(Theme.canvas)
             .navigationTitle("New item")
