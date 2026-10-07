@@ -34,7 +34,8 @@ struct BoardView: View {
             .toolbar {
                 ToolbarItem(placement: .principal) { header }
                 ToolbarItem(placement: .primaryAction) {
-                    Button { isCreating = true } label: { Image(systemName: "plus") }
+                    Button { isCreating = true } label: { Image(systemName: "plus").accessibilityLabel("New item") }
+                        .accessibilityIdentifier("add-item-button")
                         .disabled(store.projects.isEmpty)
                 }
             }
@@ -120,6 +121,7 @@ struct BoardView: View {
                     .foregroundStyle(Theme.ink)
                 Spacer()
                 Button("Undo") { Task { await store.undoDelete() } }
+                    .accessibilityIdentifier("undo-button")
                     .font(Theme.mono(.footnote, weight: .bold))
                     .foregroundStyle(Theme.accent)
             }
@@ -216,6 +218,7 @@ private struct BoardColumn: View {
     /// Long-press alternative to dragging (easier one-handed).
     @ViewBuilder
     private func moveMenu(for item: Item) -> some View {
+        Button { onSelect(item) } label: { Label("Open", systemImage: "square.and.pencil") }
         Section("Move to") {
             ForEach(store.statuses.filter { $0.id != item.statusId }) { target in
                 Button(target.name) {

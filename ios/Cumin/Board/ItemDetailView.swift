@@ -105,6 +105,7 @@ struct ItemDetailView: View {
                 Spacer()
                 Button { dismiss() } label: {
                     Image(systemName: "xmark")
+                        .accessibilityLabel("Close")
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(Theme.dim)
                         .padding(6)
@@ -131,6 +132,7 @@ struct ItemDetailView: View {
                     Task { await store.delete(item.id) }
                     dismiss()
                 }
+                .accessibilityIdentifier("confirm-delete-button")
                 .fontWeight(.semibold)
                 .foregroundStyle(.white)
                 .padding(.horizontal, 12)
@@ -139,6 +141,7 @@ struct ItemDetailView: View {
             } else {
                 Button("Delete") { confirmDelete = true }
                     .foregroundStyle(Theme.dim)
+                    .accessibilityIdentifier("delete-button")
                 let spills = (item.sprints?.count ?? 0) - 1
                 Text(spills > 0 ? "Spilled \(spills)×" : "No spillover")
                     .foregroundStyle(Theme.ghost)
@@ -148,6 +151,7 @@ struct ItemDetailView: View {
                 }
                 if isDirty {
                     Button(isSaving ? "Saving…" : "Save") { Task { await save() } }
+                        .accessibilityIdentifier("save-button")
                         .fontWeight(.semibold)
                         .foregroundStyle(.white)
                         .padding(.horizontal, 14)
@@ -198,6 +202,7 @@ struct ItemDetailView: View {
             .background(active ? Theme.accent.opacity(0.08) : Theme.surface)
             .overlay(Rectangle().stroke(active ? Theme.accent : Theme.line, lineWidth: 1))
         }
+        .accessibilityIdentifier("epic-menu")
     }
 
     private var estimateField: some View {
@@ -209,6 +214,7 @@ struct ItemDetailView: View {
                 Text("= \(Format.estimate(minutes))").font(.caption2).foregroundStyle(Theme.ghost)
             }
             TextField("e.g. 2h, 30m, 2d", text: $estimateRaw)
+                .accessibilityIdentifier("estimate-field")
                 .font(Theme.mono(.subheadline))
                 .foregroundStyle(Theme.ink)
                 .textInputAutocapitalization(.never)
@@ -288,6 +294,7 @@ struct PriorityPicker: View {
                         .overlay(Rectangle().stroke(selected ? color : Theme.line, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("priority-P\(p)")
             }
         }
     }
@@ -322,6 +329,7 @@ private struct StatusPicker: View {
                         .overlay(Rectangle().stroke(selected ? color.opacity(0.35) : .clear, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("status-chip-\(status.name)")
             }
         }
     }

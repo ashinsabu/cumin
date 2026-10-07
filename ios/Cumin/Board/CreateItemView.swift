@@ -25,6 +25,7 @@ struct CreateItemView: View {
                     TextField("Item title", text: $title, axis: .vertical)
                         .font(Theme.mono(.body))
                         .focused($titleFocused)
+                        .accessibilityIdentifier("new-title")
                 }
 
                 Section {
@@ -49,6 +50,7 @@ struct CreateItemView: View {
 
                 Section {
                     TextField("e.g. 2h, 30m, 1h30m, 2d", text: $estimateRaw)
+                        .accessibilityIdentifier("new-estimate")
                         .font(Theme.mono(.body))
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
@@ -76,6 +78,7 @@ struct CreateItemView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(isSubmitting ? "Creating…" : "Create") { Task { await submit() } }
+                        .accessibilityIdentifier("create-button")
                         .disabled(isSubmitting || trimmedTitle.isEmpty || projectID == nil || estimateInvalid)
                 }
             }
