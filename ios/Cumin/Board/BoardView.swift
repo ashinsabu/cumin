@@ -46,7 +46,16 @@ struct BoardView: View {
             }
             .sheet(isPresented: $isCreating) { CreateItemView() }
             .overlay(alignment: .bottom) { undoBanner }
-            .task { if !store.hasLoaded { await store.load() } }
+            .task {
+                if !store.hasLoaded { await store.load() }
+                #if DEBUG
+                // Simulator screenshots: `-debugOpenItem RAJ-1` opens that item's sheet.
+                if let displayID = UserDefaults.standard.string(forKey: "debugOpenItem"),
+                   let item = store.items.first(where: { $0.displayId == displayID }) {
+                    selected = SelectedItem(id: item.id)
+                }
+                #endif
+            }
             // Poll while the board is visible; SwiftUI cancels this when the tab is left.
             .task {
                 while !Task.isCancelled {

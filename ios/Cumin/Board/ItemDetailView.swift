@@ -30,118 +30,194 @@ struct ItemDetailView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if let item {
-                    form(for: item)
-                } else {
-                    ContentUnavailableView("Item not found", systemImage: "questionmark.square.dashed")
-                }
+        Group {
+            if let item {
+                content(for: item)
+            } else {
+                ContentUnavailableView("Item not found", systemImage: "questionmark.square.dashed")
             }
-            .scrollContentBackground(.hidden)
-            .background(Theme.canvas)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
-                }
-                ToolbarItem(placement: .principal) {
-                    if let item {
-                        HStack(spacing: 6) {
-                            PriorityBadge(priority: item.priority)
-                            Text(item.displayId).font(Theme.mono(.subheadline, weight: .medium)).foregroundStyle(Theme.dim)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Theme.raised)
+        .presentationBackground(Theme.raised)
+        .tint(Theme.accent)
+        .onAppear(perform: loadFields)
+    }
+
+    // Layout mirrors the web modal: header / label-value rows / footer, one flat surface.
+    private func content(for item: Item) -> some View {
+        VStack(spacing: 0) {
+            header(for: item)
+            Divider().overlay(Theme.line)
+
+            ScrollView {
+                VStack(spacing: 18) {
+                    if let description = item.description, !description.isEmpty {
+                        Text(description)
+                            .font(Theme.mono(.footnote))
+                            .foregroundStyle(Theme.dim)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    // Too many chips for a side-by-side row on a phone: label above, chips full width.
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Status")
+                            .font(Theme.mono(.subheadline))
+                            .foregroundStyle(Theme.dim)
+                        StatusPicker(statuses: store.statuses, selectedID: item.statusId) { status in
+                            Task { await store.move(itemID: item.id, to: status.id) }
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    row("Epic") { epicMenu }
+                    row("Priority") { PriorityPicker(priority: $priority).frame(maxWidth: 230) }
+                    row("Estimate") { estimateField }
+                    row("Time in status") {
+                        StatusDurationBar(minutes: item.timeInStatusMinutes, estimateMinutes: item.estimateMinutes)
+                            .frame(maxWidth: 180)
+                    }
+                    if let sprints = item.sprints, !sprints.isEmpty {
+                        row("Sprints") {
+                            Text(sprints.joined(separator: " · "))
+                                .font(Theme.mono(.caption))
+                                .foregroundStyle(Theme.dim)
+                                .multilineTextAlignment(.trailing)
                         }
                     }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    if isDirty {
-                        Button(isSaving ? "Saving…" : "Save") { Task { await save() } }
-                            .disabled(isSaving || title.trimmingCharacters(in: .whitespaces).isEmpty || estimateInvalid)
-                    }
-                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 18)
             }
-            .onAppear(perform: loadFields)
+            .scrollDismissesKeyboard(.interactively)
+
+            Divider().overlay(Theme.line)
+            footer(for: item)
         }
-        .tint(Theme.accent)
     }
 
-    private func form(for item: Item) -> some View {
-        Form {
-            Section {
-                TextField("Item title", text: $title, axis: .vertical)
-                    .font(Theme.mono(.headline, weight: .semibold))
-                if let description = item.description, !description.isEmpty {
-                    Text(description)
-                        .font(Theme.mono(.subheadline))
+    private func header(for item: Item) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                PriorityBadge(priority: item.priority)
+                Text(item.displayId)
+                    .font(Theme.mono(.subheadline, weight: .medium))
+                    .foregroundStyle(Theme.dim)
+                Spacer()
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(Theme.dim)
+                        .padding(6)
                 }
+                .buttonStyle(.plain)
             }
+            TextField("Item title", text: $title, axis: .vertical)
+                .font(Theme.mono(.title3, weight: .bold))
+                .foregroundStyle(Theme.ink)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 20)
+        .padding(.bottom, 16)
+    }
 
-            Section("Status") {
-                StatusPicker(statuses: store.statuses, selectedID: item.statusId) { status in
-                    Task { await store.move(itemID: item.id, to: status.id) }
+    private func footer(for item: Item) -> some View {
+        HStack(spacing: 12) {
+            if confirmDelete {
+                Text("Move to trash?").foregroundStyle(Theme.dim)
+                Spacer()
+                Button("Cancel") { confirmDelete = false }
+                    .foregroundStyle(Theme.dim)
+                Button("Delete") {
+                    Task { await store.delete(item.id) }
+                    dismiss()
                 }
-            }
-
-            Section("Details") {
-                Picker("Epic", selection: $epicID) {
-                    Text("None").tag(String?.none)
-                    ForEach(store.epics) { epic in
-                        Text(epic.name).tag(Optional(epic.id))
-                    }
+                .fontWeight(.semibold)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.red)
+            } else {
+                Button("Delete") { confirmDelete = true }
+                    .foregroundStyle(Theme.dim)
+                let spills = (item.sprints?.count ?? 0) - 1
+                Text(spills > 0 ? "Spilled \(spills)×" : "No spillover")
+                    .foregroundStyle(Theme.ghost)
+                Spacer()
+                if let saveError {
+                    Text(saveError).foregroundStyle(.red).lineLimit(1)
                 }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Priority").font(.subheadline)
-                    PriorityPicker(priority: $priority)
+                if isDirty {
+                    Button(isSaving ? "Saving…" : "Save") { Task { await save() } }
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                        .background(Theme.accent)
+                        .disabled(isSaving || title.trimmingCharacters(in: .whitespaces).isEmpty || estimateInvalid)
+                        .opacity(isSaving ? 0.5 : 1)
                 }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text("Estimate")
-                        Spacer()
-                        TextField("e.g. 2h, 30m, 2d", text: $estimateRaw)
-                            .multilineTextAlignment(.trailing)
-                            .font(Theme.mono(.body))
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .frame(maxWidth: 160)
-                    }
-                    if estimateInvalid {
-                        Text("Use formats like 2h, 30m, 1h30m, 2d").font(.caption).foregroundStyle(.red)
-                    } else if let minutes = parsedEstimate {
-                        Text("= \(Format.estimate(minutes))").font(.caption).foregroundStyle(Theme.ghost)
-                    }
-                }
-            }
-
-            Section("Time in status") {
-                StatusDurationBar(minutes: item.timeInStatusMinutes, estimateMinutes: item.estimateMinutes)
-            }
-
-            if let sprints = item.sprints, !sprints.isEmpty {
-                Section("Sprints") {
-                    Text(sprints.joined(separator: " · ")).font(Theme.mono(.caption)).foregroundStyle(Theme.dim)
-                    Text(sprints.count > 1 ? "Spilled \(sprints.count - 1)×" : "No spillover")
-                        .font(.caption).foregroundStyle(Theme.ghost)
-                }
-            }
-
-            if let saveError {
-                Section { Text(saveError).foregroundStyle(.red).font(.footnote) }
-            }
-
-            Section {
-                Button("Delete item", role: .destructive) { confirmDelete = true }
             }
         }
-        .confirmationDialog("Move \"\(item.title)\" to trash?", isPresented: $confirmDelete, titleVisibility: .visible) {
-            Button("Delete", role: .destructive) {
-                Task { await store.delete(item.id) }
-                dismiss()
+        .font(Theme.mono(.footnote))
+        .buttonStyle(.plain)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .background(Theme.panel)
+    }
+
+    /// Label on the left, control on the right (web `Row`).
+    private func row(_ label: String, @ViewBuilder content: () -> some View) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            Text(label)
+                .font(Theme.mono(.subheadline))
+                .foregroundStyle(Theme.dim)
+                .frame(width: 96, alignment: .leading)
+            HStack { Spacer(minLength: 0); content() }
+        }
+    }
+
+    private var epicMenu: some View {
+        let name = store.epics.first { $0.id == epicID }?.name ?? "None"
+        let active = epicID != nil
+        return Menu {
+            Button("None") { epicID = nil }
+            ForEach(store.epics) { epic in
+                Button(epic.name) { epicID = epic.id }
             }
-        } message: {
-            Text("You can undo right after, or restore it later from Recently Deleted on the web.")
+        } label: {
+            HStack {
+                Text(name).lineLimit(1)
+                Spacer()
+                Image(systemName: "chevron.down").font(.caption)
+            }
+            .font(Theme.mono(.subheadline))
+            .foregroundStyle(active ? Theme.accent : Theme.dim)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .frame(maxWidth: 200)
+            .background(active ? Theme.accent.opacity(0.08) : Theme.surface)
+            .overlay(Rectangle().stroke(active ? Theme.accent : Theme.line, lineWidth: 1))
+        }
+    }
+
+    private var estimateField: some View {
+        HStack(spacing: 8) {
+            // Hint sits beside the box so the row stays one line tall.
+            if estimateInvalid {
+                Text("2h, 30m, 2d").font(.caption2).foregroundStyle(.red)
+            } else if let minutes = parsedEstimate {
+                Text("= \(Format.estimate(minutes))").font(.caption2).foregroundStyle(Theme.ghost)
+            }
+            TextField("e.g. 2h, 30m, 2d", text: $estimateRaw)
+                .font(Theme.mono(.subheadline))
+                .foregroundStyle(Theme.ink)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .frame(maxWidth: 140)
+                .background(Theme.surface)
+                .overlay(Rectangle().stroke(estimateInvalid ? Color.red : Theme.line, lineWidth: 1))
         }
     }
 
@@ -217,31 +293,36 @@ struct PriorityPicker: View {
     }
 }
 
-/// One chip per status; tapping moves the item immediately.
+/// One chip per status; tapping moves the item immediately. Scrolls only if the chips don't fit.
 private struct StatusPicker: View {
     let statuses: [Status]
     let selectedID: String
     let onSelect: (Status) -> Void
 
     var body: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 6) {
-                ForEach(statuses) { status in
-                    let selected = status.id == selectedID
-                    let color = status.isDone ? Color(hex: "#34d399") : Theme.accent
-                    Button { if !selected { onSelect(status) } } label: {
-                        Text(status.name)
-                            .font(Theme.mono(.caption, weight: .semibold))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .foregroundStyle(selected ? color : Theme.dim)
-                            .background(selected ? color.opacity(0.12) : Theme.line)
-                            .overlay(Rectangle().stroke(selected ? color.opacity(0.3) : .clear, lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
+        ViewThatFits(in: .horizontal) {
+            chips
+            ScrollView(.horizontal) { chips }.scrollIndicators(.hidden)
+        }
+    }
+
+    private var chips: some View {
+        HStack(spacing: 6) {
+            ForEach(statuses) { status in
+                let selected = status.id == selectedID
+                let color = status.isDone ? Color(hex: "#34d399") : Theme.accent
+                Button { if !selected { onSelect(status) } } label: {
+                    Text(status.name)
+                        .font(Theme.mono(.caption, weight: .semibold))
+                        .fixedSize()
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 6)
+                        .foregroundStyle(selected ? color : Theme.dim)
+                        .background(selected ? color.opacity(0.12) : Theme.line)
+                        .overlay(Rectangle().stroke(selected ? color.opacity(0.35) : .clear, lineWidth: 1))
                 }
+                .buttonStyle(.plain)
             }
         }
-        .scrollIndicators(.hidden)
     }
 }
