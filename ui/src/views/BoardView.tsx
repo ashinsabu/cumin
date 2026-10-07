@@ -1,3 +1,4 @@
+import { useState, useMemo } from 'react'
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd'
 import { useBoard } from '../context/BoardContext'
 import { useItems, useMoveItem } from '../hooks/useItems'
@@ -25,11 +26,28 @@ export function BoardView() {
   const { data: statuses = [] } = useBoardStatuses()
   const moveItem = useMoveItem()
 
+  // pendingMoves is the source of truth for in-flight drags. It's pure React
+  // state — synchronous, never touched by network responses — so it can never
+  // be overwritten by a stale GET /api/items completing after the drop.
+  // onMutate still updates the TanStack cache (for ItemModal etc.) but can now
+  // properly await cancelQueries without racing against this visual state.
+  const [pendingMoves, setPendingMoves] = useState<Record<string, string>>({})
+
+  const displayItems = useMemo(
+    () => items.map((i) => (pendingMoves[i.id] ? { ...i, status_id: pendingMoves[i.id] } : i)),
+    [items, pendingMoves],
+  )
+
   function handleDragEnd(result: DropResult) {
     if (!result.destination) return
-    // onMutate inside useMoveItem handles the optimistic cache update synchronously
-    // (with cancelQueries + snapshot rollback on error).
-    moveItem.mutate({ id: result.draggableId, statusId: result.destination.droppableId })
+    const { draggableId: id, destination: { droppableId: statusId } } = result
+    // Synchronous React state update — commits in the same render batch as
+    // handleDragEnd returning, before dnd releases the card. Immune to any
+    // concurrent network response overwriting the TanStack cache.
+    setPendingMoves((prev) => ({ ...prev, [id]: statusId }))
+    moveItem.mutate({ id, statusId }, {
+      onSettled: () => setPendingMoves((prev) => { const { [id]: _, ...rest } = prev; return rest }),
+    })
   }
 
   return (
@@ -37,7 +55,7 @@ export function BoardView() {
       <div className="flex-1 overflow-x-auto">
         <div className="flex gap-3 p-4 min-h-full">
           {statuses.map((status, idx) => {
-            const columnItems = items.filter((i) => i.status_id === status.id)
+            const columnItems = displayItems.filter((i) => i.status_id === status.id)
             const middleIdx = statuses.slice(0, idx).filter((s) => !s.is_initial && !s.is_done).length
             const tint = columnTint(status, middleIdx)
             return (
