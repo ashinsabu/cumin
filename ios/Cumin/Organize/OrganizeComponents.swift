@@ -61,12 +61,12 @@ struct EpicTypeBadge: View {
         default: Theme.dim
         }
         Text(type.uppercased())
-            .font(Theme.mono(.caption2, weight: .semibold))
+            .font(Theme.font(.caption2, weight: .semibold))
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .foregroundStyle(color)
             .background(type == "catchall" ? Theme.line : color.opacity(0.1))
-            .overlay(Rectangle().stroke(type == "catchall" ? Theme.line : color.opacity(0.2), lineWidth: 1))
+            .themedBorder(type == "catchall" ? Theme.line : color.opacity(0.2), radius: .badge)
     }
 }
 
@@ -77,10 +77,10 @@ struct DeadlineChip: View {
     var body: some View {
         if let daysLeft {
             Text(daysLeft <= 0 ? "Overdue" : "\(daysLeft)d left")
-                .font(Theme.mono(.caption, weight: .medium))
+                .font(Theme.font(.caption, weight: .medium))
                 .foregroundStyle(daysLeft <= 0 ? .red : daysLeft < 7 ? Color(hex: "#f59e0b") : Theme.ink.opacity(0.8))
         } else {
-            Text("—").font(Theme.mono(.caption)).foregroundStyle(Theme.ghost)
+            Text("—").font(Theme.font(.caption)).foregroundStyle(Theme.ghost)
         }
     }
 }
@@ -133,7 +133,7 @@ struct FormField<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label)
-                .font(Theme.mono(.caption, weight: .semibold))
+                .font(Theme.font(.caption, weight: .semibold))
                 .foregroundStyle(Theme.dim)
             content
         }
@@ -144,11 +144,11 @@ struct FormField<Content: View>: View {
 struct BoxedTextFieldStyle: TextFieldStyle {
     func _body(configuration: TextField<Self._Label>) -> some View {
         configuration
-            .font(Theme.mono(.subheadline))
+            .font(Theme.font(.subheadline))
             .foregroundStyle(Theme.ink)
             .padding(.horizontal, 10)
             .padding(.vertical, 9)
             .background(Theme.surface)
-            .overlay(Rectangle().stroke(Theme.line, lineWidth: 1))
+            .themedBorder(Theme.line)
     }
 }

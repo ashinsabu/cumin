@@ -45,9 +45,9 @@ struct DashboardView: View {
             card {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Text("Planned vs Target (80%)").font(Theme.mono(.footnote, weight: .medium)).foregroundStyle(Theme.dim)
+                        Text("Planned vs Target (80%)").font(Theme.font(.footnote, weight: .medium)).foregroundStyle(Theme.dim)
                         Spacer()
-                        Text("\(used)%").font(Theme.mono(.footnote, weight: .bold)).foregroundStyle(color)
+                        Text("\(used)%").font(Theme.font(.footnote, weight: .bold)).foregroundStyle(color)
                     }
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
@@ -64,7 +64,7 @@ struct DashboardView: View {
                         Text("Buffer: \(Format.estimate(Int(bufferLeft))) left")
                             .foregroundStyle(Double(planned) > target ? Color(hex: "#f59e0b") : Theme.ghost)
                     }
-                    .font(Theme.mono(.caption2))
+                    .font(Theme.font(.caption2))
                 }
             }
         }
@@ -98,18 +98,18 @@ struct DashboardView: View {
                         HStack(spacing: 10) {
                             Circle().fill(color).frame(width: 10, height: 10)
                             Text(epic.name)
-                                .font(Theme.mono(.footnote, weight: .medium))
+                                .font(Theme.font(.footnote, weight: .medium))
                                 .foregroundStyle(Theme.ink.opacity(0.8))
                                 .lineLimit(1)
                                 .frame(width: 96, alignment: .leading)
                             ProgressLine(progress: stats.progress, color: color, height: 7)
                             Text("\(stats.progress)%")
-                                .font(Theme.mono(.caption, weight: .semibold))
+                                .font(Theme.font(.caption, weight: .semibold))
                                 .foregroundStyle(Theme.dim)
                                 .frame(width: 38, alignment: .trailing)
                             if let days = stats.daysLeft {
                                 Text(days > 0 ? "\(days)d" : "Overdue")
-                                    .font(Theme.mono(.caption2, weight: days < 7 ? .medium : .regular))
+                                    .font(Theme.font(.caption2, weight: days < 7 ? .medium : .regular))
                                     .foregroundStyle(days < 7 ? .red : Theme.ghost)
                             }
                         }
@@ -128,8 +128,8 @@ struct DashboardView: View {
                 ForEach(stale) { item in
                     card {
                         HStack(spacing: 10) {
-                            Text(item.displayId).font(Theme.mono(.caption, weight: .medium)).foregroundStyle(Theme.dim)
-                            Text(item.title).font(Theme.mono(.footnote, weight: .medium)).foregroundStyle(Theme.ink.opacity(0.8)).lineLimit(1)
+                            Text(item.displayId).font(Theme.code(.caption, weight: .medium)).foregroundStyle(Theme.dim)
+                            Text(item.title).font(Theme.font(.footnote, weight: .medium)).foregroundStyle(Theme.ink.opacity(0.8)).lineLimit(1)
                             Spacer(minLength: 8)
                             StatusDurationBar(minutes: item.timeInStatusMinutes, estimateMinutes: item.estimateMinutes)
                                 .frame(width: 110)
@@ -154,8 +154,8 @@ struct DashboardView: View {
                 ForEach(ideas, id: \.1) { icon, name, desc in
                     card {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("\(icon) \(name)").font(Theme.mono(.footnote, weight: .semibold)).foregroundStyle(Theme.ink.opacity(0.8))
-                            Text(desc).font(Theme.mono(.caption2)).foregroundStyle(Theme.ghost)
+                            Text("\(icon) \(name)").font(Theme.font(.footnote, weight: .semibold)).foregroundStyle(Theme.ink.opacity(0.8))
+                            Text(desc).font(Theme.font(.caption2)).foregroundStyle(Theme.ghost)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                     }
@@ -168,7 +168,7 @@ struct DashboardView: View {
 
     private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(title).font(Theme.mono(.footnote, weight: .semibold)).foregroundStyle(Theme.ink.opacity(0.8))
+            Text(title).font(Theme.font(.footnote, weight: .semibold)).foregroundStyle(Theme.ink.opacity(0.8))
             content()
         }
     }
@@ -177,11 +177,11 @@ struct DashboardView: View {
         content()
             .padding(14)
             .background(Theme.surface)
-            .overlay(Rectangle().stroke(Theme.line, lineWidth: 1))
+            .themedBorder(Theme.line)
     }
 
     private func empty(_ text: String) -> some View {
-        Text(text).font(Theme.mono(.caption)).foregroundStyle(Theme.ghost).frame(maxWidth: .infinity, alignment: .leading)
+        Text(text).font(Theme.font(.caption)).foregroundStyle(Theme.ghost).frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -193,13 +193,13 @@ private struct StatCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(label.uppercased()).font(Theme.mono(.caption2, weight: .medium)).tracking(0.5).foregroundStyle(Theme.ghost)
-            Text(value).font(Theme.mono(.title2, weight: .bold)).foregroundStyle(Theme.ink)
-            Text(sub).font(Theme.mono(.caption2)).foregroundStyle(Theme.ghost)
+            Text(label.uppercased()).font(Theme.font(.caption2, weight: .medium)).tracking(0.5).foregroundStyle(Theme.ghost)
+            Text(value).font(Theme.font(.title2, weight: .bold)).foregroundStyle(Theme.ink)
+            Text(sub).font(Theme.font(.caption2)).foregroundStyle(Theme.ghost)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(Theme.surface)
-        .overlay(Rectangle().stroke(Theme.line, lineWidth: 1))
+        .themedBorder(Theme.line)
     }
 }

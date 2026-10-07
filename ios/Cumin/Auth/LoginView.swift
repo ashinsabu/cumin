@@ -14,9 +14,11 @@ struct LoginView: View {
 
             VStack(spacing: 8) {
                 Text("Cumin")
-                    .font(.largeTitle.bold())
+                    .font(Theme.font(.largeTitle, weight: .bold))
+                    .foregroundStyle(Theme.ink)
                 Text("Sprint board for life goals")
-                    .foregroundStyle(.secondary)
+                    .font(Theme.font(.subheadline))
+                    .foregroundStyle(Theme.dim)
             }
 
             Spacer()
@@ -26,27 +28,31 @@ struct LoginView: View {
             } label: {
                 HStack {
                     if auth.isSigningIn {
-                        ProgressView()
+                        ProgressView().tint(.white)
                     } else {
                         Image(systemName: "person.crop.circle.badge.checkmark")
                     }
                     Text("Sign in with Google")
-                        .fontWeight(.semibold)
+                        .font(Theme.font(.headline, weight: .semibold))
                 }
+                .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
+                .padding(.vertical, 14)
+                .background(Theme.accent.opacity(auth.isSigningIn ? 0.6 : 1))
+                .themedClip(.card)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
+            .buttonStyle(.plain)
             .disabled(auth.isSigningIn)
 
             if let error = auth.errorMessage {
                 Text(error)
-                    .font(.footnote)
+                    .font(Theme.font(.footnote))
                     .foregroundStyle(.red)
                     .multilineTextAlignment(.center)
             }
         }
         .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.canvas)
     }
 }

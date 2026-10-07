@@ -35,7 +35,7 @@ struct EpicDetailView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Theme.raised)
-        .presentationBackground(Theme.raised)
+        .presentationBackground(Theme.sheetBackground)
         .tint(Theme.accent)
         .onAppear(perform: loadFields)
         .sheet(item: $selectedItem) {
@@ -71,10 +71,10 @@ struct EpicDetailView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     VStack(alignment: .leading, spacing: 8) {
                         TextField("Epic name", text: $name, axis: .vertical)
-                            .font(Theme.mono(.title3, weight: .bold))
+                            .font(Theme.font(.title3, weight: .bold))
                             .foregroundStyle(Theme.ink)
                         TextField("Add a description…", text: $description, axis: .vertical)
-                            .font(Theme.mono(.subheadline))
+                            .font(Theme.font(.subheadline))
                             .foregroundStyle(Theme.dim)
                             .lineLimit(2...6)
                     }
@@ -87,7 +87,7 @@ struct EpicDetailView: View {
                         HStack {
                             sectionLabel("Progress")
                             Spacer()
-                            Text("\(stats.progress)%").font(Theme.mono(.subheadline, weight: .bold)).foregroundStyle(Theme.ink)
+                            Text("\(stats.progress)%").font(Theme.font(.subheadline, weight: .bold)).foregroundStyle(Theme.ink)
                         }
                         ProgressLine(progress: stats.progress, color: color, height: 7)
                         HStack {
@@ -95,7 +95,7 @@ struct EpicDetailView: View {
                             Spacer()
                             Text("\(stats.items.count) total")
                         }
-                        .font(Theme.mono(.caption))
+                        .font(Theme.font(.caption))
                         .foregroundStyle(Theme.ghost)
                     }
                     .padding(20)
@@ -117,7 +117,7 @@ struct EpicDetailView: View {
                             showQuickAdd.toggle()
                             quickAddFocused = showQuickAdd
                         }
-                        .font(Theme.mono(.caption, weight: .semibold))
+                        .font(Theme.font(.caption, weight: .semibold))
                         .foregroundStyle(Theme.accent)
                         .accessibilityIdentifier("epic-add-item")
                     }
@@ -136,7 +136,7 @@ struct EpicDetailView: View {
                     }
                     if stats.items.isEmpty && !showQuickAdd {
                         Text("No items yet.")
-                            .font(Theme.mono(.footnote))
+                            .font(Theme.font(.footnote))
                             .foregroundStyle(Theme.ghost)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 24)
@@ -153,14 +153,14 @@ struct EpicDetailView: View {
     private func quickAdd(epicID: String) -> some View {
         HStack(spacing: 8) {
             TextField("Item title…", text: $quickAddTitle)
-                .font(Theme.mono(.subheadline))
+                .font(Theme.font(.subheadline))
                 .focused($quickAddFocused)
                 .submitLabel(.done)
                 .onSubmit { Task { await addItem(epicID: epicID) } }
                 .accessibilityIdentifier("epic-quick-add")
             if !quickAddTitle.trimmingCharacters(in: .whitespaces).isEmpty {
                 Button("Add") { Task { await addItem(epicID: epicID) } }
-                    .font(Theme.mono(.caption, weight: .semibold))
+                    .font(Theme.font(.caption, weight: .semibold))
                     .foregroundStyle(Theme.accent)
             }
         }
@@ -187,6 +187,7 @@ struct EpicDetailView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
                 .background(Color.red)
+                .themedClip(.card)
                 .accessibilityIdentifier("confirm-delete-epic")
             } else {
                 Button("Delete epic") { confirmDelete = true }
@@ -201,12 +202,13 @@ struct EpicDetailView: View {
                         .padding(.horizontal, 14)
                         .padding(.vertical, 6)
                         .background(Theme.accent)
+                        .themedClip(.card)
                         .disabled(isSaving || name.trimmingCharacters(in: .whitespaces).isEmpty)
                         .accessibilityIdentifier("save-epic")
                 }
             }
         }
-        .font(Theme.mono(.footnote))
+        .font(Theme.font(.footnote))
         .buttonStyle(.plain)
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
@@ -215,7 +217,7 @@ struct EpicDetailView: View {
 
     private func sectionLabel(_ text: String) -> some View {
         Text(text.uppercased())
-            .font(Theme.mono(.caption, weight: .semibold))
+            .font(Theme.font(.caption, weight: .semibold))
             .tracking(0.5)
             .foregroundStyle(Theme.ghost)
     }
@@ -224,7 +226,7 @@ struct EpicDetailView: View {
         HStack {
             sectionLabel(label)
             Spacer()
-            Text(value).font(Theme.mono(.subheadline, weight: .semibold)).foregroundStyle(Theme.ink)
+            Text(value).font(Theme.font(.subheadline, weight: .semibold)).foregroundStyle(Theme.ink)
         }
     }
 
@@ -267,18 +269,19 @@ private struct EpicItemRow: View {
     var body: some View {
         let priority = PriorityStyle.of(item.priority)
         HStack(spacing: 10) {
-            Text(item.displayId).font(Theme.mono(.caption, weight: .medium)).foregroundStyle(Theme.accent)
-            Text(priority.label).font(Theme.mono(.caption, weight: .bold)).foregroundStyle(priority.color)
-            Text(item.title).font(Theme.mono(.subheadline)).foregroundStyle(Theme.ink).lineLimit(1)
+            Text(item.displayId).font(Theme.code(.caption, weight: .medium)).foregroundStyle(Theme.accent)
+            Text(priority.label).font(Theme.font(.caption, weight: .bold)).foregroundStyle(priority.color)
+            Text(item.title).font(Theme.font(.subheadline)).foregroundStyle(Theme.ink).lineLimit(1)
             Spacer(minLength: 4)
             if let estimate = item.estimateMinutes {
-                Text(Format.estimate(estimate)).font(Theme.mono(.caption)).foregroundStyle(Theme.dim)
+                Text(Format.estimate(estimate)).font(Theme.font(.caption)).foregroundStyle(Theme.dim)
             }
             Text(statusName)
-                .font(Theme.mono(.caption2, weight: .semibold))
+                .font(Theme.font(.caption2, weight: .semibold))
                 .padding(.horizontal, 6)
                 .padding(.vertical, 2)
                 .background(Theme.line)
+                .themedClip()
                 .foregroundStyle(Theme.ink.opacity(0.8))
         }
         .padding(.horizontal, 20)
