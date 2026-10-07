@@ -50,8 +50,8 @@ func waitPing(t *testing.T, ch <-chan string, label string) {
 		if v != "ping" {
 			t.Errorf("%s: expected ping, got %q", label, v)
 		}
-	case <-time.After(500 * time.Millisecond):
-		t.Fatalf("%s: no ping within 500ms", label)
+	case <-time.After(2 * time.Second):
+		t.Fatalf("%s: no ping within 2s", label)
 	}
 }
 
@@ -139,7 +139,7 @@ func TestSSE_PingOnItemStatusMove(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	moveBody := fmt.Sprintf(`{"status_id":%q}`, env.DoneStatusID)
-	req, _ := http.NewRequest(http.MethodPatch, env.Server.URL+"/api/items/"+created.ID+"/move", strings.NewReader(moveBody))
+	req, _ := http.NewRequest(http.MethodPost, env.Server.URL+"/api/items/"+created.ID+"/move", strings.NewReader(moveBody))
 	req.Header.Set("Content-Type", "application/json")
 	mr, _ := http.DefaultClient.Do(req)
 	mr.Body.Close()

@@ -1,9 +1,10 @@
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd'
+import { useQueryClient } from '@tanstack/react-query'
 import { useBoard } from '../context/BoardContext'
-import { useItems, useMoveItem } from '../hooks/useItems'
+import { useItems, useMoveItem, itemKeys } from '../hooks/useItems'
 import { useBoardStatuses } from '../hooks/useBoardQueries'
 import { ItemCard } from '../components/ItemCard'
-import type { Status } from '../types'
+import type { Item, Status } from '../types'
 
 // Middle column tints cycle: red first (blocked-like), then blue (in-progress-like), then remainder
 const MIDDLE_TINTS = [
@@ -24,10 +25,17 @@ export function BoardView() {
   const { data: items = [] } = useItems()
   const { data: statuses = [] } = useBoardStatuses()
   const moveItem = useMoveItem()
+  const qc = useQueryClient()
 
   function handleDragEnd(result: DropResult) {
     if (!result.destination) return
-    moveItem.mutate({ id: result.draggableId, statusId: result.destination.droppableId })
+    const { draggableId, destination } = result
+    // Optimistic: patch cache before the network call so @hello-pangea/dnd never
+    // snaps the card back to its old column while the request is in flight.
+    qc.setQueriesData<Item[]>({ queryKey: itemKeys.all }, (old = []) =>
+      old.map((i) => (i.id === draggableId ? { ...i, status_id: destination.droppableId } : i)),
+    )
+    moveItem.mutate({ id: draggableId, statusId: destination.droppableId })
   }
 
   return (

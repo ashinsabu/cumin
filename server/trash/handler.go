@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/ashinsabu/cumin/server/api"
-	"github.com/ashinsabu/cumin/server/auth"
 	"github.com/ashinsabu/cumin/server/board"
 	"github.com/ashinsabu/cumin/server/epic"
 	"github.com/ashinsabu/cumin/server/project"
@@ -41,7 +40,7 @@ func (h *Handler) Routes(r chi.Router) {
 // @Security     CookieAuth
 // @Router       /api/trash [get]
 func (h *Handler) List(ctx context.Context) (*TrashResponse, error) {
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil {
 		return nil, api.NotFound("board not found")
 	}
@@ -74,7 +73,7 @@ func (h *Handler) List(ctx context.Context) (*TrashResponse, error) {
 // @Security     CookieAuth
 // @Router       /api/trash [delete]
 func (h *Handler) Empty(ctx context.Context) error {
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil {
 		return api.NotFound("board not found")
 	}

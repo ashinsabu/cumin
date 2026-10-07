@@ -18,11 +18,19 @@ export function useRealtime(enabled: boolean, onPing?: () => void) {
     const API = import.meta.env.VITE_API_URL ?? ''
     const es = new EventSource(`${API}/api/events`, { withCredentials: true })
 
+    es.onopen = () => {
+      console.debug('[realtime] SSE connected')
+    }
+
     es.onmessage = () => {
       for (const key of QUERY_KEYS) {
         queryClient.invalidateQueries({ queryKey: [key], refetchType: 'active' })
       }
       onPing?.()
+    }
+
+    es.onerror = (e) => {
+      console.warn('[realtime] SSE error — will reconnect', e)
     }
 
     return () => es.close()

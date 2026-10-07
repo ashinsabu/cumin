@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/ashinsabu/cumin/server/api"
-	"github.com/ashinsabu/cumin/server/auth"
 	"github.com/ashinsabu/cumin/server/board"
 	"github.com/go-chi/chi/v5"
 )
@@ -59,7 +58,7 @@ func (h *Handler) Routes(r chi.Router) {
 // @Security     CookieAuth
 // @Router       /api/epics [get]
 func (h *Handler) List(ctx context.Context) (*ListResponse, error) {
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil {
 		return nil, api.NotFound("board not found")
 	}
@@ -87,7 +86,7 @@ func (h *Handler) List(ctx context.Context) (*ListResponse, error) {
 // @Security     CookieAuth
 // @Router       /api/epics [post]
 func (h *Handler) Create(ctx context.Context, req CreateRequest) (*Epic, error) {
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil {
 		return nil, api.NotFound("board not found")
 	}
@@ -129,7 +128,7 @@ func (h *Handler) Update(ctx context.Context, req UpdateRequest) (*Epic, error) 
 		return nil, api.NotFound("epic not found")
 	}
 
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil || existing.BoardID != b.ID {
 		return nil, api.NotFound("epic not found")
 	}
@@ -173,7 +172,7 @@ func (h *Handler) Delete(ctx context.Context) error {
 		return api.NotFound("epic not found")
 	}
 
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil || existing.BoardID != b.ID {
 		return api.NotFound("epic not found")
 	}
@@ -196,7 +195,7 @@ func (h *Handler) Delete(ctx context.Context) error {
 func (h *Handler) Restore(ctx context.Context) error {
 	id := api.URLParam(ctx, "id")
 
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil {
 		return api.NotFound("board not found")
 	}

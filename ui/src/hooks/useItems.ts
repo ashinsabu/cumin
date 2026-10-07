@@ -51,11 +51,18 @@ export function useMoveItem() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, statusId }: { id: string; statusId: string }) =>
-      apiFetch(`/api/items/${id}/move`, {
+      apiFetch<Item>(`/api/items/${id}/move`, {
         method: 'POST',
         body: JSON.stringify({ status_id: statusId }),
       }),
-    onSuccess: () => {
+    onSuccess: (updatedItem) => {
+      // Immediately patch the moved item so the card never snaps back visually.
+      qc.setQueriesData<Item[]>({ queryKey: itemKeys.all }, (old = []) =>
+        old.map((i) => (i.id === updatedItem.id ? updatedItem : i)),
+      )
+      // Background-refresh all items so every card's time_in_status stays current.
+      // setQueriesData above means the moved item won't re-render on this refetch
+      // (structural sharing sees no diff).
       qc.invalidateQueries({ queryKey: itemKeys.all })
     },
   })

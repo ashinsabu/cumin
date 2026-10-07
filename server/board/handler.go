@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/ashinsabu/cumin/server/api"
-	"github.com/ashinsabu/cumin/server/auth"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -57,7 +56,7 @@ func (h *Handler) Routes(r chi.Router) {
 // @Security     CookieAuth
 // @Router       /api/board [get]
 func (h *Handler) Get(ctx context.Context) (*Board, error) {
-	b, err := h.store.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := GetOrFetch(ctx, h.store)
 	if err != nil {
 		return nil, api.NotFound("board not found")
 	}
@@ -76,7 +75,7 @@ func (h *Handler) Get(ctx context.Context) (*Board, error) {
 // @Security     CookieAuth
 // @Router       /api/board [patch]
 func (h *Handler) Update(ctx context.Context, req UpdateRequest) (*Board, error) {
-	b, err := h.store.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := GetOrFetch(ctx, h.store)
 	if err != nil {
 		return nil, api.NotFound("board not found")
 	}
@@ -111,7 +110,7 @@ func (h *Handler) Update(ctx context.Context, req UpdateRequest) (*Board, error)
 // @Security     CookieAuth
 // @Router       /api/board/statuses [get]
 func (h *Handler) ListStatuses(ctx context.Context) (*StatusListResponse, error) {
-	b, err := h.store.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := GetOrFetch(ctx, h.store)
 	if err != nil {
 		return nil, api.NotFound("board not found")
 	}
@@ -139,7 +138,7 @@ func (h *Handler) ListStatuses(ctx context.Context) (*StatusListResponse, error)
 // @Security     CookieAuth
 // @Router       /api/board/statuses [post]
 func (h *Handler) CreateStatus(ctx context.Context, req CreateStatusRequest) (*Status, error) {
-	b, err := h.store.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := GetOrFetch(ctx, h.store)
 	if err != nil {
 		return nil, api.NotFound("board not found")
 	}
@@ -166,7 +165,7 @@ func (h *Handler) CreateStatus(ctx context.Context, req CreateStatusRequest) (*S
 // @Security     CookieAuth
 // @Router       /api/board/statuses/{id} [delete]
 func (h *Handler) DeleteStatus(ctx context.Context) error {
-	b, err := h.store.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := GetOrFetch(ctx, h.store)
 	if err != nil {
 		return api.NotFound("board not found")
 	}
@@ -199,7 +198,7 @@ func (h *Handler) DeleteStatus(ctx context.Context) error {
 // @Security     CookieAuth
 // @Router       /api/board/statuses/reorder [put]
 func (h *Handler) ReorderStatuses(ctx context.Context, req ReorderStatusesRequest) (*StatusListResponse, error) {
-	b, err := h.store.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := GetOrFetch(ctx, h.store)
 	if err != nil {
 		return nil, api.NotFound("board not found")
 	}
