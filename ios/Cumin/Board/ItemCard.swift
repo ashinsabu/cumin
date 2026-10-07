@@ -4,7 +4,6 @@ import SwiftUI
 struct ItemCard: View {
     let item: Item
 
-    private var priority: PriorityStyle { .of(item.priority) }
     private var spillCount: Int { max((item.sprints?.count ?? 0) - 1, 0) }
     private var epicColor: Color? { item.epicColor.map(Color.init(hex:)) }
 
@@ -28,12 +27,7 @@ struct ItemCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 8) {
-                Text(priority.label)
-                    .font(Theme.mono(.caption, weight: .heavy))
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
-                    .background(priority.bg)
-                    .foregroundStyle(priority.color)
+                PriorityBadge(priority: item.priority)
                 Text(item.title)
                     .font(Theme.mono(.subheadline, weight: .medium))
                     .foregroundStyle(Theme.ink)
@@ -62,7 +56,7 @@ struct ItemCard: View {
                 }
             }
 
-            StatusDurationBar(minutes: item.timeInStatusMinutes)
+            StatusDurationBar(minutes: item.timeInStatusMinutes, estimateMinutes: item.estimateMinutes)
 
             HStack {
                 if let estimate = item.estimateMinutes {
@@ -102,14 +96,16 @@ struct ItemCard: View {
     }()
 }
 
-/// Port of ui/src/components/StatusDurationBar.tsx: green < 1d, yellow < 3d, orange < 7d, red after.
+/// Port of ui/src/components/StatusDurationBar.tsx.
+/// With an estimate: fill = time in status / estimate (green < 50%, yellow < 80%, orange < 100%, red after).
+/// Without one: scaled against an 8h day.
 struct StatusDurationBar: View {
     let minutes: Int?
+    var estimateMinutes: Int? = nil
 
     var body: some View {
         if let minutes {
-            let days = Double(minutes) / 1440
-            let (color, fraction) = Self.style(days: days)
+            let (color, fraction) = Self.style(minutes: minutes, estimate: estimateMinutes)
             HStack(spacing: 8) {
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
@@ -120,17 +116,28 @@ struct StatusDurationBar: View {
                 .frame(height: 6)
                 Text(Format.duration(minutes))
                     .font(Theme.mono(.footnote, weight: .bold))
-                    .foregroundStyle(color)
+                    .foregroundStyle(minutes == 0 ? Theme.ghost : color)
             }
         } else {
             Text("—").font(.caption).foregroundStyle(Theme.ghost)
         }
     }
 
-    private static func style(days: Double) -> (Color, Double) {
-        if days > 7 { return (Color(hex: "#dc2626"), 1) }
-        if days > 3 { return (Color(hex: "#f97316"), min(days * 0.12, 1)) }
-        if days > 1 { return (Color(hex: "#eab308"), min(days * 0.20, 1)) }
-        return (Color(hex: "#22c55e"), max(days * 0.30, 0.08))
+    private static let green = Color(hex: "#22c55e")
+    private static let yellow = Color(hex: "#eab308")
+    private static let orange = Color(hex: "#f97316")
+    private static let red = Color(hex: "#dc2626")
+
+    static func style(minutes: Int, estimate: Int?) -> (Color, Double) {
+        if let estimate, estimate > 0 {
+            let ratio = Double(minutes) / Double(estimate)
+            let color = ratio >= 1 ? red : ratio >= 0.8 ? orange : ratio >= 0.5 ? yellow : green
+            return (color, min(ratio, 1))
+        }
+        let hours = Double(minutes) / 60
+        if hours > 24 { return (red, 1) }
+        if hours > 8 { return (orange, min(0.5 + (hours - 8) / 16 * 0.5, 1)) }
+        if hours > 2 { return (yellow, min(0.25 + (hours - 2) / 6 * 0.25, 0.5)) }
+        return (green, minutes == 0 ? 0 : max(hours / 2 * 0.25, 0.03))
     }
 }

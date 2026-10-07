@@ -6,11 +6,14 @@ struct BoardView: View {
     @Environment(BoardStore.self) private var store
     @Environment(\.scenePhase) private var scenePhase
 
+    @State private var selected: SelectedItem?
+    @State private var isCreating = false
+
     /// How often the board re-syncs while it's on screen.
     private static let pollInterval: Duration = .seconds(15)
 
     var body: some View {
-        NavigationStack {
+        Group {
             Group {
                 if !store.hasLoaded {
                     ProgressView()
@@ -30,8 +33,30 @@ struct BoardView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) { header }
+                ToolbarItem(placement: .primaryAction) {
+                    Button { isCreating = true } label: { Image(systemName: "plus").accessibilityLabel("New item") }
+                        .accessibilityIdentifier("add-item-button")
+                        .disabled(store.projects.isEmpty)
+                }
             }
-            .task { if !store.hasLoaded { await store.load() } }
+            .sheet(item: $selected) {
+                ItemDetailView(itemID: $0.id)
+                    // Open at half height; drag up for full screen.
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+            }
+            .sheet(isPresented: $isCreating) { CreateItemView() }
+
+            .task {
+                if !store.hasLoaded { await store.load() }
+                #if DEBUG
+                // Simulator screenshots: `-debugOpenItem RAJ-1` opens that item's sheet.
+                if let displayID = UserDefaults.standard.string(forKey: "debugOpenItem"),
+                   let item = store.items.first(where: { $0.displayId == displayID }) {
+                    selected = SelectedItem(id: item.id)
+                }
+                #endif
+            }
             // Poll while the board is visible; SwiftUI cancels this when the tab is left.
             .task {
                 while !Task.isCancelled {
@@ -55,7 +80,7 @@ struct BoardView: View {
         ScrollView(.horizontal) {
             LazyHStack(alignment: .top, spacing: 12) {
                 ForEach(Array(store.statuses.enumerated()), id: \.element.id) { index, status in
-                    BoardColumn(status: status, tint: tint(for: status, at: index))
+                    BoardColumn(status: status, tint: tint(for: status, at: index)) { selected = SelectedItem(id: $0.id) }
                         .containerRelativeFrame(.horizontal) { width, _ in width * 0.85 }
                 }
             }
@@ -103,10 +128,16 @@ struct BoardView: View {
     }
 }
 
+/// Wraps an item ID for `.sheet(item:)`.
+struct SelectedItem: Identifiable {
+    let id: String
+}
+
 private struct BoardColumn: View {
     @Environment(BoardStore.self) private var store
     let status: Status
     let tint: Color
+    let onSelect: (Item) -> Void
     @State private var isTargeted = false
 
     var body: some View {
@@ -130,6 +161,7 @@ private struct BoardColumn: View {
                 LazyVStack(spacing: 8) {
                     ForEach(items) { item in
                         ItemCard(item: item)
+                            .onTapGesture { onSelect(item) }
                             .draggable(item.id) {
                                 ItemCard(item: item).frame(width: 260).rotationEffect(.degrees(1))
                             }
@@ -159,6 +191,7 @@ private struct BoardColumn: View {
     /// Long-press alternative to dragging (easier one-handed).
     @ViewBuilder
     private func moveMenu(for item: Item) -> some View {
+        Button { onSelect(item) } label: { Label("Open", systemImage: "square.and.pencil") }
         Section("Move to") {
             ForEach(store.statuses.filter { $0.id != item.statusId }) { target in
                 Button(target.name) {
