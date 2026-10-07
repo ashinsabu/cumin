@@ -9,6 +9,9 @@ final class BoardStore {
     private(set) var statuses: [Status] = []
     private(set) var items: [Item] = []
     private(set) var epics: [Epic] = []
+    private(set) var projects: [Project] = []
+    /// Most recently deleted item, kept briefly so it can be restored (web: undo toast).
+    private(set) var recentlyDeleted: Item?
     private(set) var activeSprint: Sprint?
     private(set) var isLoading = false
     private(set) var hasLoaded = false
@@ -61,6 +64,7 @@ final class BoardStore {
         let statuses: [Status]
         let items: [Item]
         let epics: [Epic]
+        let projects: [Project]
         let sprint: Sprint?
     }
 
@@ -69,12 +73,14 @@ final class BoardStore {
         async let statuses: StatusList = api.get("/api/board/statuses")
         async let items: ItemList = api.get("/api/items")
         async let epics: EpicList = api.get("/api/epics")
+        async let projects: ProjectList = api.get("/api/projects")
         async let sprint = activeSprintOrNil()
         return try await Snapshot(
             board: board,
             statuses: (statuses.statuses ?? []).sorted { $0.position < $1.position },
             items: items.items ?? [],
             epics: epics.epics ?? [],
+            projects: projects.projects ?? [],
             sprint: sprint
         )
     }
@@ -85,6 +91,7 @@ final class BoardStore {
         if statuses != s.statuses { statuses = s.statuses }
         if items != s.items { items = s.items }
         if epics != s.epics { epics = s.epics }
+        if projects != s.projects { projects = s.projects }
         if activeSprint != s.sprint { activeSprint = s.sprint }
     }
 
@@ -105,6 +112,85 @@ final class BoardStore {
             if let i = items.firstIndex(where: { $0.id == itemID }) { items[i] = previous }
             errorMessage = "Couldn't move \"\(previous.title)\": \(error.localizedDescription)"
         }
+    }
+
+    // MARK: - Create / edit / delete (ports of BoardContext createItem/updateItem/deleteItem)
+
+    struct NewItem: Encodable {
+        var title: String
+        var projectId: String
+        var epicId: String?
+        var priority: Int
+        var estimateMinutes: Int?
+    }
+
+    /// Creates an item (it lands in the board's first status) and re-syncs. Throws so the form can show the error.
+    func create(_ new: NewItem) async throws {
+        let item: Item = try await api.post("/api/items", body: new)
+        localEdits += 1
+        items.append(item)
+        await resync()
+    }
+
+    struct ItemChanges: Encodable {
+        var title: String
+        var priority: Int
+        var estimateMinutes: Int?
+        var epicId: String?
+        var clearEpic: Bool
+    }
+
+    /// Saves edits from the item sheet. The server keeps fields it doesn't receive.
+    func update(_ itemID: String, _ changes: ItemChanges) async throws {
+        let _: APIClient.Empty = try await api.send("PATCH", "/api/items/\(itemID)", body: changes)
+        localEdits += 1
+        if let i = items.firstIndex(where: { $0.id == itemID }) {
+            let epic = changes.clearEpic ? nil : epics.first { $0.id == changes.epicId }
+            items[i].title = changes.title
+            items[i].priority = changes.priority
+            items[i].estimateMinutes = changes.estimateMinutes ?? items[i].estimateMinutes
+            if changes.clearEpic || epic != nil {
+                items[i].epicId = epic?.id
+                items[i].epicName = epic?.name
+                items[i].epicColor = epic?.color
+            }
+        }
+        await resync()
+    }
+
+    /// Soft delete, optimistic. The item can be restored with `undoDelete()`.
+    func delete(_ itemID: String) async {
+        guard let i = items.firstIndex(where: { $0.id == itemID }) else { return }
+        let removed = items.remove(at: i)
+        localEdits += 1
+        do {
+            let _: APIClient.Empty = try await api.send("DELETE", "/api/items/\(itemID)", body: Optional<APIClient.Empty>.none)
+            recentlyDeleted = removed
+        } catch {
+            items.insert(removed, at: min(i, items.count))
+            errorMessage = "Couldn't delete \"\(removed.title)\": \(error.localizedDescription)"
+        }
+    }
+
+    func undoDelete() async {
+        guard let item = recentlyDeleted else { return }
+        recentlyDeleted = nil
+        localEdits += 1
+        items.append(item)
+        do {
+            let _: APIClient.Empty = try await api.post("/api/items/\(item.id)/restore", body: APIClient.Empty())
+            await resync()
+        } catch {
+            items.removeAll { $0.id == item.id }
+            errorMessage = "Couldn't restore \"\(item.title)\": \(error.localizedDescription)"
+        }
+    }
+
+    func dismissUndo() { recentlyDeleted = nil }
+
+    /// After our own change succeeds, pull the server's view (enriched fields, positions, IDs).
+    private func resync() async {
+        if let snapshot = try? await fetch() { apply(snapshot) }
     }
 
     /// /api/sprints/active returns 404 when no sprint is running.

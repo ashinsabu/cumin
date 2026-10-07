@@ -6,6 +6,9 @@ struct BoardView: View {
     @Environment(BoardStore.self) private var store
     @Environment(\.scenePhase) private var scenePhase
 
+    @State private var selected: SelectedItem?
+    @State private var isCreating = false
+
     /// How often the board re-syncs while it's on screen.
     private static let pollInterval: Duration = .seconds(15)
 
@@ -30,7 +33,14 @@ struct BoardView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) { header }
+                ToolbarItem(placement: .primaryAction) {
+                    Button { isCreating = true } label: { Image(systemName: "plus") }
+                        .disabled(store.projects.isEmpty)
+                }
             }
+            .sheet(item: $selected) { ItemDetailView(itemID: $0.id) }
+            .sheet(isPresented: $isCreating) { CreateItemView() }
+            .overlay(alignment: .bottom) { undoBanner }
             .task { if !store.hasLoaded { await store.load() } }
             // Poll while the board is visible; SwiftUI cancels this when the tab is left.
             .task {
@@ -55,7 +65,7 @@ struct BoardView: View {
         ScrollView(.horizontal) {
             LazyHStack(alignment: .top, spacing: 12) {
                 ForEach(Array(store.statuses.enumerated()), id: \.element.id) { index, status in
-                    BoardColumn(status: status, tint: tint(for: status, at: index))
+                    BoardColumn(status: status, tint: tint(for: status, at: index)) { selected = SelectedItem(id: $0.id) }
                         .containerRelativeFrame(.horizontal) { width, _ in width * 0.85 }
                 }
             }
@@ -85,6 +95,33 @@ struct BoardView: View {
         }
     }
 
+    /// Web parity: "Item deleted · Undo" toast, hidden after a few seconds.
+    @ViewBuilder
+    private var undoBanner: some View {
+        if let deleted = store.recentlyDeleted {
+            HStack(spacing: 12) {
+                Text("\"\(deleted.title)\" deleted")
+                    .font(Theme.mono(.footnote))
+                    .lineLimit(1)
+                    .foregroundStyle(Theme.ink)
+                Spacer()
+                Button("Undo") { Task { await store.undoDelete() } }
+                    .font(Theme.mono(.footnote, weight: .bold))
+                    .foregroundStyle(Theme.accent)
+            }
+            .padding(12)
+            .background(Theme.raised)
+            .overlay(Rectangle().stroke(Theme.line, lineWidth: 1))
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+            .task(id: deleted.id) {
+                try? await Task.sleep(for: .seconds(5))
+                if !Task.isCancelled { withAnimation { store.dismissUndo() } }
+            }
+        }
+    }
+
     private var errorBinding: Binding<Bool> {
         Binding(
             get: { store.errorMessage != nil && store.hasLoaded && !store.statuses.isEmpty },
@@ -103,10 +140,15 @@ struct BoardView: View {
     }
 }
 
+private struct SelectedItem: Identifiable {
+    let id: String
+}
+
 private struct BoardColumn: View {
     @Environment(BoardStore.self) private var store
     let status: Status
     let tint: Color
+    let onSelect: (Item) -> Void
     @State private var isTargeted = false
 
     var body: some View {
@@ -130,6 +172,7 @@ private struct BoardColumn: View {
                 LazyVStack(spacing: 8) {
                     ForEach(items) { item in
                         ItemCard(item: item)
+                            .onTapGesture { onSelect(item) }
                             .draggable(item.id) {
                                 ItemCard(item: item).frame(width: 260).rotationEffect(.degrees(1))
                             }
