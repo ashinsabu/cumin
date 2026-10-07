@@ -80,26 +80,23 @@ func Setup() (*TestEnv, error) {
 	// Full teardown before each test run so nothing leaks into the shared local dev DB.
 	// Delete in FK order, then delete the board itself so ProvisionNewUser below
 	// recreates statuses + project + epic from scratch.
-	_, err = pool.Exec(ctx, `
-		DO $$
-		DECLARE bid UUID;
-		BEGIN
-			SELECT id INTO bid FROM boards WHERE user_id = $1 AND deleted_at IS NULL LIMIT 1;
-			IF bid IS NOT NULL THEN
-				DELETE FROM queue_items        WHERE board_id = bid;
-				DELETE FROM status_transitions WHERE item_id IN (SELECT id FROM items WHERE board_id = bid);
-				DELETE FROM items              WHERE board_id = bid;
-				DELETE FROM epics              WHERE board_id = bid;
-				DELETE FROM sprints            WHERE board_id = bid;
-				DELETE FROM projects           WHERE board_id = bid;
-				-- deleting the board cascades to statuses; ProvisionNewUser recreates all
-				DELETE FROM boards             WHERE id = bid;
-			END IF;
-		END $$;
-	`, TestUserID)
-	if err != nil {
-		pool.Close()
-		return nil, fmt.Errorf("clean test data: %w", err)
+	var testBoardID string
+	_ = pool.QueryRow(ctx, `SELECT id FROM boards WHERE user_id = $1 LIMIT 1`, TestUserID).Scan(&testBoardID)
+	if testBoardID != "" {
+		for _, q := range []string{
+			`DELETE FROM queue_items        WHERE board_id = $1`,
+			`DELETE FROM status_transitions WHERE item_id IN (SELECT id FROM items WHERE board_id = $1)`,
+			`DELETE FROM items              WHERE board_id = $1`,
+			`DELETE FROM epics              WHERE board_id = $1`,
+			`DELETE FROM sprints            WHERE board_id = $1`,
+			`DELETE FROM projects           WHERE board_id = $1`,
+			`DELETE FROM boards             WHERE id = $1`, // cascades to statuses
+		} {
+			if _, err = pool.Exec(ctx, q, testBoardID); err != nil {
+				pool.Close()
+				return nil, fmt.Errorf("clean test data: %w", err)
+			}
+		}
 	}
 
 	// ProvisionNewUser is idempotent (ON CONFLICT DO NOTHING on board insert).
