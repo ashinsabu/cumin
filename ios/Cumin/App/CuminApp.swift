@@ -4,11 +4,13 @@ import SwiftUI
 @main
 struct CuminApp: App {
     @State private var auth = AuthService()
+    @AppStorage(Appearance.storageKey) private var appearance = Appearance.system
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(auth)
+                .preferredColorScheme(appearance.colorScheme)
                 .task { await auth.restoreSession() }
                 // Google Sign-In returns to the app through the reversed client ID URL scheme.
                 .onOpenURL { GIDSignIn.sharedInstance.handle($0) }
@@ -43,44 +45,43 @@ struct MainTabView: View {
 
     var body: some View {
         TabView {
-            BoardView()
+            NavigationStack { BoardView() }
                 .tabItem { Label("Board", systemImage: "rectangle.split.3x1") }
-            AccountView(user: user)
-                .tabItem { Label("Account", systemImage: "person.crop.circle") }
+            NavigationStack { ItemListView(kind: .backlog) }
+                .tabItem { Label("Backlog", systemImage: "list.bullet") }
+            NavigationStack { ItemListView(kind: .all) }
+                .tabItem { Label("Items", systemImage: "square.grid.2x2") }
+            NavigationStack { DashboardView() }
+                .tabItem { Label("Dashboard", systemImage: "chart.bar") }
+            NavigationStack { MoreView(user: user) }
+                .tabItem { Label("More", systemImage: "ellipsis") }
         }
+        .overlay(alignment: .bottom) { UndoBanner().padding(.bottom, 56) }
         .environment(board)
         .tint(Theme.accent)
     }
 }
 
-struct AccountView: View {
-    @Environment(AuthService.self) private var auth
+/// Web sidebar's "Organize" group plus Account.
+struct MoreView: View {
     let user: User
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section("Signed in as") {
-                    HStack(spacing: 12) {
-                        AsyncImage(url: URL(string: user.avatarUrl)) { image in
-                            image.resizable().scaledToFill()
-                        } placeholder: {
-                            Image(systemName: "person.circle.fill").resizable()
-                        }
-                        .frame(width: 40, height: 40)
-                        .clipShape(Circle())
-
-                        VStack(alignment: .leading) {
-                            Text(user.displayName).font(.headline)
-                            Text(user.email).font(.subheadline).foregroundStyle(.secondary)
-                        }
-                    }
-                }
-                Section {
-                    Button("Sign out", role: .destructive) { auth.signOut() }
-                }
+        List {
+            Section("Organize") {
+                NavigationLink { EpicsView() } label: { Label("Epics", systemImage: "scope") }
+                NavigationLink { ProjectsView() } label: { Label("Projects", systemImage: "square.stack.3d.up") }
             }
-            .navigationTitle("Account")
+            .listRowBackground(Theme.surface)
+            Section {
+                NavigationLink { AccountView(user: user) } label: { Label("Account", systemImage: "person.crop.circle") }
+            }
+            .listRowBackground(Theme.surface)
         }
+        .font(Theme.mono(.subheadline))
+        .scrollContentBackground(.hidden)
+        .background(Theme.canvas)
+        .navigationTitle("More")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
