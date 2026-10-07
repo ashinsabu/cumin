@@ -4,10 +4,10 @@ import { useQueryClient } from '@tanstack/react-query'
 const QUERY_KEYS = ['items', 'sprints', 'epics', 'projects', 'board'] as const
 
 /**
- * Opens a persistent SSE connection to /api/events and invalidates active
- * TanStack Query caches on each ping. Only connects when enabled=true
- * (controlled by FEATURE_FLAGS=realtime). EventSource reconnects automatically
- * on disconnect — no manual retry logic needed.
+ * Opens a persistent SSE connection to /api/events and immediately invalidates
+ * active queries on each ping. Safe to do on your own mutations too — mutations
+ * update the cache via setQueryData first, so the SSE refetch returns identical
+ * data and TanStack's structural sharing suppresses any re-render.
  */
 export function useRealtime(enabled: boolean, onPing?: () => void) {
   const queryClient = useQueryClient()
@@ -20,10 +20,7 @@ export function useRealtime(enabled: boolean, onPing?: () => void) {
 
     es.onmessage = () => {
       for (const key of QUERY_KEYS) {
-        // refetchType: 'none' — mark stale only, don't trigger an immediate refetch.
-        // Your own mutations update the cache directly; SSE is for other clients.
-        // Stale queries refetch on next focus/navigation.
-        queryClient.invalidateQueries({ queryKey: [key], refetchType: 'none' })
+        queryClient.invalidateQueries({ queryKey: [key], refetchType: 'active' })
       }
       onPing?.()
     }
