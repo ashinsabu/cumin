@@ -77,6 +77,28 @@ func Setup() (*TestEnv, error) {
 		return nil, fmt.Errorf("create test user: %w", err)
 	}
 
+	// Full teardown before each test run so nothing leaks into the shared local dev DB.
+	// Delete in FK order, then delete the board itself so ProvisionNewUser below
+	// recreates statuses + project + epic from scratch.
+	var testBoardID string
+	_ = pool.QueryRow(ctx, `SELECT id FROM boards WHERE user_id = $1 LIMIT 1`, TestUserID).Scan(&testBoardID)
+	if testBoardID != "" {
+		for _, q := range []string{
+			`DELETE FROM queue_items        WHERE board_id = $1`,
+			`DELETE FROM status_transitions WHERE item_id IN (SELECT id FROM items WHERE board_id = $1)`,
+			`DELETE FROM items              WHERE board_id = $1`,
+			`DELETE FROM epics              WHERE board_id = $1`,
+			`DELETE FROM sprints            WHERE board_id = $1`,
+			`DELETE FROM projects           WHERE board_id = $1`,
+			`DELETE FROM boards             WHERE id = $1`, // cascades to statuses
+		} {
+			if _, err = pool.Exec(ctx, q, testBoardID); err != nil {
+				pool.Close()
+				return nil, fmt.Errorf("clean test data: %w", err)
+			}
+		}
+	}
+
 	// ProvisionNewUser is idempotent (ON CONFLICT DO NOTHING on board insert).
 	prov := auth.NewProvisioner(pool)
 	if err := prov.ProvisionNewUser(ctx, TestUserID, "Test User"); err != nil {

@@ -56,6 +56,9 @@ type BoardContextValue = {
 const BoardContext = createContext<BoardContextValue | null>(null)
 
 export function BoardProvider({ children }: { children: ReactNode }) {
+  // Store the display_id only — derive the full Item from the live cache so the
+  // modal always reflects the latest server state (status moves, field updates, etc.)
+  const [selectedItemDisplayId, setSelectedItemDisplayId] = useState<string | null>(null)
   const [selectedItem, setSelectedItem] = useState<Item | null>(null)
   const [selectedEpic, setSelectedEpic] = useState<Epic | null>(null)
   const [searchParams, setSearchParams] = useSearchParams()
@@ -63,29 +66,43 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   const { push: pushToast } = useToast()
   const qc = useQueryClient()
 
-  // Sync selectedItem with URL ?item= param
+  // Keep selectedItem in sync with the cache. Runs on mount, when the selected ID
+  // changes, and whenever any query cache entry updates (including setQueriesData
+  // from mutations and invalidateQueries refetches).
+  useEffect(() => {
+    function syncFromCache() {
+      if (!selectedItemDisplayId) {
+        setSelectedItem(null)
+        return
+      }
+      const allItemQueries = qc.getQueriesData<Item[]>({ queryKey: itemKeys.all })
+      for (const [, data] of allItemQueries) {
+        const found = data?.find((i) => i.display_id === selectedItemDisplayId)
+        if (found) {
+          setSelectedItem(found)
+          return
+        }
+      }
+    }
+    syncFromCache()
+    return qc.getQueryCache().subscribe(syncFromCache)
+  }, [selectedItemDisplayId, qc])
+
+  // Sync selected item display ID with URL ?item= param
   useEffect(() => {
     const itemParam = searchParams.get('item')
-    if (!itemParam) {
-      setSelectedItem(null)
-      return
-    }
-    // Find the item across all item caches
+    setSelectedItemDisplayId(itemParam || null)
+    if (!itemParam) return
+    // If not in cache yet, clear the URL param
     const allItemQueries = qc.getQueriesData<Item[]>({ queryKey: itemKeys.all })
-    let found: Item | undefined
-    for (const [, data] of allItemQueries) {
-      found = data?.find((i) => i.display_id === itemParam)
-      if (found) break
-    }
-    if (found) {
-      setSelectedItem(found)
-    } else {
+    const exists = allItemQueries.some(([, data]) => data?.some((i) => i.display_id === itemParam))
+    if (!exists) {
       setSearchParams((prev) => { prev.delete('item'); return prev }, { replace: true })
     }
   }, [searchParams])
 
   const selectItem = useCallback((item: Item | null) => {
-    setSelectedItem(item)
+    setSelectedItemDisplayId(item?.display_id ?? null)
     setSearchParams((prev) => {
       if (item) {
         prev.set('item', item.display_id)

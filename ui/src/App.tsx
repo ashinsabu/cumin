@@ -14,8 +14,7 @@ import { LoginPage } from './components/LoginPage'
 import { AuthErrorPage } from './components/AuthErrorPage'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { BoardView } from './views/BoardView'
-import { BacklogView } from './views/BacklogView'
-import { AllItemsView } from './views/AllItemsView'
+import { ItemsView } from './views/ItemsView'
 import { EpicsView } from './views/EpicsView'
 import { ProjectsView } from './views/ProjectsView'
 import { DashboardView } from './views/DashboardView'
@@ -25,12 +24,11 @@ import { useRealtime } from './hooks/useRealtime'
 import type { NavEntry } from './types'
 
 const NAV_VIEWS: NavEntry[] = [
-  { id: 'board', path: '/', label: 'Board', icon: '▦' },
-  { id: 'backlog', path: '/backlog', label: 'Backlog', icon: '☰' },
-  { id: 'all-items', path: '/items', label: 'All Items', icon: '⊞' },
-  { id: 'epics', path: '/epics', label: 'Epics', icon: '◎' },
-  { id: 'projects', path: '/projects', label: 'Projects', icon: '▣' },
-  { id: 'dashboards', path: '/dashboards', label: 'Dashboards', icon: '◩' },
+  { id: 'board',      path: '/',          label: 'Board',      icon: '▦' },
+  { id: 'items',      path: '/items',     label: 'Items',      icon: '⊞' },
+  { id: 'epics',      path: '/epics',     label: 'Epics',      icon: '◎' },
+  { id: 'projects',   path: '/projects',  label: 'Projects',   icon: '▣' },
+  { id: 'dashboards', path: '/dashboards',label: 'Dashboards', icon: '◩' },
 ]
 
 
@@ -85,7 +83,7 @@ function AppShell() {
           <div className="flex items-center gap-3">
             <button onClick={() => setMobileNavOpen(true)} className="md:hidden p-1.5 rounded-[var(--c-radius-card)] text-dim hover:bg-line">☰</button>
             <span className="text-sm font-semibold text-ink">{activeLabel}</span>
-            {(activeId === 'board' || activeId === 'backlog' || activeId === 'all-items') && items.length > 0 && (
+            {(activeId === 'board' || activeId === 'items') && items.length > 0 && (
               <span className="text-xs px-1.5 py-0.5 rounded-full bg-line text-ghost font-mono">{items.length}</span>
             )}
           </div>
@@ -118,8 +116,8 @@ function AppShell() {
             >
               <Routes location={location}>
                 <Route path="/" element={<BoardView />} />
-                <Route path="/backlog" element={<BacklogView />} />
-                <Route path="/items" element={<AllItemsView />} />
+                <Route path="/items" element={<ItemsView />} />
+                <Route path="/backlog" element={<Navigate to="/items" replace />} />
                 <Route path="/epics" element={<EpicsView />} />
                 <Route path="/projects" element={<ProjectsView />} />
                 <Route path="/dashboards" element={<DashboardView />} />

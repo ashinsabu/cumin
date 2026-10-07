@@ -23,6 +23,7 @@ import (
 	"github.com/ashinsabu/cumin/server/queue"
 	"github.com/ashinsabu/cumin/server/sprint"
 	"github.com/ashinsabu/cumin/server/trash"
+	"github.com/ashinsabu/cumin/server/views"
 	"github.com/ashinsabu/cumin/server/version"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -90,17 +91,9 @@ func main() {
 		// Public XHR — no auth, but needs CORS for browser fetch
 		r.Get("/api/flags", flags.NewHandler(cfg).ServeHTTP)
 
-		// Protected routes
+		// Protected routes — always require a valid JWT cookie
 		r.Group(func(r chi.Router) {
-			if cfg.AuthDisabled {
-				if !cfg.IsDev() {
-					slog.Error("AUTH_DISABLED=true is not allowed outside of development environment")
-					os.Exit(1)
-				}
-				r.Use(auth.DevBypass("00000000-0000-0000-0000-000000000001"))
-			} else {
-				r.Use(auth.Middleware(cfg.JWTSecret))
-			}
+			r.Use(auth.Middleware(cfg.JWTSecret))
 
 			r.Get("/api/auth/me", oauthHandler.HandleMe)
 			r.Post("/api/auth/logout", oauthHandler.HandleLogout)
@@ -109,7 +102,7 @@ func main() {
 		})
 	})
 
-	slog.Info("cumin server starting", "port", cfg.Port, "auth_disabled", cfg.AuthDisabled)
+	slog.Info("cumin server starting", "port", cfg.Port)
 	if err := http.ListenAndServe(":"+cfg.Port, r); err != nil {
 		slog.Error("server stopped", "err", err)
 		os.Exit(1)
@@ -161,6 +154,7 @@ func registerDomainRoutes(r chi.Router, pool *pgxpool.Pool, cfg config.Config) {
 		item.NewHandler(itemStore, boardStore).Routes(r)
 		trash.NewHandler(projectStore, epicStore, boardStore).Routes(r)
 		queue.NewHandler(&queue.Store{DB: pool}, boardStore).Routes(r)
+		views.NewHandler(&views.Store{DB: pool}, boardStore).Routes(r)
 		r.Get("/api/events", hub.NewHandler(h, cfg.IsFeatureEnabled("realtime")).Events)
 	})
 }

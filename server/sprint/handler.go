@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/ashinsabu/cumin/server/api"
-	"github.com/ashinsabu/cumin/server/auth"
 	"github.com/ashinsabu/cumin/server/board"
 	"github.com/go-chi/chi/v5"
 )
@@ -62,7 +61,7 @@ func (h *Handler) Routes(r chi.Router) {
 // @Security     CookieAuth
 // @Router       /api/sprints [get]
 func (h *Handler) List(ctx context.Context) (*ListResponse, error) {
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil {
 		return nil, api.NotFound("board not found")
 	}
@@ -86,7 +85,7 @@ func (h *Handler) List(ctx context.Context) (*ListResponse, error) {
 // @Security     CookieAuth
 // @Router       /api/sprints/active [get]
 func (h *Handler) GetActive(ctx context.Context) (*Sprint, error) {
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil {
 		return nil, api.NotFound("board not found")
 	}
@@ -109,7 +108,7 @@ func (h *Handler) GetActive(ctx context.Context) (*Sprint, error) {
 // @Security     CookieAuth
 // @Router       /api/sprints [post]
 func (h *Handler) Create(ctx context.Context, req CreateRequest) (*Sprint, error) {
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil {
 		return nil, api.NotFound("board not found")
 	}
@@ -150,7 +149,7 @@ func (h *Handler) Activate(ctx context.Context) (*Sprint, error) {
 		return nil, api.NotFound("sprint not found")
 	}
 
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil || sp.BoardID != b.ID {
 		return nil, api.NotFound("sprint not found")
 	}
@@ -185,7 +184,7 @@ func (h *Handler) Close(ctx context.Context) (*CloseResponse, error) {
 		return nil, api.NotFound("sprint not found")
 	}
 
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil || sp.BoardID != b.ID {
 		return nil, api.NotFound("sprint not found")
 	}
@@ -229,7 +228,7 @@ func (h *Handler) SpilloverPreview(ctx context.Context) (*SpilloverPreviewRespon
 		return nil, api.NotFound("sprint not found")
 	}
 
-	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	b, err := board.GetOrFetch(ctx, h.boardStore)
 	if err != nil || sp.BoardID != b.ID {
 		return nil, api.NotFound("sprint not found")
 	}

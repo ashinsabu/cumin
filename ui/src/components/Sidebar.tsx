@@ -1,5 +1,8 @@
+import { useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTheme } from '../context/ThemeContext'
 import { useAuth } from '../context/AuthContext'
+import { useSavedViews, useDeleteView } from '../hooks/useSavedViews'
 import type { NavEntry } from '../types'
 
 type SidebarProps = {
@@ -9,10 +12,68 @@ type SidebarProps = {
 }
 
 const NAV_GROUPS = [
-  { label: null,       ids: ['board', 'backlog', 'all-items'] },
+  { label: null,       ids: ['board', 'items'] },
   { label: 'Organize', ids: ['epics', 'projects'] },
   { label: 'Insights', ids: ['dashboards'] },
 ]
+
+function ViewsSection({ activeId }: { activeId: string }) {
+  const { data: savedViews = [] } = useSavedViews()
+  const deleteView = useDeleteView()
+  const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+
+  if (savedViews.length === 0) return null
+
+  const activeViewId = searchParams.get('view')
+
+  function loadView(v: typeof savedViews[0]) {
+    const params = new URLSearchParams()
+    params.set('view', v.id)
+    if (v.filters.project_id) params.set('project_id', v.filters.project_id)
+    if (v.filters.epic_id)    params.set('epic_id',    v.filters.epic_id)
+    if (v.filters.status_id)  params.set('status_id',  v.filters.status_id)
+    if (v.filters.priority !== undefined) params.set('priority', String(v.filters.priority))
+    if (v.filters.hide_done)  params.set('hide_done',  'true')
+    navigate(`/items?${params.toString()}`)
+  }
+
+  return (
+    <div>
+      <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-ghost/60">My Views</p>
+      {savedViews.map((v) => (
+        <div
+          key={v.id}
+          className="group relative"
+          onMouseEnter={() => setHoveredId(v.id)}
+          onMouseLeave={() => setHoveredId(null)}
+        >
+          <button
+            onClick={() => loadView(v)}
+            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-[var(--c-radius-card)] text-sm font-medium mb-0.5 transition-colors pr-8 ${
+              activeViewId === v.id && activeId === 'items'
+                ? 'nav-item-active bg-accent/10 text-accent'
+                : 'text-dim hover:bg-surface hover:text-ink'
+            }`}
+          >
+            <span className="text-xs opacity-60">▤</span>
+            <span className="flex-1 text-left truncate">{v.name}</span>
+          </button>
+          {hoveredId === v.id && (
+            <button
+              onClick={(e) => { e.stopPropagation(); deleteView.mutate(v.id) }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-ghost/40 hover:text-accent/80 hover:bg-accent/10 transition-colors"
+              title="Delete view"
+            >
+              ×
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
 
 export function Sidebar({ views, activeId, onNavigate }: SidebarProps) {
   const { isDark, toggle } = useTheme()
@@ -33,13 +94,13 @@ export function Sidebar({ views, activeId, onNavigate }: SidebarProps) {
           <span className="text-base font-bold tracking-tight text-ink">cumin</span>
         </div>
       </div>
-      <nav className="flex-1 px-2 space-y-3">
+      <nav className="flex-1 px-2 space-y-3 overflow-y-auto">
         {NAV_GROUPS.map((group, gi) => (
           <div key={gi}>
             {group.label && (
               <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-ghost/60">{group.label}</p>
             )}
-            {views.filter(v => group.ids.includes(v.id)).map((nav) => {
+            {views.filter((v) => group.ids.includes(v.id)).map((nav) => {
               const isPlaceholder = nav.id === 'dashboards'
               return (
                 <button key={nav.id}
@@ -60,6 +121,7 @@ export function Sidebar({ views, activeId, onNavigate }: SidebarProps) {
             })}
           </div>
         ))}
+        <ViewsSection activeId={activeId} />
       </nav>
       <div className="px-3 py-3 border-t border-line">
         <button onClick={toggle}
