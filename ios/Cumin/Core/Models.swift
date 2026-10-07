@@ -63,6 +63,7 @@ struct Item: Codable, Equatable, Identifiable {
     var timeInStatusMinutes: Int?
     var deadline: String?
     var sprints: [String]?
+    var createdAt: Date?
 }
 
 struct Project: Codable, Equatable, Identifiable {

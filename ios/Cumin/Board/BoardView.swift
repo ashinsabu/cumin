@@ -13,7 +13,7 @@ struct BoardView: View {
     private static let pollInterval: Duration = .seconds(15)
 
     var body: some View {
-        NavigationStack {
+        Group {
             Group {
                 if !store.hasLoaded {
                     ProgressView()
