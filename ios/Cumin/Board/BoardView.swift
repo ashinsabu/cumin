@@ -38,7 +38,12 @@ struct BoardView: View {
                         .disabled(store.projects.isEmpty)
                 }
             }
-            .sheet(item: $selected) { ItemDetailView(itemID: $0.id) }
+            .sheet(item: $selected) {
+                ItemDetailView(itemID: $0.id)
+                    // Open at half height; drag up for full screen.
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+            }
             .sheet(isPresented: $isCreating) { CreateItemView() }
             .overlay(alignment: .bottom) { undoBanner }
             .task { if !store.hasLoaded { await store.load() } }
