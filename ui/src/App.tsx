@@ -83,6 +83,9 @@ function AppShell() {
           <div className="flex items-center gap-3">
             <button onClick={() => setMobileNavOpen(true)} className="md:hidden p-1.5 rounded-[var(--c-radius-card)] text-dim hover:bg-line">☰</button>
             <span className="text-sm font-semibold text-ink">{activeLabel}</span>
+            {(activeId === 'board' || activeId === 'backlog' || activeId === 'all-items') && items.length > 0 && (
+              <span className="text-xs px-1.5 py-0.5 rounded-full bg-line text-ghost font-mono">{items.length}</span>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {activeId !== 'account' && (

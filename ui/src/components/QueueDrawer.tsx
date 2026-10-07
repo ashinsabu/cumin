@@ -593,8 +593,11 @@ function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: Qu
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-line shrink-0">
         <span className={`font-semibold text-ink ${headerSize === 'md' ? 'text-base' : 'text-sm'}`}>Queue</span>
+        {activeItems.length > 0 && (
+          <span className="text-xs px-1.5 py-0.5 rounded-full bg-line text-ghost font-mono">{activeItems.length}</span>
+        )}
         {urgentCount > 0 && (
-          <span className="text-xs px-1.5 py-0.5 rounded bg-accent/10 text-accent font-bold">{urgentCount}</span>
+          <span className="text-xs px-1.5 py-0.5 rounded bg-accent/10 text-accent font-bold">{urgentCount} urgent</span>
         )}
         <div className="flex items-center gap-1.5 ml-auto">
           <select
