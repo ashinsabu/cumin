@@ -45,6 +45,8 @@ struct MainTabView: View {
         TabView {
             BoardView()
                 .tabItem { Label("Board", systemImage: "rectangle.split.3x1") }
+            BacklogView()
+                .tabItem { Label("Backlog", systemImage: "list.bullet") }
             AccountView(user: user)
                 .tabItem { Label("Account", systemImage: "person.crop.circle") }
         }
