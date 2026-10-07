@@ -330,6 +330,66 @@ func TestItems_Move_MissingStatusID(t *testing.T) {
 	drainClose(resp)
 }
 
+// TestItems_Move_ReturnsUpdatedStatusID verifies the move endpoint returns the
+// item with its new status_id in the response body. The frontend relies on this
+// to update the TanStack cache in onSuccess (the authoritative replacement for
+// the optimistic update applied in onMutate).
+func TestItems_Move_ReturnsUpdatedStatusID(t *testing.T) {
+	it := createTestItem(t, "Move returns status")
+	t.Cleanup(func() { hardDeleteItems(it.ID) })
+
+	if it.StatusID == testEnv.DoneStatusID {
+		t.Skip("item already in done status")
+	}
+
+	resp := mustDo(t, testEnv.Server, "POST", "/api/items/"+it.ID+"/move", map[string]any{
+		"status_id": testEnv.DoneStatusID,
+	})
+	assertStatus(t, resp, http.StatusOK)
+	moved := mustDecodeJSON[itemJSON](t, resp)
+
+	if moved.StatusID != testEnv.DoneStatusID {
+		t.Errorf("expected status_id=%s in response, got %s", testEnv.DoneStatusID, moved.StatusID)
+	}
+	if moved.ID != it.ID {
+		t.Errorf("expected id=%s in response, got %s", it.ID, moved.ID)
+	}
+}
+
+// TestItems_Move_ConsecutiveMoves verifies that two rapid moves end with the
+// item in the final requested status. Guards against the server mishandling
+// concurrent or back-to-back transitions (e.g. from the drag-and-drop race fix).
+func TestItems_Move_ConsecutiveMoves(t *testing.T) {
+	it := createTestItem(t, "Rapid move item")
+	t.Cleanup(func() { hardDeleteItems(it.ID) })
+
+	// Move 1: todo → done.
+	resp := mustDo(t, testEnv.Server, "POST", "/api/items/"+it.ID+"/move", map[string]any{
+		"status_id": testEnv.DoneStatusID,
+	})
+	assertStatus(t, resp, http.StatusOK)
+	drainClose(resp)
+
+	// Move 2: done → todo (simulates "oops, move it back").
+	resp = mustDo(t, testEnv.Server, "POST", "/api/items/"+it.ID+"/move", map[string]any{
+		"status_id": testEnv.TodoStatusID,
+	})
+	assertStatus(t, resp, http.StatusOK)
+	final := mustDecodeJSON[itemJSON](t, resp)
+
+	if final.StatusID != testEnv.TodoStatusID {
+		t.Errorf("expected final status_id=%s after back-to-back moves, got %s", testEnv.TodoStatusID, final.StatusID)
+	}
+
+	// Both transitions should be recorded.
+	resp = mustDo(t, testEnv.Server, "GET", "/api/items/"+it.ID+"/transitions", nil)
+	assertStatus(t, resp, http.StatusOK)
+	tr := mustDecodeJSON[transitionsListJSON](t, resp)
+	if len(tr.Transitions) < 2 {
+		t.Errorf("expected at least 2 transitions after two moves, got %d", len(tr.Transitions))
+	}
+}
+
 // ─── Update / clear fields ────────────────────────────────────────────────────
 
 func TestItems_ClearEpic(t *testing.T) {
