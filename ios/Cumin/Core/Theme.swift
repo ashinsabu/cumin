@@ -77,6 +77,8 @@ private struct ThemeSpec {
     let blur: Bool
 
     /// Hex pairs are (light, dark); 8-digit hex carries alpha (web rgba values).
+    /// One deliberate difference from the web: dark "ghost" in Glass/Minimal is brighter,
+    /// because the web values are unreadable as secondary text on a phone.
     init(canvas: (String, String), surface: (String, String), raised: (String, String), panel: (String, String),
          line: (String, String), ink: (String, String), dim: (String, String), ghost: (String, String),
          accent: String, body: FontFamily, mono: FontFamily, cardRadius: CGFloat, badgeRadius: CGFloat, blur: Bool) {
@@ -98,14 +100,14 @@ private struct ThemeSpec {
     static let glass = ThemeSpec(
         canvas: ("#ebebf5", "#0d0d14"), surface: ("#ffffffbf", "#ffffff0d"), raised: ("#ffffffeb", "#ffffff14"),
         panel: ("#ffffff8c", "#ffffff08"), line: ("#00000014", "#ffffff14"), ink: ("#0f0e1a", "#f1f0ff"),
-        dim: ("#6b6b80", "#8b8ba7"), ghost: ("#a0a0b0", "#4a4a5a"), accent: "#7c3aed",
+        dim: ("#6b6b80", "#8b8ba7"), ghost: ("#a0a0b0", "#6b6b80"), accent: "#7c3aed",
         body: .geist, mono: .geistMono, cardRadius: 8, badgeRadius: 4, blur: true
     )
 
     static let minimal = ThemeSpec(
         canvas: ("#f5f5f7", "#1c1c1e"), surface: ("#ffffff", "#2c2c2e"), raised: ("#ffffff", "#3a3a3c"),
         panel: ("#fafafa", "#1c1c1e"), line: ("#e5e5ea", "#38383a"), ink: ("#1c1c1e", "#f5f5f7"),
-        dim: ("#6c6c70", "#8e8e93"), ghost: ("#aeaeb2", "#48484a"), accent: "#3b82f6",
+        dim: ("#6c6c70", "#8e8e93"), ghost: ("#aeaeb2", "#6c6c70"), accent: "#3b82f6",
         body: .system, mono: .systemMono, cardRadius: 6, badgeRadius: 4, blur: false
     )
 }
