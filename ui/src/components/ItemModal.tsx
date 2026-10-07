@@ -56,7 +56,7 @@ export function ItemModal({ item, onClose }: { item: Item; onClose: () => void }
   async function handleSave() {
     if (!title.trim()) return
     if (estimateRaw.trim() && parseEstimate(estimateRaw) === null) {
-      setEstimateError('Use formats like 2h, 30m, 1h30m')
+      setEstimateError('Use formats like 2h, 30m, 1h30m, 2d')
       return
     }
     setSaving(true); setSaveError('')
@@ -167,7 +167,7 @@ export function ItemModal({ item, onClose }: { item: Item; onClose: () => void }
           <Row label="Estimate">
             <div className="flex flex-col items-end gap-1">
               <input type="text" value={estimateRaw} onChange={(e) => { setEstimateRaw(e.target.value); setEstimateError('') }}
-                placeholder="e.g. 2h, 30m"
+                placeholder="e.g. 2h, 30m, 2d"
                 className="w-36 px-2 py-1 text-sm rounded-[var(--c-radius-card)] border bg-surface border-line text-ink placeholder:text-ghost focus:outline-none focus:border-ghost" />
               {estimateError && <p className="text-xs text-red-500">{estimateError}</p>}
               {!estimateError && estimateRaw.trim() && parseEstimate(estimateRaw) !== null && (

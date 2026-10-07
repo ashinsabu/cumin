@@ -1,7 +1,9 @@
-// Parses "2h", "30m", "1h30m", "90m", "1.5h" → minutes. Returns null if unparseable.
+// Parses "2h", "30m", "1h30m", "90m", "1.5h", "2d", "1.5d" → minutes. Returns null if unparseable.
 export function parseEstimate(raw: string): number | null {
   const s = raw.trim().toLowerCase()
   if (!s) return null
+  const dOnly = s.match(/^(\d+(?:\.\d+)?)d$/)
+  if (dOnly) return Math.round(parseFloat(dOnly[1]) * 1440)
   const full = s.match(/^(\d+(?:\.\d+)?)h(?:(\d+)m)?$/)
   if (full) return Math.round(parseFloat(full[1]) * 60) + (full[2] ? parseInt(full[2]) : 0)
   const mOnly = s.match(/^(\d+)m$/)

@@ -41,7 +41,7 @@ export function CreateItemModal({ onClose, onCreated }: Props) {
     let estimateMinutes: number | null = null
     if (estimateRaw.trim()) {
       estimateMinutes = parseEstimate(estimateRaw)
-      if (estimateMinutes === null) { setEstimateError('Use formats like 2h, 30m, 1h30m'); return }
+      if (estimateMinutes === null) { setEstimateError('Use formats like 2h, 30m, 1h30m, 2d'); return }
     }
 
     setSubmitting(true)
@@ -140,12 +140,12 @@ export function CreateItemModal({ onClose, onCreated }: Props) {
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold text-dim">Estimate <span className="text-ghost font-normal">(optional — e.g. 2h, 30m, 1h30m)</span></label>
+            <label className="text-xs font-semibold text-dim">Estimate <span className="text-ghost font-normal">(optional — e.g. 2h, 30m, 1h30m, 2d)</span></label>
             <input
               type="text"
               value={estimateRaw}
               onChange={(e) => { setEstimateRaw(e.target.value); setEstimateError('') }}
-              placeholder="e.g. 2h, 30m, 1h30m"
+              placeholder="e.g. 2h, 30m, 1h30m, 2d"
               className="w-full px-3 py-2 text-sm rounded-[var(--c-radius-card)] border bg-surface border-line text-ink placeholder:text-ghost focus:outline-none focus:border-ghost"
             />
             {estimateError && <p className="text-xs text-red-500">{estimateError}</p>}
