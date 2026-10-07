@@ -13,12 +13,17 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-func IssueToken(secret, userID, email string) (string, error) {
+const (
+	WebTokenTTL    = 24 * time.Hour
+	MobileTokenTTL = 30 * 24 * time.Hour
+)
+
+func IssueToken(secret, userID, email string, ttl time.Duration) (string, error) {
 	claims := Claims{
 		UserID: userID,
 		Email:  email,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(ttl)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}

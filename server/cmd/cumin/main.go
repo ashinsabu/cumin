@@ -83,6 +83,9 @@ func main() {
 		// instead of returning 405 before middleware runs.
 		r.Options("/*", func(w http.ResponseWriter, r *http.Request) {})
 
+		// Native app sign-in: Google ID token in, Cumin JWT out (in the body, not a cookie).
+		r.Post("/api/auth/google/mobile", oauthHandler.HandleMobileLogin)
+
 		// Public XHR — no auth, but needs CORS for browser fetch
 		r.Get("/api/flags", flags.NewHandler(cfg).ServeHTTP)
 
@@ -182,6 +185,7 @@ func newAuthHandler(cfg config.Config, pool *pgxpool.Pool) *auth.Handler {
 		RedirectURL:    cfg.GoogleRedirectURL,
 		AllowedOrigins: cfg.AllowedOriginsList(),
 		JWTSecret:      cfg.JWTSecret,
+		AppClientIDs:   cfg.GoogleAppClientIDs,
 	}, repo, provisioner.ProvisionNewUser)
 }
 
