@@ -1,7 +1,7 @@
 DB_URL ?= postgres://cumin:cumin@localhost:5432/cumin?sslmode=disable
 TEST_DATABASE_URL ?= $(DB_URL)
 
-.PHONY: dev run check check-server check-ui testdata cleandata wipe-user
+.PHONY: dev run spec check check-server check-ui testdata cleandata wipe-user
 
 # Run all pre-commit checks — works on any machine with Go, Node, and Docker.
 # Spins up a throwaway Postgres container for integration tests, tears it down after.
@@ -33,6 +33,9 @@ dev:
 
 run:
 	go run ./cmd/cumin
+
+spec:
+	swag init -g cmd/cumin/main.go -o docs --parseDependency --parseInternal
 
 testdata: cleandata
 	@echo "==> Seeding test data..."

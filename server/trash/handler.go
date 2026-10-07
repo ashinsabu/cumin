@@ -31,6 +31,15 @@ func (h *Handler) Routes(r chi.Router) {
 	r.Delete("/api/trash", api.HandleDelete(h.Empty))
 }
 
+// List returns all soft-deleted projects and epics in the board's trash.
+//
+// @Summary      List trash
+// @Tags         trash
+// @Produce      json
+// @Success      200  {object}  trash.TrashResponse
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/trash [get]
 func (h *Handler) List(ctx context.Context) (*TrashResponse, error) {
 	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
 	if err != nil {
@@ -56,6 +65,14 @@ func (h *Handler) List(ctx context.Context) (*TrashResponse, error) {
 	return &TrashResponse{Projects: projects, Epics: epics}, nil
 }
 
+// Empty permanently deletes all items in the board's trash.
+//
+// @Summary      Empty trash
+// @Tags         trash
+// @Success      204  "No Content"
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/trash [delete]
 func (h *Handler) Empty(ctx context.Context) error {
 	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
 	if err != nil {

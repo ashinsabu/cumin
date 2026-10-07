@@ -73,7 +73,16 @@ func (h *Handler) Routes(r chi.Router) {
 	r.Get("/api/items/{id}/transitions", api.HandleNoBody(h.Transitions))
 }
 
-// listHTTP needs raw http access for query params
+// listHTTP lists items for the authenticated user's board.
+//
+// @Summary      List items
+// @Tags         items
+// @Produce      json
+// @Param        sprint_id  query   string  false  "Filter by sprint ID"
+// @Success      200  {object}  item.ListResponse
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/items [get]
 func (h *Handler) listHTTP(w http.ResponseWriter, r *http.Request) {
 	b, err := h.boardStore.GetByUser(r.Context(), auth.UserIDFromContext(r.Context()))
 	if err != nil {
@@ -97,6 +106,15 @@ func (h *Handler) listHTTP(w http.ResponseWriter, r *http.Request) {
 	api.WriteJSON(w, &ListResponse{Items: items})
 }
 
+// Backlog returns all backlog items (not assigned to a sprint).
+//
+// @Summary      List backlog items
+// @Tags         items
+// @Produce      json
+// @Success      200  {object}  item.ListResponse
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/items/backlog [get]
 func (h *Handler) Backlog(ctx context.Context) (*ListResponse, error) {
 	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
 	if err != nil {
@@ -113,6 +131,16 @@ func (h *Handler) Backlog(ctx context.Context) (*ListResponse, error) {
 	return &ListResponse{Items: items}, nil
 }
 
+// Get returns a single item by ID.
+//
+// @Summary      Get item
+// @Tags         items
+// @Produce      json
+// @Param        id  path  string  true  "Item ID"
+// @Success      200  {object}  item.Item
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/items/{id} [get]
 func (h *Handler) Get(ctx context.Context) (*Item, error) {
 	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
 	if err != nil {
@@ -126,6 +154,18 @@ func (h *Handler) Get(ctx context.Context) (*Item, error) {
 	return it, nil
 }
 
+// Create creates a new item on the board.
+//
+// @Summary      Create item
+// @Tags         items
+// @Accept       json
+// @Produce      json
+// @Param        body  body  item.CreateRequest  true  "Item to create"
+// @Success      200  {object}  item.Item
+// @Failure      400  {object}  api.ErrorResponse
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/items [post]
 func (h *Handler) Create(ctx context.Context, req CreateRequest) (*Item, error) {
 	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
 	if err != nil {
@@ -185,6 +225,19 @@ type updateParsed struct {
 	estimate    *int
 }
 
+// Update updates an existing item.
+//
+// @Summary      Update item
+// @Tags         items
+// @Accept       json
+// @Produce      json
+// @Param        id    path  string            true  "Item ID"
+// @Param        body  body  item.UpdateRequest  true  "Fields to update"
+// @Success      200  {object}  item.Item
+// @Failure      400  {object}  api.ErrorResponse
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/items/{id} [patch]
 func (h *Handler) Update(ctx context.Context, req UpdateRequest) (*Item, error) {
 	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
 	if err != nil {
@@ -239,6 +292,15 @@ func (h *Handler) Update(ctx context.Context, req UpdateRequest) (*Item, error) 
 	return h.store.Update(ctx, it.ID, p.title, p.description, p.epicID, p.sprintID, p.priority, p.estimate)
 }
 
+// Delete soft-deletes an item.
+//
+// @Summary      Delete item
+// @Tags         items
+// @Param        id  path  string  true  "Item ID"
+// @Success      204  "No Content"
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/items/{id} [delete]
 func (h *Handler) Delete(ctx context.Context) error {
 	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
 	if err != nil {
@@ -253,6 +315,15 @@ func (h *Handler) Delete(ctx context.Context) error {
 	return h.store.SoftDelete(ctx, it.ID)
 }
 
+// Restore restores a soft-deleted item.
+//
+// @Summary      Restore item
+// @Tags         items
+// @Param        id  path  string  true  "Item ID"
+// @Success      204  "No Content"
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/items/{id}/restore [post]
 func (h *Handler) Restore(ctx context.Context) error {
 	id := api.URLParam(ctx, "id")
 	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
@@ -268,6 +339,19 @@ func (h *Handler) Restore(ctx context.Context) error {
 	return nil
 }
 
+// Move moves an item to a different status column.
+//
+// @Summary      Move item
+// @Tags         items
+// @Accept       json
+// @Produce      json
+// @Param        id    path  string          true  "Item ID"
+// @Param        body  body  item.MoveRequest  true  "Target status"
+// @Success      200  {object}  item.Item
+// @Failure      400  {object}  api.ErrorResponse
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/items/{id}/move [post]
 func (h *Handler) Move(ctx context.Context, req MoveRequest) (*Item, error) {
 	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
 	if err != nil {
@@ -302,6 +386,18 @@ func (h *Handler) Move(ctx context.Context, req MoveRequest) (*Item, error) {
 	return h.store.Move(ctx, it.ID, req.StatusID)
 }
 
+// Reorder reorders items within a status column.
+//
+// @Summary      Reorder items
+// @Tags         items
+// @Accept       json
+// @Produce      json
+// @Param        body  body  item.ReorderRequest  true  "Status and ordered item IDs"
+// @Success      200  {object}  item.ListResponse
+// @Failure      400  {object}  api.ErrorResponse
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/items/reorder [put]
 func (h *Handler) Reorder(ctx context.Context, req ReorderRequest) (*ListResponse, error) {
 	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
 	if err != nil {
@@ -326,6 +422,16 @@ func (h *Handler) Reorder(ctx context.Context, req ReorderRequest) (*ListRespons
 	return &ListResponse{Items: items}, nil
 }
 
+// Transitions returns available status transitions for an item.
+//
+// @Summary      List item transitions
+// @Tags         items
+// @Produce      json
+// @Param        id  path  string  true  "Item ID"
+// @Success      200  {object}  item.TransitionsResponse
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/items/{id}/transitions [get]
 func (h *Handler) Transitions(ctx context.Context) (*TransitionsResponse, error) {
 	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
 	if err != nil {

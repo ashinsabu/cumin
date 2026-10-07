@@ -52,6 +52,15 @@ func (h *Handler) Routes(r chi.Router) {
 	r.Get("/api/sprints/{id}/spillover-preview", api.HandleNoBody(h.SpilloverPreview))
 }
 
+// List returns all sprints for the authenticated user's board.
+//
+// @Summary      List sprints
+// @Tags         sprints
+// @Produce      json
+// @Success      200  {object}  sprint.ListResponse
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/sprints [get]
 func (h *Handler) List(ctx context.Context) (*ListResponse, error) {
 	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
 	if err != nil {
@@ -67,6 +76,15 @@ func (h *Handler) List(ctx context.Context) (*ListResponse, error) {
 	return &ListResponse{Sprints: sprints}, nil
 }
 
+// GetActive returns the currently active sprint.
+//
+// @Summary      Get active sprint
+// @Tags         sprints
+// @Produce      json
+// @Success      200  {object}  sprint.Sprint
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/sprints/active [get]
 func (h *Handler) GetActive(ctx context.Context) (*Sprint, error) {
 	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
 	if err != nil {
@@ -79,6 +97,17 @@ func (h *Handler) GetActive(ctx context.Context) (*Sprint, error) {
 	return sp, nil
 }
 
+// Create creates a new planning sprint.
+//
+// @Summary      Create sprint
+// @Tags         sprints
+// @Accept       json
+// @Produce      json
+// @Param        body  body  sprint.CreateRequest  true  "Sprint start date (optional)"
+// @Success      200  {object}  sprint.Sprint
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/sprints [post]
 func (h *Handler) Create(ctx context.Context, req CreateRequest) (*Sprint, error) {
 	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
 	if err != nil {
@@ -102,6 +131,17 @@ func (h *Handler) Create(ctx context.Context, req CreateRequest) (*Sprint, error
 	return sp, nil
 }
 
+// Activate transitions a sprint from planning to active.
+//
+// @Summary      Activate sprint
+// @Tags         sprints
+// @Produce      json
+// @Param        id  path  string  true  "Sprint ID"
+// @Success      200  {object}  sprint.Sprint
+// @Failure      404  {object}  api.ErrorResponse
+// @Failure      409  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/sprints/{id}/activate [post]
 func (h *Handler) Activate(ctx context.Context) (*Sprint, error) {
 	id := api.URLParam(ctx, "id")
 
@@ -126,6 +166,17 @@ func (h *Handler) Activate(ctx context.Context) (*Sprint, error) {
 	return activated, nil
 }
 
+// Close closes an active sprint and spills incomplete items to a new planning sprint.
+//
+// @Summary      Close sprint
+// @Tags         sprints
+// @Produce      json
+// @Param        id  path  string  true  "Sprint ID"
+// @Success      200  {object}  sprint.CloseResponse
+// @Failure      404  {object}  api.ErrorResponse
+// @Failure      409  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/sprints/{id}/close [post]
 func (h *Handler) Close(ctx context.Context) (*CloseResponse, error) {
 	id := api.URLParam(ctx, "id")
 
@@ -160,6 +211,16 @@ func (h *Handler) Close(ctx context.Context) (*CloseResponse, error) {
 	return &CloseResponse{SpilledCount: result.SpilledCount, NextSprint: result.NextSprint}, nil
 }
 
+// SpilloverPreview returns the count of items that would spill to the next sprint on close.
+//
+// @Summary      Spillover preview
+// @Tags         sprints
+// @Produce      json
+// @Param        id  path  string  true  "Sprint ID"
+// @Success      200  {object}  sprint.SpilloverPreviewResponse
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/sprints/{id}/spillover-preview [get]
 func (h *Handler) SpilloverPreview(ctx context.Context) (*SpilloverPreviewResponse, error) {
 	id := api.URLParam(ctx, "id")
 

@@ -59,6 +59,15 @@ func (h *Handler) Routes(r chi.Router) {
 	r.Put("/api/queue/reorder", api.Handle(h.Reorder))
 }
 
+// List returns all active queue items for the authenticated user's board.
+//
+// @Summary      List queue items
+// @Tags         queue
+// @Produce      json
+// @Success      200  {object}  queue.ListResponse
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/queue [get]
 func (h *Handler) List(ctx context.Context) (*ListResponse, error) {
 	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
 	if err != nil {
@@ -71,6 +80,18 @@ func (h *Handler) List(ctx context.Context) (*ListResponse, error) {
 	return &ListResponse{Items: items}, nil
 }
 
+// Create captures a new item into the queue.
+//
+// @Summary      Create queue item
+// @Tags         queue
+// @Accept       json
+// @Produce      json
+// @Param        body  body  queue.CreateRequest  true  "Queue item to capture"
+// @Success      200  {object}  queue.QueueItem
+// @Failure      400  {object}  api.ErrorResponse
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/queue [post]
 func (h *Handler) Create(ctx context.Context, req CreateRequest) (*QueueItem, error) {
 	if req.Title == "" {
 		return nil, api.BadRequest("title required")
@@ -87,6 +108,19 @@ func (h *Handler) Create(ctx context.Context, req CreateRequest) (*QueueItem, er
 	return q, nil
 }
 
+// Update updates a queue item.
+//
+// @Summary      Update queue item
+// @Tags         queue
+// @Accept       json
+// @Produce      json
+// @Param        id    path  string               true  "Queue item ID"
+// @Param        body  body  queue.UpdateRequest  true  "Fields to update"
+// @Success      200  {object}  queue.QueueItem
+// @Failure      400  {object}  api.ErrorResponse
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/queue/{id} [patch]
 func (h *Handler) Update(ctx context.Context, req UpdateRequest) (*QueueItem, error) {
 	id := api.URLParam(ctx, "id")
 	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
@@ -103,6 +137,15 @@ func (h *Handler) Update(ctx context.Context, req UpdateRequest) (*QueueItem, er
 	return q, nil
 }
 
+// Archive archives (soft-deletes) a queue item.
+//
+// @Summary      Archive queue item
+// @Tags         queue
+// @Param        id  path  string  true  "Queue item ID"
+// @Success      204  "No Content"
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/queue/{id} [delete]
 func (h *Handler) Archive(ctx context.Context) error {
 	id := api.URLParam(ctx, "id")
 	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
@@ -115,6 +158,16 @@ func (h *Handler) Archive(ctx context.Context) error {
 	return nil
 }
 
+// Reorder sets the display order of queue items.
+//
+// @Summary      Reorder queue items
+// @Tags         queue
+// @Accept       json
+// @Param        body  body  queue.ReorderRequest  true  "Ordered queue item IDs"
+// @Success      204  "No Content"
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/queue/reorder [put]
 func (h *Handler) Reorder(ctx context.Context, req ReorderRequest) (*struct{}, error) {
 	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
 	if err != nil {
@@ -126,6 +179,16 @@ func (h *Handler) Reorder(ctx context.Context, req ReorderRequest) (*struct{}, e
 	return nil, nil
 }
 
+// Revive resets a stale queue item's created_at to now, moving it back to the active belt.
+//
+// @Summary      Revive stale queue item
+// @Tags         queue
+// @Param        id  path  string  true  "Queue item ID"
+// @Produce      json
+// @Success      200  {object}  queue.QueueItem
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/queue/{id}/revive [post]
 func (h *Handler) Revive(ctx context.Context) (*QueueItem, error) {
 	id := api.URLParam(ctx, "id")
 	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
@@ -139,6 +202,19 @@ func (h *Handler) Revive(ctx context.Context) (*QueueItem, error) {
 	return q, nil
 }
 
+// Promote converts a queue item into a board item.
+//
+// @Summary      Promote queue item to board item
+// @Tags         queue
+// @Accept       json
+// @Produce      json
+// @Param        id    path  string               true  "Queue item ID"
+// @Param        body  body  queue.PromoteRequest  true  "Promotion target"
+// @Success      200  {object}  queue.PromoteResult
+// @Failure      400  {object}  api.ErrorResponse
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/queue/{id}/promote [post]
 func (h *Handler) Promote(ctx context.Context, req PromoteRequest) (*PromoteResult, error) {
 	id := api.URLParam(ctx, "id")
 	if req.ProjectID == "" || req.StatusID == "" {

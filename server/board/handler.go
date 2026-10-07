@@ -47,6 +47,15 @@ func (h *Handler) Routes(r chi.Router) {
 	r.Put("/api/board/statuses/reorder", api.Handle(h.ReorderStatuses))
 }
 
+// Get returns the authenticated user's board configuration.
+//
+// @Summary      Get board
+// @Tags         board
+// @Produce      json
+// @Success      200  {object}  board.Board
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/board [get]
 func (h *Handler) Get(ctx context.Context) (*Board, error) {
 	b, err := h.store.GetByUser(ctx, auth.UserIDFromContext(ctx))
 	if err != nil {
@@ -55,6 +64,17 @@ func (h *Handler) Get(ctx context.Context) (*Board, error) {
 	return b, nil
 }
 
+// Update updates the board configuration.
+//
+// @Summary      Update board
+// @Tags         board
+// @Accept       json
+// @Produce      json
+// @Param        body  body  board.UpdateRequest  true  "Board settings to update"
+// @Success      200  {object}  board.Board
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/board [patch]
 func (h *Handler) Update(ctx context.Context, req UpdateRequest) (*Board, error) {
 	b, err := h.store.GetByUser(ctx, auth.UserIDFromContext(ctx))
 	if err != nil {
@@ -81,6 +101,15 @@ func (h *Handler) Update(ctx context.Context, req UpdateRequest) (*Board, error)
 	return updated, nil
 }
 
+// ListStatuses returns all statuses for the board.
+//
+// @Summary      List board statuses
+// @Tags         board
+// @Produce      json
+// @Success      200  {object}  board.StatusListResponse
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/board/statuses [get]
 func (h *Handler) ListStatuses(ctx context.Context) (*StatusListResponse, error) {
 	b, err := h.store.GetByUser(ctx, auth.UserIDFromContext(ctx))
 	if err != nil {
@@ -97,6 +126,18 @@ func (h *Handler) ListStatuses(ctx context.Context) (*StatusListResponse, error)
 	return &StatusListResponse{Statuses: statuses}, nil
 }
 
+// CreateStatus adds a new status column to the board.
+//
+// @Summary      Create board status
+// @Tags         board
+// @Accept       json
+// @Produce      json
+// @Param        body  body  board.CreateStatusRequest  true  "Status to create"
+// @Success      200  {object}  board.Status
+// @Failure      400  {object}  api.ErrorResponse
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/board/statuses [post]
 func (h *Handler) CreateStatus(ctx context.Context, req CreateStatusRequest) (*Status, error) {
 	b, err := h.store.GetByUser(ctx, auth.UserIDFromContext(ctx))
 	if err != nil {
@@ -114,6 +155,16 @@ func (h *Handler) CreateStatus(ctx context.Context, req CreateStatusRequest) (*S
 	return st, nil
 }
 
+// DeleteStatus removes a status column from the board (fails if items are in it).
+//
+// @Summary      Delete board status
+// @Tags         board
+// @Param        id  path  string  true  "Status ID"
+// @Success      204  "No Content"
+// @Failure      404  {object}  api.ErrorResponse
+// @Failure      409  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/board/statuses/{id} [delete]
 func (h *Handler) DeleteStatus(ctx context.Context) error {
 	b, err := h.store.GetByUser(ctx, auth.UserIDFromContext(ctx))
 	if err != nil {
@@ -135,6 +186,18 @@ func (h *Handler) DeleteStatus(ctx context.Context) error {
 	return nil
 }
 
+// ReorderStatuses sets the display order of status columns.
+//
+// @Summary      Reorder board statuses
+// @Tags         board
+// @Accept       json
+// @Produce      json
+// @Param        body  body  board.ReorderStatusesRequest  true  "Ordered status IDs"
+// @Success      200  {object}  board.StatusListResponse
+// @Failure      400  {object}  api.ErrorResponse
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/board/statuses/reorder [put]
 func (h *Handler) ReorderStatuses(ctx context.Context, req ReorderStatusesRequest) (*StatusListResponse, error) {
 	b, err := h.store.GetByUser(ctx, auth.UserIDFromContext(ctx))
 	if err != nil {

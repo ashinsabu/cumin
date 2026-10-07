@@ -44,6 +44,15 @@ func (h *Handler) Routes(r chi.Router) {
 	r.Post("/api/projects/{id}/restore", api.HandleDelete(h.Restore))
 }
 
+// List returns all projects for the authenticated user's board.
+//
+// @Summary      List projects
+// @Tags         projects
+// @Produce      json
+// @Success      200  {object}  project.ListResponse
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/projects [get]
 func (h *Handler) List(ctx context.Context) (*ListResponse, error) {
 	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
 	if err != nil {
@@ -60,6 +69,19 @@ func (h *Handler) List(ctx context.Context) (*ListResponse, error) {
 	return &ListResponse{Projects: projects}, nil
 }
 
+// Create creates a new project on the board.
+//
+// @Summary      Create project
+// @Tags         projects
+// @Accept       json
+// @Produce      json
+// @Param        body  body  project.CreateRequest  true  "Project to create"
+// @Success      200  {object}  project.Project
+// @Failure      400  {object}  api.ErrorResponse
+// @Failure      404  {object}  api.ErrorResponse
+// @Failure      409  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/projects [post]
 func (h *Handler) Create(ctx context.Context, req CreateRequest) (*Project, error) {
 	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
 	if err != nil {
@@ -88,6 +110,19 @@ func (h *Handler) Create(ctx context.Context, req CreateRequest) (*Project, erro
 	return p, nil
 }
 
+// Update updates an existing project.
+//
+// @Summary      Update project
+// @Tags         projects
+// @Accept       json
+// @Produce      json
+// @Param        id    path  string               true  "Project ID"
+// @Param        body  body  project.UpdateRequest  true  "Fields to update"
+// @Success      200  {object}  project.Project
+// @Failure      400  {object}  api.ErrorResponse
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/projects/{id} [patch]
 func (h *Handler) Update(ctx context.Context, req UpdateRequest) (*Project, error) {
 	id := api.URLParam(ctx, "id")
 
@@ -114,6 +149,15 @@ func (h *Handler) Update(ctx context.Context, req UpdateRequest) (*Project, erro
 	return h.store.Update(ctx, id, req.Name, req.Color, req.Description)
 }
 
+// Delete soft-deletes a project.
+//
+// @Summary      Delete project
+// @Tags         projects
+// @Param        id  path  string  true  "Project ID"
+// @Success      204  "No Content"
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/projects/{id} [delete]
 func (h *Handler) Delete(ctx context.Context) error {
 	id := api.URLParam(ctx, "id")
 
@@ -133,6 +177,16 @@ func (h *Handler) Delete(ctx context.Context) error {
 	return nil
 }
 
+// Restore restores a soft-deleted project.
+//
+// @Summary      Restore project
+// @Tags         projects
+// @Param        id  path  string  true  "Project ID"
+// @Success      204  "No Content"
+// @Failure      404  {object}  api.ErrorResponse
+// @Failure      409  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/projects/{id}/restore [post]
 func (h *Handler) Restore(ctx context.Context) error {
 	id := api.URLParam(ctx, "id")
 

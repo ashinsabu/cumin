@@ -49,6 +49,15 @@ func (h *Handler) Routes(r chi.Router) {
 	r.Post("/api/epics/{id}/restore", api.HandleDelete(h.Restore))
 }
 
+// List returns all epics for the authenticated user's board.
+//
+// @Summary      List epics
+// @Tags         epics
+// @Produce      json
+// @Success      200  {object}  epic.ListResponse
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/epics [get]
 func (h *Handler) List(ctx context.Context) (*ListResponse, error) {
 	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
 	if err != nil {
@@ -65,6 +74,18 @@ func (h *Handler) List(ctx context.Context) (*ListResponse, error) {
 	return &ListResponse{Epics: epics}, nil
 }
 
+// Create creates a new epic on the board.
+//
+// @Summary      Create epic
+// @Tags         epics
+// @Accept       json
+// @Produce      json
+// @Param        body  body  epic.CreateRequest  true  "Epic to create"
+// @Success      200  {object}  epic.Epic
+// @Failure      400  {object}  api.ErrorResponse
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/epics [post]
 func (h *Handler) Create(ctx context.Context, req CreateRequest) (*Epic, error) {
 	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
 	if err != nil {
@@ -87,6 +108,19 @@ func (h *Handler) Create(ctx context.Context, req CreateRequest) (*Epic, error) 
 	return h.store.Create(ctx, b.ID, req.Name, req.Type, req.Color, req.Description, req.Deadline)
 }
 
+// Update updates an existing epic.
+//
+// @Summary      Update epic
+// @Tags         epics
+// @Accept       json
+// @Produce      json
+// @Param        id    path  string            true  "Epic ID"
+// @Param        body  body  epic.UpdateRequest  true  "Fields to update"
+// @Success      200  {object}  epic.Epic
+// @Failure      400  {object}  api.ErrorResponse
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/epics/{id} [patch]
 func (h *Handler) Update(ctx context.Context, req UpdateRequest) (*Epic, error) {
 	id := api.URLParam(ctx, "id")
 
@@ -122,6 +156,15 @@ func (h *Handler) Update(ctx context.Context, req UpdateRequest) (*Epic, error) 
 	return h.store.Update(ctx, id, req.Name, req.Type, req.Color, req.Description, req.Deadline)
 }
 
+// Delete soft-deletes an epic and its child items.
+//
+// @Summary      Delete epic
+// @Tags         epics
+// @Param        id  path  string  true  "Epic ID"
+// @Success      204  "No Content"
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/epics/{id} [delete]
 func (h *Handler) Delete(ctx context.Context) error {
 	id := api.URLParam(ctx, "id")
 
@@ -141,6 +184,15 @@ func (h *Handler) Delete(ctx context.Context) error {
 	return nil
 }
 
+// Restore restores a soft-deleted epic and its child items.
+//
+// @Summary      Restore epic
+// @Tags         epics
+// @Param        id  path  string  true  "Epic ID"
+// @Success      204  "No Content"
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/epics/{id}/restore [post]
 func (h *Handler) Restore(ctx context.Context) error {
 	id := api.URLParam(ctx, "id")
 

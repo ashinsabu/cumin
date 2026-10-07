@@ -13,6 +13,7 @@ import (
 	"github.com/ashinsabu/cumin/server/board"
 	"github.com/ashinsabu/cumin/server/config"
 	"github.com/ashinsabu/cumin/server/db"
+	swaggerDocs "github.com/ashinsabu/cumin/server/docs"
 	"github.com/ashinsabu/cumin/server/epic"
 	"github.com/ashinsabu/cumin/server/flags"
 	"github.com/ashinsabu/cumin/server/item"
@@ -28,6 +29,14 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// @title           Cumin API
+// @version         1.0
+// @description     OSS sprint board API
+// @host            api.cumin.ashinsabu.com
+// @BasePath        /
+// @securityDefinitions.apikey CookieAuth
+// @in              cookie
+// @name            token
 func main() {
 	applogger.Setup()
 
@@ -56,10 +65,8 @@ func main() {
 
 	// Browser-navigation routes: no CORS needed (not XHR, Origin header from Google would be blocked)
 	r.Get("/healthz", healthz(pool))
-	r.Get("/api/version", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(version.Get().JSON())
-	})
+	r.Get("/api/version", versionHandler)
+	r.Get("/api/docs/swagger.json", swaggerJSONHandler)
 	oauthHandler := newAuthHandler(cfg, pool)
 	r.Get("/api/auth/google/login", oauthHandler.HandleLogin)
 	r.Get("/api/auth/google/callback", oauthHandler.HandleCallback)
@@ -103,6 +110,30 @@ func main() {
 		slog.Error("server stopped", "err", err)
 		os.Exit(1)
 	}
+}
+
+// versionHandler returns build version metadata.
+//
+// @Summary      Get API version
+// @Tags         meta
+// @Produce      json
+// @Success      200  {object}  version.Info
+// @Router       /api/version [get]
+func versionHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(version.Get().JSON())
+}
+
+// swaggerJSONHandler serves the OpenAPI 2.0 spec for the Cumin API.
+//
+// @Summary      Get OpenAPI spec
+// @Tags         meta
+// @Produce      json
+// @Success      200  {object}  object
+// @Router       /api/docs/swagger.json [get]
+func swaggerJSONHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(swaggerDocs.JSON)
 }
 
 func registerDomainRoutes(r chi.Router, pool *pgxpool.Pool) {
@@ -154,6 +185,14 @@ func newAuthHandler(cfg config.Config, pool *pgxpool.Pool) *auth.Handler {
 	}, repo, provisioner.ProvisionNewUser)
 }
 
+// healthz returns a health check handler that pings the database.
+//
+// @Summary      Health check
+// @Tags         meta
+// @Produce      json
+// @Success      200  {object}  object
+// @Failure      503  {object}  object
+// @Router       /healthz [get]
 func healthz(pool *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := pool.Ping(r.Context()); err != nil {

@@ -16,6 +16,13 @@ func NewHandler(cfg config.Config) *Handler {
 	return &Handler{cfg: cfg}
 }
 
+// ServeHTTP returns the current feature flag states.
+//
+// @Summary      Get feature flags
+// @Tags         meta
+// @Produce      json
+// @Success      200  {object}  map[string]bool
+// @Router       /api/flags [get]
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	out := map[string]bool{}
 	for _, f := range strings.Split(h.cfg.FeatureFlags, ",") {

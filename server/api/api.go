@@ -15,6 +15,11 @@ type Error struct {
 	Message string `json:"error"`
 }
 
+// ErrorResponse is the error envelope returned by all API endpoints on failure.
+type ErrorResponse struct {
+	Error string `json:"error"`
+}
+
 func (e *Error) Error() string { return e.Message }
 
 func BadRequest(msg string) *Error  { return &Error{Status: http.StatusBadRequest, Message: msg} }

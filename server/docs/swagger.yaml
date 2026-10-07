@@ -1,0 +1,1540 @@
+basePath: /
+definitions:
+  api.ErrorResponse:
+    properties:
+      error:
+        type: string
+    type: object
+  board.Board:
+    properties:
+      available_hours_per_sprint:
+        type: integer
+      created_at:
+        type: string
+      id:
+        type: string
+      item_seq:
+        type: integer
+      name:
+        type: string
+      sprint_cadence_days:
+        type: integer
+      sprint_start_day:
+        type: integer
+      updated_at:
+        type: string
+      user_id:
+        type: string
+    type: object
+  board.CreateStatusRequest:
+    properties:
+      is_done:
+        type: boolean
+      is_initial:
+        type: boolean
+      name:
+        type: string
+      position:
+        type: integer
+    type: object
+  board.ReorderStatusesRequest:
+    properties:
+      ids:
+        items:
+          type: string
+        type: array
+    type: object
+  board.Status:
+    properties:
+      board_id:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      is_done:
+        type: boolean
+      is_initial:
+        type: boolean
+      name:
+        type: string
+      position:
+        type: integer
+    type: object
+  board.StatusListResponse:
+    properties:
+      statuses:
+        items:
+          $ref: '#/definitions/board.Status'
+        type: array
+    type: object
+  board.UpdateRequest:
+    properties:
+      available_hours_per_sprint:
+        type: integer
+      name:
+        type: string
+      sprint_cadence_days:
+        type: integer
+      sprint_start_day:
+        type: integer
+    type: object
+  epic.CreateRequest:
+    properties:
+      color:
+        type: string
+      deadline:
+        type: string
+      description:
+        type: string
+      name:
+        type: string
+      type:
+        type: string
+    type: object
+  epic.Epic:
+    properties:
+      board_id:
+        type: string
+      color:
+        type: string
+      created_at:
+        type: string
+      deadline:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      type:
+        type: string
+    type: object
+  epic.ListResponse:
+    properties:
+      epics:
+        items:
+          $ref: '#/definitions/epic.Epic'
+        type: array
+    type: object
+  epic.TrashEpic:
+    properties:
+      color:
+        type: string
+      deleted_at:
+        type: string
+      id:
+        type: string
+      item_count:
+        type: integer
+      name:
+        type: string
+    type: object
+  epic.UpdateRequest:
+    properties:
+      color:
+        type: string
+      deadline:
+        type: string
+      description:
+        type: string
+      name:
+        type: string
+      type:
+        type: string
+    type: object
+  item.CreateRequest:
+    properties:
+      description:
+        type: string
+      epic_id:
+        type: string
+      estimate_minutes:
+        type: integer
+      priority:
+        type: integer
+      project_id:
+        type: string
+      sprint_id:
+        type: string
+      title:
+        type: string
+    type: object
+  item.Item:
+    properties:
+      board_id:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      display_id:
+        type: string
+      epic_color:
+        type: string
+      epic_id:
+        type: string
+      epic_name:
+        description: Enriched (computed from JOINs, not stored)
+        type: string
+      estimate_minutes:
+        type: integer
+      id:
+        type: string
+      position:
+        type: integer
+      priority:
+        type: integer
+      project_id:
+        type: string
+      sprint_id:
+        type: string
+      status_id:
+        type: string
+      time_in_status_minutes:
+        type: integer
+      title:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  item.ListResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/item.Item'
+        type: array
+    type: object
+  item.MoveRequest:
+    properties:
+      status_id:
+        type: string
+    type: object
+  item.ReorderRequest:
+    properties:
+      ids:
+        items:
+          type: string
+        type: array
+      status_id:
+        type: string
+    type: object
+  item.StatusTransition:
+    properties:
+      from_status_id:
+        type: string
+      id:
+        type: string
+      item_id:
+        type: string
+      to_status_id:
+        type: string
+      transitioned_at:
+        type: string
+    type: object
+  item.TransitionsResponse:
+    properties:
+      transitions:
+        items:
+          $ref: '#/definitions/item.StatusTransition'
+        type: array
+    type: object
+  item.UpdateRequest:
+    properties:
+      clear_epic:
+        type: boolean
+      clear_sprint:
+        type: boolean
+      description:
+        type: string
+      epic_id:
+        type: string
+      estimate_minutes:
+        type: integer
+      priority:
+        type: integer
+      sprint_id:
+        type: string
+      title:
+        type: string
+    type: object
+  project.CreateRequest:
+    properties:
+      color:
+        type: string
+      description:
+        type: string
+      name:
+        type: string
+      prefix:
+        type: string
+    type: object
+  project.ListResponse:
+    properties:
+      projects:
+        items:
+          $ref: '#/definitions/project.Project'
+        type: array
+    type: object
+  project.Project:
+    properties:
+      board_id:
+        type: string
+      color:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      item_seq:
+        type: integer
+      name:
+        type: string
+      prefix:
+        type: string
+    type: object
+  project.TrashProject:
+    properties:
+      color:
+        type: string
+      deleted_at:
+        type: string
+      epic_count:
+        type: integer
+      id:
+        type: string
+      item_count:
+        type: integer
+      name:
+        type: string
+      prefix:
+        type: string
+    type: object
+  project.UpdateRequest:
+    properties:
+      color:
+        type: string
+      description:
+        type: string
+      name:
+        type: string
+    type: object
+  queue.CreateRequest:
+    properties:
+      deadline:
+        type: string
+      estimate_minutes:
+        type: integer
+      notes:
+        type: string
+      priority:
+        type: integer
+      title:
+        type: string
+    type: object
+  queue.ListResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/queue.QueueItem'
+        type: array
+    type: object
+  queue.PromoteRequest:
+    properties:
+      epic_id:
+        type: string
+      project_id:
+        type: string
+      status_id:
+        type: string
+    type: object
+  queue.PromoteResult:
+    properties:
+      item_display_id:
+        type: string
+      item_id:
+        type: string
+    type: object
+  queue.QueueItem:
+    properties:
+      board_id:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: string
+      deadline:
+        type: string
+      estimate_minutes:
+        type: integer
+      id:
+        type: string
+      notes:
+        type: string
+      position:
+        type: integer
+      priority:
+        type: integer
+      promoted_item_id:
+        type: string
+      title:
+        type: string
+      urgency_score:
+        type: number
+    type: object
+  queue.ReorderRequest:
+    properties:
+      order:
+        items:
+          type: string
+        type: array
+    type: object
+  queue.UpdateRequest:
+    properties:
+      deadline:
+        type: string
+      estimate_minutes:
+        type: integer
+      notes:
+        type: string
+      priority:
+        type: integer
+      title:
+        type: string
+    type: object
+  sprint.CloseResponse:
+    properties:
+      next_sprint:
+        $ref: '#/definitions/sprint.Sprint'
+      spilled_count:
+        type: integer
+    type: object
+  sprint.CreateRequest:
+    properties:
+      start_date:
+        description: StartDate is optional; defaults to today if omitted.
+        type: string
+    type: object
+  sprint.ListResponse:
+    properties:
+      sprints:
+        items:
+          $ref: '#/definitions/sprint.Sprint'
+        type: array
+    type: object
+  sprint.SpilloverPreviewResponse:
+    properties:
+      count:
+        type: integer
+    type: object
+  sprint.Sprint:
+    properties:
+      board_id:
+        type: string
+      created_at:
+        type: string
+      days_remaining:
+        type: integer
+      days_total:
+        type: integer
+      end_date:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      sprint_number:
+        type: integer
+      start_date:
+        type: string
+      state:
+        type: string
+    type: object
+  trash.TrashResponse:
+    properties:
+      epics:
+        items:
+          $ref: '#/definitions/epic.TrashEpic'
+        type: array
+      projects:
+        items:
+          $ref: '#/definitions/project.TrashProject'
+        type: array
+    type: object
+  version.Info:
+    properties:
+      gitBranch:
+        type: string
+      gitCommit:
+        type: string
+      timestamp:
+        type: string
+      version:
+        type: string
+    type: object
+host: api.cumin.ashinsabu.com
+info:
+  contact: {}
+  description: OSS sprint board API
+  title: Cumin API
+  version: "1.0"
+paths:
+  /api/board:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/board.Board'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Get board
+      tags:
+      - board
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Board settings to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/board.UpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/board.Board'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Update board
+      tags:
+      - board
+  /api/board/statuses:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/board.StatusListResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: List board statuses
+      tags:
+      - board
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Status to create
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/board.CreateStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/board.Status'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Create board status
+      tags:
+      - board
+  /api/board/statuses/{id}:
+    delete:
+      parameters:
+      - description: Status ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Delete board status
+      tags:
+      - board
+  /api/board/statuses/reorder:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Ordered status IDs
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/board.ReorderStatusesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/board.StatusListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Reorder board statuses
+      tags:
+      - board
+  /api/docs/swagger.json:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: object
+      summary: Get OpenAPI spec
+      tags:
+      - meta
+  /api/epics:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/epic.ListResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: List epics
+      tags:
+      - epics
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Epic to create
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/epic.CreateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/epic.Epic'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Create epic
+      tags:
+      - epics
+  /api/epics/{id}:
+    delete:
+      parameters:
+      - description: Epic ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Delete epic
+      tags:
+      - epics
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Epic ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/epic.UpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/epic.Epic'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Update epic
+      tags:
+      - epics
+  /api/epics/{id}/restore:
+    post:
+      parameters:
+      - description: Epic ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Restore epic
+      tags:
+      - epics
+  /api/flags:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: boolean
+            type: object
+      summary: Get feature flags
+      tags:
+      - meta
+  /api/items:
+    get:
+      parameters:
+      - description: Filter by sprint ID
+        in: query
+        name: sprint_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/item.ListResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: List items
+      tags:
+      - items
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Item to create
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/item.CreateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/item.Item'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Create item
+      tags:
+      - items
+  /api/items/{id}:
+    delete:
+      parameters:
+      - description: Item ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Delete item
+      tags:
+      - items
+    get:
+      parameters:
+      - description: Item ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/item.Item'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Get item
+      tags:
+      - items
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Item ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/item.UpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/item.Item'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Update item
+      tags:
+      - items
+  /api/items/{id}/move:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Item ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Target status
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/item.MoveRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/item.Item'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Move item
+      tags:
+      - items
+  /api/items/{id}/restore:
+    post:
+      parameters:
+      - description: Item ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Restore item
+      tags:
+      - items
+  /api/items/{id}/transitions:
+    get:
+      parameters:
+      - description: Item ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/item.TransitionsResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: List item transitions
+      tags:
+      - items
+  /api/items/backlog:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/item.ListResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: List backlog items
+      tags:
+      - items
+  /api/items/reorder:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Status and ordered item IDs
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/item.ReorderRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/item.ListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Reorder items
+      tags:
+      - items
+  /api/projects:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/project.ListResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: List projects
+      tags:
+      - projects
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Project to create
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/project.CreateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/project.Project'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Create project
+      tags:
+      - projects
+  /api/projects/{id}:
+    delete:
+      parameters:
+      - description: Project ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Delete project
+      tags:
+      - projects
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Project ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/project.UpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/project.Project'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Update project
+      tags:
+      - projects
+  /api/projects/{id}/restore:
+    post:
+      parameters:
+      - description: Project ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Restore project
+      tags:
+      - projects
+  /api/queue:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/queue.ListResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: List queue items
+      tags:
+      - queue
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Queue item to capture
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/queue.CreateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/queue.QueueItem'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Create queue item
+      tags:
+      - queue
+  /api/queue/{id}:
+    delete:
+      parameters:
+      - description: Queue item ID
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Archive queue item
+      tags:
+      - queue
+    patch:
+      consumes:
+      - application/json
+      parameters:
+      - description: Queue item ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/queue.UpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/queue.QueueItem'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Update queue item
+      tags:
+      - queue
+  /api/queue/{id}/promote:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Queue item ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Promotion target
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/queue.PromoteRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/queue.PromoteResult'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Promote queue item to board item
+      tags:
+      - queue
+  /api/queue/reorder:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Ordered queue item IDs
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/queue.ReorderRequest'
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Reorder queue items
+      tags:
+      - queue
+  /api/sprints:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sprint.ListResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: List sprints
+      tags:
+      - sprints
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Sprint start date (optional)
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/sprint.CreateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sprint.Sprint'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Create sprint
+      tags:
+      - sprints
+  /api/sprints/{id}/activate:
+    post:
+      parameters:
+      - description: Sprint ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sprint.Sprint'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Activate sprint
+      tags:
+      - sprints
+  /api/sprints/{id}/close:
+    post:
+      parameters:
+      - description: Sprint ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sprint.CloseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Close sprint
+      tags:
+      - sprints
+  /api/sprints/{id}/spillover-preview:
+    get:
+      parameters:
+      - description: Sprint ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sprint.SpilloverPreviewResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Spillover preview
+      tags:
+      - sprints
+  /api/sprints/active:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/sprint.Sprint'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Get active sprint
+      tags:
+      - sprints
+  /api/trash:
+    delete:
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Empty trash
+      tags:
+      - trash
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/trash.TrashResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/api.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: List trash
+      tags:
+      - trash
+  /api/version:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/version.Info'
+      summary: Get API version
+      tags:
+      - meta
+  /healthz:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{"status":"ok"}'
+          schema:
+            type: object
+        "503":
+          description: '{"status":"unhealthy"}'
+          schema:
+            type: object
+      summary: Health check
+      tags:
+      - meta
+securityDefinitions:
+  CookieAuth:
+    in: cookie
+    name: token
+    type: apiKey
+swagger: "2.0"
