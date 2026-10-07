@@ -55,6 +55,7 @@ func (h *Handler) Routes(r chi.Router) {
 	r.Patch("/api/queue/{id}", api.Handle(h.Update))
 	r.Delete("/api/queue/{id}", api.HandleDelete(h.Archive))
 	r.Post("/api/queue/{id}/promote", api.Handle(h.Promote))
+	r.Post("/api/queue/{id}/revive", api.HandleNoBody(h.Revive))
 	r.Put("/api/queue/reorder", api.Handle(h.Reorder))
 }
 
@@ -123,6 +124,19 @@ func (h *Handler) Reorder(ctx context.Context, req ReorderRequest) (*struct{}, e
 		return nil, api.Internal("failed to reorder queue")
 	}
 	return nil, nil
+}
+
+func (h *Handler) Revive(ctx context.Context) (*QueueItem, error) {
+	id := api.URLParam(ctx, "id")
+	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	if err != nil {
+		return nil, api.NotFound("board not found")
+	}
+	q, err := h.store.Revive(ctx, id, b.ID)
+	if err != nil {
+		return nil, api.NotFound("queue item not found")
+	}
+	return q, nil
 }
 
 func (h *Handler) Promote(ctx context.Context, req PromoteRequest) (*PromoteResult, error) {

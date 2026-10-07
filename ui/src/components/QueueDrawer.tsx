@@ -7,11 +7,16 @@ import { useProjects } from '../hooks/useProjects'
 import { useBoardStatuses } from '../hooks/useBoardQueries'
 import { useEpics } from '../hooks/useEpics'
 import { parseEstimate, formatEstimate } from '../hooks/useFormat'
+import { PRIORITY } from '../constants'
 import type { QueueItem } from '../types'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const PRIORITY_LABELS = ['P0', 'P1', 'P2', 'P3', 'P4']
+const STALE_MS = 24 * 60 * 60 * 1000
+
+function isStale(item: QueueItem): boolean {
+  return Date.now() - new Date(item.created_at).getTime() > STALE_MS
+}
 
 type SortAlgo = 'auto' | 'priority' | 'deadline' | 'shortest' | 'custom'
 
@@ -36,12 +41,11 @@ function sortItems(items: QueueItem[], algo: SortAlgo): QueueItem[] {
       })
     case 'custom':
       return s.sort((a, b) => a.position - b.position)
-    default: // auto
+    default:
       return s.sort((a, b) => b.urgency_score - a.urgency_score)
   }
 }
 
-// Left rail color — hotter at top, cooler at bottom
 function railClass(index: number, total: number): string {
   const pct = total <= 1 ? 0 : index / (total - 1)
   if (pct < 0.25) return 'bg-accent'
@@ -50,11 +54,9 @@ function railClass(index: number, total: number): string {
   return 'bg-line'
 }
 
-function priorityBadgeClass(p: number): string {
-  if (p === 0) return 'text-xs font-bold text-accent'
-  if (p === 1) return 'text-xs font-semibold text-accent/70'
-  if (p === 2) return 'text-xs font-medium text-dim'
-  return 'text-xs text-ghost'
+function PriorityBadge({ p }: { p: number }) {
+  const cfg = PRIORITY[p] ?? PRIORITY[4]
+  return <span className="text-xs font-bold" style={{ color: cfg.color }}>{cfg.label}</span>
 }
 
 function formatDeadline(iso: string): string {
@@ -72,6 +74,18 @@ function relativeTime(iso: string): string {
   if (h < 1) return 'just now'
   if (h < 24) return `${h}h ago`
   return `${Math.floor(h / 24)}d ago`
+}
+
+// Age bar: shows how much of the 24h window has elapsed. Green → amber → red.
+function AgeBar({ createdAt }: { createdAt: string }) {
+  const elapsed = Date.now() - new Date(createdAt).getTime()
+  const pct = Math.min((elapsed / STALE_MS) * 100, 100)
+  const color = pct >= 80 ? '#ef4444' : pct >= 50 ? '#f97316' : '#22c55e'
+  return (
+    <div className="w-full h-0.5 bg-line/30 rounded-full overflow-hidden mt-1.5">
+      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
+    </div>
+  )
 }
 
 // ─── Convert sheet ─────────────────────────────────────────────────────────────
@@ -191,7 +205,6 @@ function ExpandedEditor({ item, onClose, onArchive }: ExpandedEditorProps) {
       className="overflow-hidden border-t border-line/30"
     >
       <div className="px-4 py-3 space-y-3 bg-raised/20">
-        {/* Title */}
         <input
           autoFocus
           value={draft.title}
@@ -199,28 +212,22 @@ function ExpandedEditor({ item, onClose, onArchive }: ExpandedEditorProps) {
           className="w-full text-sm bg-surface border border-line rounded-[var(--c-radius-card)] px-3 py-2 text-ink focus:outline-none focus:border-accent/50"
           placeholder="Title"
         />
-
-        {/* Priority */}
         <div>
           <p className="text-xs text-ghost mb-1.5">Priority</p>
           <div className="flex gap-1.5 flex-wrap">
-            {PRIORITY_LABELS.map((label, i) => (
-              <button key={label} onClick={() => setDraft((d) => ({ ...d, priority: i }))}
-                className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors cursor-pointer ${
-                  draft.priority === i
-                    ? i === 0 ? 'bg-accent text-white'
-                      : i === 1 ? 'bg-accent/20 text-accent'
-                      : i === 2 ? 'bg-line text-dim'
-                      : 'bg-line/50 text-ghost'
-                    : 'text-ghost hover:text-dim hover:bg-line/50'
-                }`}>
-                {label}
-              </button>
-            ))}
+            {[0,1,2,3,4].map((i) => {
+                const cfg = PRIORITY[i]
+                const active = draft.priority === i
+                return (
+                  <button key={i} onClick={() => setDraft((d) => ({ ...d, priority: i }))}
+                    className="px-2.5 py-1 rounded text-xs font-bold transition-colors cursor-pointer border"
+                    style={active ? { color: cfg.color, borderColor: cfg.color, backgroundColor: cfg.color + '18' } : { color: '#6b7280', borderColor: 'transparent' }}>
+                    {cfg.label}
+                  </button>
+                )
+              })}
           </div>
         </div>
-
-        {/* Estimate + Deadline */}
         <div className="flex gap-2">
           <div className="flex-1">
             <p className="text-xs text-ghost mb-1.5">Estimate</p>
@@ -233,8 +240,6 @@ function ExpandedEditor({ item, onClose, onArchive }: ExpandedEditorProps) {
               className="w-full text-sm bg-surface border border-line rounded-[var(--c-radius-card)] px-3 py-2 text-ink focus:outline-none focus:border-accent/50" />
           </div>
         </div>
-
-        {/* Notes — clearly subordinate: smaller, paragraph style */}
         <div>
           <p className="text-xs text-ghost mb-1.5">Notes</p>
           <textarea value={draft.notes} onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
@@ -242,8 +247,6 @@ function ExpandedEditor({ item, onClose, onArchive }: ExpandedEditorProps) {
             rows={3}
             className="w-full text-xs leading-relaxed bg-surface border border-line rounded-[var(--c-radius-card)] px-3 py-2 text-dim resize-none focus:outline-none focus:border-accent/50 placeholder:text-ghost" />
         </div>
-
-        {/* Actions */}
         {!converting ? (
           <div className="flex items-center gap-2">
             <button onClick={() => setConverting(true)}
@@ -297,26 +300,18 @@ function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchiv
       onDrop={onDrop}
       onDragEnd={onDragEnd}
     >
-      {/* Drop-here indicator */}
       {isDragOver && (
         <div className="absolute top-0 left-0 right-0 h-0.5 bg-accent z-10" />
       )}
-
       <div className="flex items-stretch border-b border-line/20 last:border-0">
-        {/* Left urgency rail */}
         <div className={`w-1 shrink-0 ${railClass(index, total)}`} />
-
-        {/* Drag handle + position */}
         <div className="flex flex-col items-center justify-start pt-3.5 px-2 shrink-0 cursor-grab active:cursor-grabbing select-none">
           <span className="text-[9px] font-mono text-ghost/50 leading-none">{String(index + 1).padStart(2, '0')}</span>
           <span className="text-ghost/30 text-[13px] mt-1 leading-none">⠿</span>
         </div>
-
-        {/* Content */}
         <div className="flex-1 min-w-0">
-          {/* Clickable collapsed row */}
           <div
-            className="flex items-start gap-2 pt-3 pb-2.5 pr-3 cursor-pointer group"
+            className="flex items-start gap-2 pt-3 pb-2 pr-3 cursor-pointer group"
             onClick={expanded ? onCollapse : onExpand}
           >
             <div className="flex-1 min-w-0">
@@ -325,7 +320,7 @@ function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchiv
               )}
               <p className="text-sm text-ink leading-snug">{item.title}</p>
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                <span className={priorityBadgeClass(item.priority)}>{PRIORITY_LABELS[item.priority]}</span>
+                <PriorityBadge p={item.priority} />
                 {item.estimate_minutes && (
                   <span className="text-xs font-medium text-dim">{formatEstimate(item.estimate_minutes)}</span>
                 )}
@@ -334,10 +329,8 @@ function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchiv
                     {formatDeadline(item.deadline)}
                   </span>
                 )}
-                {!item.deadline && !item.estimate_minutes && (
-                  <span className="text-xs text-ghost">{relativeTime(item.created_at)}</span>
-                )}
               </div>
+              <AgeBar createdAt={item.created_at} />
             </div>
             <button
               onClick={(e) => { e.stopPropagation(); onArchive() }}
@@ -346,8 +339,6 @@ function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchiv
               ×
             </button>
           </div>
-
-          {/* Expanded editor */}
           <AnimatePresence initial={false}>
             {expanded && (
               <ExpandedEditor item={item} onClose={onCollapse} onArchive={() => { onArchive(); onCollapse() }} />
@@ -355,6 +346,116 @@ function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchiv
           </AnimatePresence>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ─── Stale (archived) section ─────────────────────────────────────────────────
+
+function StaleSection({ items }: { items: QueueItem[] }) {
+  const [open, setOpen] = useState(false)
+  const { reviveItem, archiveItem, promoteItem } = useQueue()
+  const { data: projects = [] } = useProjects()
+  const { data: statuses = [] } = useBoardStatuses()
+  const { data: epics = [] } = useEpics()
+  const [convertingId, setConvertingId] = useState<string | null>(null)
+  const [convertedIds, setConvertedIds] = useState<Set<string>>(new Set())
+
+  if (items.length === 0) return null
+
+  const initialStatus = statuses.find((s) => s.is_initial) ?? statuses[0]
+
+  return (
+    <div className="border-t border-line/30 mt-auto shrink-0">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-ghost hover:text-dim transition-colors"
+      >
+        <span className="flex-1 text-left font-medium">
+          {open ? '↑' : '↓'} Yesterday · {items.length} item{items.length !== 1 ? 's' : ''}
+        </span>
+        <span className="text-ghost/40">auto-archived</span>
+      </button>
+
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ ...beltSpring, damping: 35 }}
+            className="overflow-hidden"
+          >
+            {items.map((item) => {
+              if (convertedIds.has(item.id)) return null
+              const isConverting = convertingId === item.id
+
+              return (
+                <div key={item.id} className="flex items-stretch border-b border-line/10 last:border-0 opacity-50 hover:opacity-70 transition-opacity">
+                  <div className="w-1 shrink-0 bg-line/30" />
+                  <div className="flex-1 min-w-0 px-3 py-2.5">
+                    <p className="text-xs text-dim leading-snug truncate">{item.title}</p>
+                    <p className="text-[10px] text-ghost mt-0.5">{relativeTime(item.created_at)}</p>
+
+                    {isConverting ? (
+                      <div className="mt-2 space-y-1.5">
+                        <select defaultValue={projects[0]?.id ?? ''} id={`proj-${item.id}`}
+                          className="w-full text-xs bg-surface border border-line rounded px-2 py-1.5 text-ink">
+                          {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select>
+                        <select defaultValue="" id={`epic-${item.id}`}
+                          className="w-full text-xs bg-surface border border-line rounded px-2 py-1.5 text-dim">
+                          <option value="">No epic</option>
+                          {epics.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
+                        </select>
+                        <div className="flex gap-1.5">
+                          <button onClick={() => setConvertingId(null)}
+                            className="flex-1 text-xs py-1.5 rounded border border-line text-ghost hover:text-dim">
+                            Cancel
+                          </button>
+                          <button
+                            onClick={async () => {
+                              const projEl = document.getElementById(`proj-${item.id}`) as HTMLSelectElement
+                              const epicEl = document.getElementById(`epic-${item.id}`) as HTMLSelectElement
+                              if (!projEl || !initialStatus) return
+                              await promoteItem(item.id, { project_id: projEl.value, status_id: initialStatus.id, epic_id: epicEl.value || null })
+                              setConvertedIds((s) => new Set([...s, item.id]))
+                              setConvertingId(null)
+                            }}
+                            className="flex-1 text-xs py-1.5 rounded bg-accent/10 text-accent hover:bg-accent/20 font-medium">
+                            Create ↗
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 mt-1.5">
+                        <button
+                          onClick={() => reviveItem(item.id)}
+                          className="text-[10px] px-2 py-0.5 rounded border border-line/50 text-ghost hover:text-dim hover:border-line transition-colors"
+                        >
+                          ↩ Revive
+                        </button>
+                        <button
+                          onClick={() => setConvertingId(item.id)}
+                          className="text-[10px] px-2 py-0.5 rounded border border-line/50 text-ghost hover:text-accent hover:border-accent/40 transition-colors"
+                        >
+                          → Convert
+                        </button>
+                        <button
+                          onClick={() => archiveItem(item.id)}
+                          className="ml-auto text-[10px] text-ghost/40 hover:text-ghost transition-colors"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
@@ -392,16 +493,17 @@ function NewItemForm({ onCreate, onDiscard }: { onCreate: (t: string, p: number,
           />
           <div className="flex items-center gap-3">
             <div className="flex gap-1">
-              {PRIORITY_LABELS.map((label, i) => (
-                <button key={label} onClick={() => setPriority(i)}
-                  className={`px-2 py-0.5 rounded text-xs font-semibold transition-colors cursor-pointer ${
-                    priority === i
-                      ? i === 0 ? 'bg-accent text-white' : i === 1 ? 'bg-accent/20 text-accent' : 'bg-line text-dim'
-                      : 'text-ghost hover:text-dim'
-                  }`}>
-                  {label}
-                </button>
-              ))}
+              {[0,1,2,3,4].map((i) => {
+                const cfg = PRIORITY[i]
+                const active = priority === i
+                return (
+                  <button key={i} onClick={() => setPriority(i)}
+                    className="px-2 py-0.5 rounded text-xs font-bold transition-colors cursor-pointer border"
+                    style={active ? { color: cfg.color, borderColor: cfg.color, backgroundColor: cfg.color + '18' } : { color: '#6b7280', borderColor: 'transparent' }}>
+                    {cfg.label}
+                  </button>
+                )
+              })}
             </div>
             <input
               value={estimate}
@@ -434,7 +536,8 @@ function EmptyBelt({ onAdd }: { onAdd: () => void }) {
       <div>
         <p className="text-sm font-medium text-dim">Belt is clear</p>
         <p className="text-[11px] text-ghost mt-1 leading-relaxed">
-          Capture bugs, blockers, quick decisions. Items are auto-scored by urgency and deadline.
+          Capture bugs, blockers, quick decisions.<br />
+          Items older than 24h auto-archive below.
         </p>
       </div>
       <button onClick={onAdd} className="text-sm px-4 py-2 rounded-[var(--c-radius-card)] bg-accent/10 text-accent hover:bg-accent/20 font-medium transition-colors">
@@ -460,8 +563,10 @@ function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: Qu
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dropTargetId, setDropTargetId] = useState<string | null>(null)
 
-  const sortedItems = sortItems(items, sortAlgo)
-  const urgentCount = items.filter((i) => i.urgency_score > 9).length
+  const activeItems = items.filter((i) => !isStale(i))
+  const staleItems = items.filter((i) => isStale(i))
+  const sortedActive = sortItems(activeItems, sortAlgo)
+  const urgentCount = activeItems.filter((i) => i.urgency_score > 9).length
 
   const handleAddNew = async (title: string, priority: number, estimate: string) => {
     const estimateMinutes = estimate ? parseEstimate(estimate) : null
@@ -471,7 +576,7 @@ function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: Qu
 
   const handleDrop = useCallback((targetId: string) => {
     if (!draggingId || draggingId === targetId) return
-    const currentOrder = sortedItems.map((i) => i.id)
+    const currentOrder = sortedActive.map((i) => i.id)
     const fromIdx = currentOrder.indexOf(draggingId)
     const toIdx = currentOrder.indexOf(targetId)
     const newOrder = [...currentOrder]
@@ -481,7 +586,7 @@ function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: Qu
     setDropTargetId(null)
     onSortChange('custom')
     reorderItems(newOrder)
-  }, [draggingId, sortedItems, reorderItems, onSortChange])
+  }, [draggingId, sortedActive, reorderItems, onSortChange])
 
   return (
     <>
@@ -524,11 +629,11 @@ function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: Qu
 
         {loading ? (
           <p className="text-sm text-ghost p-4">Loading...</p>
-        ) : sortedItems.length === 0 && !showNew ? (
+        ) : sortedActive.length === 0 && !showNew ? (
           <EmptyBelt onAdd={() => setShowNew(true)} />
         ) : (
           <AnimatePresence initial={false}>
-            {sortedItems.map((item, index) => (
+            {sortedActive.map((item, index) => (
               <motion.div
                 key={item.id}
                 initial={{ opacity: 0, scale: 0.97, y: -6 }}
@@ -539,7 +644,7 @@ function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: Qu
                 <BeltItem
                   item={item}
                   index={index}
-                  total={sortedItems.length}
+                  total={sortedActive.length}
                   expanded={expandedId === item.id}
                   onExpand={() => setExpandedId(item.id)}
                   onCollapse={() => setExpandedId(null)}
@@ -556,6 +661,9 @@ function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: Qu
           </AnimatePresence>
         )}
       </div>
+
+      {/* Stale section always at bottom */}
+      <StaleSection items={staleItems} />
     </>
   )
 }
@@ -564,7 +672,7 @@ function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: Qu
 
 export function QueueDrawer({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   const { items } = useQueue()
-  const urgentCount = items.filter((i) => i.urgency_score > 9).length
+  const urgentCount = items.filter((i) => !isStale(i) && i.urgency_score > 9).length
   const [sortAlgo, setSortAlgo] = useState<SortAlgo>(() => (localStorage.getItem('queue_sort') as SortAlgo) ?? 'auto')
 
   const handleSortChange = (algo: SortAlgo) => {
@@ -597,7 +705,7 @@ export function QueueDrawer({ open, onToggle }: { open: boolean; onToggle: () =>
 
 export function QueueMobileTrigger({ onToggle }: { onToggle: () => void }) {
   const { items } = useQueue()
-  const urgentCount = items.filter((i) => i.urgency_score > 9).length
+  const urgentCount = items.filter((i) => !isStale(i) && i.urgency_score > 9).length
   return (
     <button onClick={onToggle} className="md:hidden flex items-center gap-1.5 text-sm px-2.5 py-1.5 rounded-[var(--c-radius-card)] bg-surface border border-line text-dim hover:text-ink">
       Queue

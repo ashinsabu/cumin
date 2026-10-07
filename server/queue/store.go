@@ -113,6 +113,21 @@ func (s *Store) Update(ctx context.Context, id, boardID, title, notes string, de
 	return &q, nil
 }
 
+func (s *Store) Revive(ctx context.Context, id, boardID string) (*QueueItem, error) {
+	var q QueueItem
+	err := s.DB.QueryRow(ctx, `
+		UPDATE queue_items SET created_at = NOW(), position =
+		    COALESCE((SELECT MAX(position)+1 FROM queue_items WHERE board_id=$2 AND deleted_at IS NULL), 0)
+		WHERE id = $1 AND board_id = $2 AND deleted_at IS NULL
+		RETURNING `+listCols+`
+	`, id, boardID).Scan(&q.ID, &q.BoardID, &q.CreatedBy, &q.Title, &q.Notes, &q.Deadline, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	q.UrgencyScore = urgencyScore(q.Title, q.CreatedAt, q.Deadline, q.Priority)
+	return &q, nil
+}
+
 func (s *Store) Archive(ctx context.Context, id, boardID string) error {
 	_, err := s.DB.Exec(ctx, `
 		UPDATE queue_items SET deleted_at = NOW()
