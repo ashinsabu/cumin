@@ -49,9 +49,16 @@ const itemCols = `id, board_id, project_id, epic_id, sprint_id, status_id, displ
 const itemAliasedCols = `i.id, i.board_id, i.project_id, i.epic_id, i.sprint_id, i.status_id, i.display_id,
 	i.title, i.description, i.priority, i.estimate_minutes, i.position, i.created_at, i.updated_at`
 
+// itemEnrichedCols uses LATERAL join (not correlated scalar subquery) to avoid N+1 index scans.
+// Callers must include "LEFT JOIN LATERAL (...) t ON true" in their FROM clause.
 const itemEnrichedCols = itemAliasedCols + `,
 	e.name, e.color,
-	COALESCE(EXTRACT(EPOCH FROM (NOW() - (SELECT transitioned_at FROM status_transitions WHERE item_id = i.id ORDER BY transitioned_at DESC LIMIT 1))) / 60, 0)::int`
+	COALESCE(EXTRACT(EPOCH FROM (NOW() - t.transitioned_at)) / 60, 0)::int`
+
+const itemLateralJoin = `LEFT JOIN LATERAL (
+	SELECT transitioned_at FROM status_transitions
+	WHERE item_id = i.id ORDER BY transitioned_at DESC LIMIT 1
+) t ON true`
 
 func scanItemEnriched(row interface{ Scan(...any) error }) (*Item, error) {
 	var it Item
@@ -75,7 +82,7 @@ func scanItemBase(row interface{ Scan(...any) error }) (*Item, error) {
 }
 
 func (s *Store) List(ctx context.Context, boardID string, sprintID *string) ([]Item, error) {
-	query := `SELECT ` + itemEnrichedCols + ` FROM items i LEFT JOIN epics e ON i.epic_id = e.id WHERE i.board_id = $1 AND i.deleted_at IS NULL`
+	query := `SELECT ` + itemEnrichedCols + ` FROM items i LEFT JOIN epics e ON i.epic_id = e.id ` + itemLateralJoin + ` WHERE i.board_id = $1 AND i.deleted_at IS NULL`
 	args := []any{boardID}
 
 	if sprintID != nil {
@@ -103,7 +110,7 @@ func (s *Store) List(ctx context.Context, boardID string, sprintID *string) ([]I
 
 func (s *Store) Backlog(ctx context.Context, boardID string) ([]Item, error) {
 	rows, err := s.DB.Query(ctx, `
-		SELECT `+itemEnrichedCols+` FROM items i LEFT JOIN epics e ON i.epic_id = e.id
+		SELECT `+itemEnrichedCols+` FROM items i LEFT JOIN epics e ON i.epic_id = e.id `+itemLateralJoin+`
 		WHERE i.board_id = $1 AND i.sprint_id IS NULL AND i.deleted_at IS NULL
 		  AND i.status_id NOT IN (SELECT id FROM statuses WHERE board_id = $1 AND is_done = true)
 		ORDER BY i.priority, i.position
@@ -125,7 +132,7 @@ func (s *Store) Backlog(ctx context.Context, boardID string) ([]Item, error) {
 }
 
 func (s *Store) GetByID(ctx context.Context, id string) (*Item, error) {
-	row := s.DB.QueryRow(ctx, `SELECT `+itemEnrichedCols+` FROM items i LEFT JOIN epics e ON i.epic_id = e.id WHERE i.id = $1 AND i.deleted_at IS NULL`, id)
+	row := s.DB.QueryRow(ctx, `SELECT `+itemEnrichedCols+` FROM items i LEFT JOIN epics e ON i.epic_id = e.id `+itemLateralJoin+` WHERE i.id = $1 AND i.deleted_at IS NULL`, id)
 	return scanItemEnriched(row)
 }
 
