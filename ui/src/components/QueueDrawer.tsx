@@ -80,10 +80,12 @@ function relativeTime(iso: string): string {
 function AgeBar({ createdAt }: { createdAt: string }) {
   const elapsed = Date.now() - new Date(createdAt).getTime()
   const pct = Math.min((elapsed / STALE_MS) * 100, 100)
-  const color = pct >= 80 ? '#ef4444' : pct >= 50 ? '#f97316' : '#22c55e'
+  // Only show when >75% elapsed (~18h) — signals imminent expiry, not just age
+  if (pct < 75) return null
+  const barClass = pct >= 90 ? 'bg-red-500' : 'bg-orange-400'
   return (
     <div className="w-full h-0.5 bg-line/30 rounded-full overflow-hidden mt-1.5">
-      <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
+      <div className={`h-full rounded-full ${barClass}`} style={{ width: `${pct}%` }} />
     </div>
   )
 }
@@ -204,61 +206,70 @@ function ExpandedEditor({ item, onClose, onArchive }: ExpandedEditorProps) {
       transition={{ ...beltSpring, damping: 35 }}
       className="overflow-hidden border-t border-line/30"
     >
-      <div className="px-4 py-3 space-y-3 bg-raised/20">
+      <div className="px-3 py-3 space-y-2.5 bg-raised/20">
         <input
           autoFocus
           value={draft.title}
           onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
-          className="w-full text-sm bg-surface border border-line rounded-[var(--c-radius-card)] px-3 py-2 text-ink focus:outline-none focus:border-accent/50"
+          className="w-full text-sm bg-surface border border-line rounded-[var(--c-radius-card)] px-2.5 py-1.5 text-ink focus:outline-none focus:border-accent/50"
           placeholder="Title"
         />
-        <div>
-          <p className="text-xs text-ghost mb-1.5">Priority</p>
-          <div className="flex gap-1.5 flex-wrap">
-            {[0,1,2,3,4].map((i) => {
-                const cfg = PRIORITY[i]
-                const active = draft.priority === i
-                return (
-                  <button key={i} onClick={() => setDraft((d) => ({ ...d, priority: i }))}
-                    className="px-2.5 py-1 rounded text-xs font-bold transition-colors cursor-pointer border"
-                    style={active ? { color: cfg.color, borderColor: cfg.color, backgroundColor: cfg.color + '18' } : { color: '#6b7280', borderColor: 'transparent' }}>
-                    {cfg.label}
-                  </button>
-                )
-              })}
-          </div>
+        {/* Priority row */}
+        <div className="flex gap-1">
+          {[0,1,2,3,4].map((i) => {
+            const cfg = PRIORITY[i]
+            const active = draft.priority === i
+            return (
+              <button key={i} onClick={() => setDraft((d) => ({ ...d, priority: i }))}
+                className="px-2 py-0.5 rounded text-xs font-bold transition-colors cursor-pointer border"
+                style={active ? { color: cfg.color, borderColor: cfg.color, backgroundColor: cfg.color + '18' } : { color: '#6b7280', borderColor: 'transparent' }}>
+                {cfg.label}
+              </button>
+            )
+          })}
         </div>
+        {/* Estimate + Deadline row */}
         <div className="flex gap-2">
-          <div className="flex-1">
-            <p className="text-xs text-ghost mb-1.5">Estimate</p>
-            <input value={draft.estimate} onChange={(e) => setDraft((d) => ({ ...d, estimate: e.target.value }))}
-              placeholder="30m, 2h" className="w-full text-sm bg-surface border border-line rounded-[var(--c-radius-card)] px-3 py-2 text-ink focus:outline-none focus:border-accent/50 placeholder:text-ghost" />
+          <div className="flex-1 space-y-1">
+            <p className="text-[10px] font-medium text-ghost uppercase tracking-wide">Estimate</p>
+            <div className="flex gap-1 flex-wrap">
+              {['15m','30m','1h','2h'].map((t) => (
+                <button key={t} type="button" onClick={() => setDraft((d) => ({ ...d, estimate: d.estimate === t ? '' : t }))}
+                  className={`px-1.5 py-0.5 rounded text-xs font-medium transition-colors cursor-pointer border ${
+                    draft.estimate === t ? 'text-accent border-accent bg-accent/10' : 'text-ghost border-transparent'
+                  }`}>
+                  {t}
+                </button>
+              ))}
+              <input value={['15m','30m','1h','2h'].includes(draft.estimate) ? '' : draft.estimate}
+                onChange={(e) => setDraft((d) => ({ ...d, estimate: e.target.value }))}
+                placeholder="other"
+                className="w-10 text-xs bg-transparent border-b border-line text-ink focus:outline-none focus:border-accent/50 placeholder:text-ghost pb-0.5" />
+            </div>
           </div>
-          <div className="flex-1">
-            <p className="text-xs text-ghost mb-1.5">Deadline</p>
+          <div className="w-[90px] space-y-1">
+            <p className="text-[10px] font-medium text-ghost uppercase tracking-wide">Deadline</p>
             <input type="date" value={draft.deadline} onChange={(e) => setDraft((d) => ({ ...d, deadline: e.target.value }))}
-              className="w-full text-sm bg-surface border border-line rounded-[var(--c-radius-card)] px-3 py-2 text-ink focus:outline-none focus:border-accent/50" />
+              className="w-full text-xs bg-surface border border-line rounded px-1.5 py-1 text-ink focus:outline-none focus:border-accent/50" />
           </div>
         </div>
-        <div>
-          <p className="text-xs text-ghost mb-1.5">Notes</p>
-          <textarea value={draft.notes} onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
-            placeholder="Add context, links, or details..."
-            rows={3}
-            className="w-full text-xs leading-relaxed bg-surface border border-line rounded-[var(--c-radius-card)] px-3 py-2 text-dim resize-none focus:outline-none focus:border-accent/50 placeholder:text-ghost" />
-        </div>
+        {/* Notes */}
+        <textarea value={draft.notes} onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
+          placeholder="Notes..."
+          rows={2}
+          className="w-full text-xs leading-relaxed bg-surface border border-line rounded-[var(--c-radius-card)] px-2.5 py-1.5 text-dim resize-none focus:outline-none focus:border-accent/50 placeholder:text-ghost" />
         {!converting ? (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button onClick={() => setConverting(true)}
-              className="flex-1 text-sm py-2 rounded-[var(--c-radius-card)] bg-accent/10 text-accent hover:bg-accent/20 font-medium transition-colors">
-              Convert to item ↗
+              className="flex-1 text-xs py-1.5 rounded-[var(--c-radius-card)] bg-accent/10 text-accent hover:bg-accent/20 font-medium transition-colors">
+              Convert ↗
             </button>
             <button onClick={onArchive}
-              className="text-sm px-3 py-2 rounded-[var(--c-radius-card)] border border-line text-dim hover:text-ink hover:border-accent/40 transition-colors">
+              className="text-xs px-2.5 py-1.5 rounded-[var(--c-radius-card)] border border-line text-dim hover:text-ink transition-colors">
               Remove
             </button>
             <button onClick={handleClose}
-              className="text-xs px-2 py-2 rounded-[var(--c-radius-card)] text-ghost hover:text-dim transition-colors">
+              className="text-xs px-2.5 py-1.5 rounded-[var(--c-radius-card)] border border-line text-ghost hover:text-dim transition-colors">
               {saving ? '…' : 'Done'}
             </button>
           </div>
@@ -491,25 +502,36 @@ function NewItemForm({ onCreate, onDiscard }: { onCreate: (t: string, p: number,
             placeholder="What needs attention?"
             className="w-full text-sm bg-surface border border-accent/40 rounded-[var(--c-radius-card)] px-3 py-2 text-ink focus:outline-none focus:border-accent placeholder:text-ghost"
           />
-          <div className="flex items-center gap-3">
-            <div className="flex gap-1">
-              {[0,1,2,3,4].map((i) => {
-                const cfg = PRIORITY[i]
-                const active = priority === i
-                return (
-                  <button key={i} onClick={() => setPriority(i)}
-                    className="px-2 py-0.5 rounded text-xs font-bold transition-colors cursor-pointer border"
-                    style={active ? { color: cfg.color, borderColor: cfg.color, backgroundColor: cfg.color + '18' } : { color: '#6b7280', borderColor: 'transparent' }}>
-                    {cfg.label}
-                  </button>
-                )
-              })}
-            </div>
+          <div className="flex gap-1">
+            {[0,1,2,3,4].map((i) => {
+              const cfg = PRIORITY[i]
+              const active = priority === i
+              return (
+                <button key={i} onClick={() => setPriority(i)}
+                  className="px-2 py-0.5 rounded text-xs font-bold transition-colors cursor-pointer border"
+                  style={active ? { color: cfg.color, borderColor: cfg.color, backgroundColor: cfg.color + '18' } : { color: '#6b7280', borderColor: 'transparent' }}>
+                  {cfg.label}
+                </button>
+              )
+            })}
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] text-ghost mr-0.5">est.</span>
+            {['15m', '30m', '1h', '2h'].map((t) => (
+              <button key={t} type="button" onClick={() => setEstimate((prev) => prev === t ? '' : t)}
+                className={`px-2 py-0.5 rounded text-xs font-medium transition-colors cursor-pointer border ${
+                  estimate === t
+                    ? 'text-accent border-accent bg-accent/10'
+                    : 'text-ghost border-transparent'
+                }`}>
+                {t}
+              </button>
+            ))}
             <input
-              value={estimate}
+              value={['15m','30m','1h','2h'].includes(estimate) ? '' : estimate}
               onChange={(e) => setEstimate(e.target.value)}
-              placeholder="est."
-              className="w-16 text-xs bg-surface border border-line rounded px-2 py-1 text-ink focus:outline-none focus:border-accent/50 placeholder:text-ghost"
+              placeholder="other"
+              className="w-12 text-xs bg-surface border border-line rounded px-2 py-0.5 text-ink focus:outline-none focus:border-accent/50 placeholder:text-ghost"
             />
           </div>
           <div className="flex gap-2">

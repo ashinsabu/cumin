@@ -27,5 +27,4 @@ Thumbs.db
 # Local scratch files
 progress.md
 FEATURE_FACTORY.md
-docs/
-!server/docs/
+/docs/
