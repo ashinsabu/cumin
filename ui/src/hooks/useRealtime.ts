@@ -20,9 +20,10 @@ export function useRealtime(enabled: boolean, onPing?: () => void) {
 
     es.onmessage = () => {
       for (const key of QUERY_KEYS) {
-        // refetchType: 'active' — only queries currently mounted refetch.
-        // Background/stale queries are marked stale and refetch on next mount.
-        queryClient.invalidateQueries({ queryKey: [key], refetchType: 'active' })
+        // refetchType: 'none' — mark stale only, don't trigger an immediate refetch.
+        // Your own mutations update the cache directly; SSE is for other clients.
+        // Stale queries refetch on next focus/navigation.
+        queryClient.invalidateQueries({ queryKey: [key], refetchType: 'none' })
       }
       onPing?.()
     }
