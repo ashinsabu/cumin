@@ -85,5 +85,6 @@ export type QueueItem = {
   position: number
   urgency_score: number
   promoted_item_id: string | null
+  completed_at: string | null
   created_at: string
 }

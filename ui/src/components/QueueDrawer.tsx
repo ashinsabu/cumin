@@ -261,7 +261,7 @@ function ExpandedEditor({ item, onClose, onArchive }: ExpandedEditorProps) {
         {!converting ? (
           <div className="flex items-center gap-1.5">
             <button onClick={() => setConverting(true)}
-              className="flex-1 text-xs py-1.5 rounded-[var(--c-radius-card)] bg-accent/10 text-accent hover:bg-accent/20 font-medium transition-colors">
+              className="flex-1 text-xs py-1.5 rounded-[var(--c-radius-card)] bg-accent/10 text-accent hover:bg-accent/20 font-medium transition-colors whitespace-nowrap">
               Convert ↗
             </button>
             <button onClick={onArchive}
@@ -291,6 +291,7 @@ type BeltItemProps = {
   onExpand: () => void
   onCollapse: () => void
   onArchive: () => void
+  onComplete: () => void
   isDragOver: boolean
   dragging: boolean
   onDragStart: (e: React.DragEvent) => void
@@ -299,14 +300,14 @@ type BeltItemProps = {
   onDragEnd: () => void
 }
 
-function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchive, isDragOver, dragging, onDragStart, onDragOver, onDrop, onDragEnd }: BeltItemProps) {
+function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchive, onComplete, isDragOver, dragging, onDragStart, onDragOver, onDrop, onDragEnd }: BeltItemProps) {
   const isFirst = index === 0
   const [done, setDone] = useState(false)
 
   const handleDone = (e: React.MouseEvent) => {
     e.stopPropagation()
     setDone(true)
-    setTimeout(() => onArchive(), 350)
+    setTimeout(() => onComplete(), 350)
   }
 
   return (
@@ -327,11 +328,12 @@ function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchiv
           <span className="text-[9px] font-mono text-ghost/50 leading-none">{String(index + 1).padStart(2, '0')}</span>
           <span className="text-ghost/30 text-[13px] mt-1 leading-none">⠿</span>
         </div>
-        <div
-          className="flex-1 min-w-0 cursor-pointer"
-          onClick={expanded ? onCollapse : onExpand}
-        >
-          <div className="pt-3 pb-2 pl-0 pr-2">
+        <div className="flex-1 min-w-0">
+          {/* Clickable header — collapses/expands */}
+          <div
+            className="pt-3 pb-2 pl-0 pr-2 cursor-pointer"
+            onClick={expanded ? onCollapse : onExpand}
+          >
             {isFirst && !expanded && (
               <span className="inline-block text-[10px] font-bold text-accent uppercase tracking-widest mb-1">Next up</span>
             )}
@@ -349,9 +351,12 @@ function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchiv
             </div>
             <AgeBar createdAt={item.created_at} />
           </div>
+          {/* Editor — not clickable, stops propagation */}
           <AnimatePresence initial={false}>
             {expanded && (
-              <ExpandedEditor item={item} onClose={onCollapse} onArchive={() => { onArchive(); onCollapse() }} />
+              <div onClick={(e) => e.stopPropagation()}>
+                <ExpandedEditor item={item} onClose={onCollapse} onArchive={() => { onArchive(); onCollapse() }} />
+              </div>
             )}
           </AnimatePresence>
         </div>
@@ -597,7 +602,7 @@ type QueueContentProps = {
 }
 
 function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: QueueContentProps) {
-  const { items, loading, createItem, archiveItem, reorderItems } = useQueue()
+  const { items, loading, createItem, archiveItem, completeItem, reorderItems } = useQueue()
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [showNew, setShowNew] = useState(false)
   const [draggingId, setDraggingId] = useState<string | null>(null)
@@ -692,6 +697,7 @@ function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: Qu
                   onExpand={() => setExpandedId(item.id)}
                   onCollapse={() => setExpandedId(null)}
                   onArchive={() => { archiveItem(item.id); if (expandedId === item.id) setExpandedId(null) }}
+                  onComplete={() => { completeItem(item.id); if (expandedId === item.id) setExpandedId(null) }}
                   isDragOver={dropTargetId === item.id && draggingId !== item.id}
                   dragging={draggingId === item.id}
                   onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; setDraggingId(item.id) }}
@@ -707,7 +713,56 @@ function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: Qu
 
       {/* Stale section always at bottom */}
       <StaleSection items={staleItems} />
+
+      {/* Done history */}
+      <HistorySection />
     </>
+  )
+}
+
+function HistorySection() {
+  const [open, setOpen] = useState(false)
+  const [history, setHistory] = useState<QueueItem[]>([])
+  const API = import.meta.env.VITE_API_URL ?? ''
+
+  const load = async () => {
+    const res = await fetch(`${API}/api/queue/history`, { credentials: 'include' })
+    if (res.ok) {
+      const data = await res.json()
+      setHistory(data.items ?? [])
+    }
+    setOpen(true)
+  }
+
+  const toggle = () => open ? setOpen(false) : load()
+
+  const fmt = (ts: string) => {
+    const d = new Date(ts)
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  }
+
+  return (
+    <div className="border-t border-line/20">
+      <button onClick={toggle} className="w-full flex items-center justify-between px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-ghost hover:text-dim transition-colors">
+        <span>Done history {history.length > 0 && `(${history.length})`}</span>
+        <span>{open ? '↑' : '↓'}</span>
+      </button>
+      {open && (
+        <div className="pb-2">
+          {history.length === 0 ? (
+            <p className="text-xs text-ghost px-4 py-2">Nothing marked done yet</p>
+          ) : (
+            history.map((item) => (
+              <div key={item.id} className="flex items-center gap-2 px-4 py-1.5 border-b border-line/10 last:border-0">
+                <span className="text-green-500/60 text-xs">✓</span>
+                <span className="flex-1 text-xs text-ghost line-through leading-snug">{item.title}</span>
+                <span className="text-[10px] text-ghost/50 shrink-0">{fmt(item.completed_at!)}</span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
   )
 }
 

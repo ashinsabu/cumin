@@ -51,9 +51,11 @@ type ReorderRequest struct {
 
 func (h *Handler) Routes(r chi.Router) {
 	r.Get("/api/queue", api.HandleNoBody(h.List))
+	r.Get("/api/queue/history", api.HandleNoBody(h.History))
 	r.Post("/api/queue", api.Handle(h.Create))
 	r.Patch("/api/queue/{id}", api.Handle(h.Update))
 	r.Delete("/api/queue/{id}", api.HandleDelete(h.Archive))
+	r.Post("/api/queue/{id}/complete", api.HandleNoBody(h.Complete))
 	r.Post("/api/queue/{id}/promote", api.Handle(h.Promote))
 	r.Post("/api/queue/{id}/revive", api.HandleNoBody(h.Revive))
 	r.Put("/api/queue/reorder", api.Handle(h.Reorder))
@@ -68,6 +70,35 @@ func (h *Handler) Routes(r chi.Router) {
 // @Failure      404  {object}  api.ErrorResponse
 // @Security     CookieAuth
 // @Router       /api/queue [get]
+type HistoryResponse struct {
+	Items []QueueItem `json:"items"`
+}
+
+func (h *Handler) History(ctx context.Context) (*HistoryResponse, error) {
+	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	if err != nil {
+		return nil, api.NotFound("board not found")
+	}
+	items, err := h.store.History(ctx, b.ID)
+	if err != nil {
+		return nil, api.Internal("failed to list history")
+	}
+	return &HistoryResponse{Items: items}, nil
+}
+
+func (h *Handler) Complete(ctx context.Context) (*QueueItem, error) {
+	id := api.URLParam(ctx, "id")
+	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
+	if err != nil {
+		return nil, api.NotFound("board not found")
+	}
+	q, err := h.store.Complete(ctx, id, b.ID)
+	if err != nil {
+		return nil, api.NotFound("queue item not found")
+	}
+	return q, nil
+}
+
 func (h *Handler) List(ctx context.Context) (*ListResponse, error) {
 	b, err := h.boardStore.GetByUser(ctx, auth.UserIDFromContext(ctx))
 	if err != nil {

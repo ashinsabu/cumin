@@ -28,6 +28,7 @@ type QueueContextValue = {
   createItem: (p: CreatePayload) => Promise<QueueItem>
   updateItem: (id: string, p: UpdatePayload) => Promise<void>
   archiveItem: (id: string) => void
+  completeItem: (id: string) => Promise<void>
   reviveItem: (id: string) => Promise<void>
   reorderItems: (ids: string[]) => Promise<void>
   promoteItem: (id: string, p: PromotePayload) => Promise<{ item_id: string; item_display_id: string }>
@@ -110,6 +111,11 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     })
   }, [pushToast])
 
+  const completeItem = useCallback(async (id: string): Promise<void> => {
+    setItems((prev) => prev.filter((i) => i.id !== id))
+    await fetch(`${API}/api/queue/${id}/complete`, { method: 'POST', credentials: 'include' })
+  }, [])
+
   const reviveItem = useCallback(async (id: string): Promise<void> => {
     const res = await fetch(`${API}/api/queue/${id}/revive`, { method: 'POST', credentials: 'include' })
     if (!res.ok) throw new Error('Failed to revive queue item')
@@ -131,7 +137,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <QueueContext.Provider value={{ items, loading, createItem, updateItem, archiveItem, reviveItem, reorderItems, promoteItem }}>
+    <QueueContext.Provider value={{ items, loading, createItem, updateItem, archiveItem, completeItem, reviveItem, reorderItems, promoteItem }}>
       {children}
     </QueueContext.Provider>
   )
