@@ -327,44 +327,27 @@ function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchiv
           <span className="text-[9px] font-mono text-ghost/50 leading-none">{String(index + 1).padStart(2, '0')}</span>
           <span className="text-ghost/30 text-[13px] mt-1 leading-none">⠿</span>
         </div>
-        <div className="flex-1 min-w-0">
-          <div
-            className="flex items-start gap-2 pt-3 pb-2 pr-3 cursor-pointer group"
-            onClick={expanded ? onCollapse : onExpand}
-          >
-            <div className="flex-1 min-w-0">
-              {isFirst && !expanded && (
-                <span className="inline-block text-[10px] font-bold text-accent uppercase tracking-widest mb-1">Next up</span>
+        <div
+          className="flex-1 min-w-0 cursor-pointer"
+          onClick={expanded ? onCollapse : onExpand}
+        >
+          <div className="pt-3 pb-2 pl-0 pr-2">
+            {isFirst && !expanded && (
+              <span className="inline-block text-[10px] font-bold text-accent uppercase tracking-widest mb-1">Next up</span>
+            )}
+            <p className={`text-sm leading-snug transition-all duration-300 ${done ? 'line-through text-ghost' : 'text-ink'}`}>{item.title}</p>
+            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+              <PriorityBadge p={item.priority} />
+              {item.estimate_minutes && (
+                <span className="text-xs font-medium text-dim">{formatEstimate(item.estimate_minutes)}</span>
               )}
-              <p className={`text-sm leading-snug transition-all duration-300 ${done ? 'line-through text-ghost' : 'text-ink'}`}>{item.title}</p>
-              <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                <PriorityBadge p={item.priority} />
-                {item.estimate_minutes && (
-                  <span className="text-xs font-medium text-dim">{formatEstimate(item.estimate_minutes)}</span>
-                )}
-                {item.deadline && (
-                  <span className={`text-xs font-medium ${new Date(item.deadline) < new Date() ? 'text-accent' : 'text-dim'}`}>
-                    {formatDeadline(item.deadline)}
-                  </span>
-                )}
-              </div>
-              <AgeBar createdAt={item.created_at} />
+              {item.deadline && (
+                <span className={`text-xs font-medium ${new Date(item.deadline) < new Date() ? 'text-accent' : 'text-dim'}`}>
+                  {formatDeadline(item.deadline)}
+                </span>
+              )}
             </div>
-            <div className="flex items-center gap-0.5 shrink-0 mt-0.5">
-              <button
-                onClick={handleDone}
-                title="Mark done"
-                className={`w-6 h-6 flex items-center justify-center rounded transition-colors text-sm leading-none ${done ? 'text-green-500' : 'text-ghost hover:text-green-500 hover:bg-green-500/10'}`}
-              >
-                ✓
-              </button>
-              <button
-                onClick={(e) => { e.stopPropagation(); onArchive() }}
-                className="w-6 h-6 flex items-center justify-center rounded text-ghost hover:text-accent hover:bg-accent/10 transition-colors text-base leading-none"
-              >
-                ×
-              </button>
-            </div>
+            <AgeBar createdAt={item.created_at} />
           </div>
           <AnimatePresence initial={false}>
             {expanded && (
@@ -372,6 +355,25 @@ function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchiv
             )}
           </AnimatePresence>
         </div>
+        {/* Full-height action columns */}
+        <button
+          onClick={handleDone}
+          title="Mark done"
+          className={`w-8 shrink-0 flex items-center justify-center border-l transition-colors text-sm font-bold ${
+            done
+              ? 'border-green-500/30 bg-green-500/20 text-green-500'
+              : 'border-line/20 bg-green-500/5 text-green-500/40 hover:bg-green-500/15 hover:text-green-500'
+          }`}
+        >
+          ✓
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onArchive() }}
+          title="Dismiss"
+          className="w-8 shrink-0 flex items-center justify-center border-l border-line/20 bg-accent/5 text-accent/30 hover:bg-accent/15 hover:text-accent transition-colors text-base font-bold"
+        >
+          ×
+        </button>
       </div>
     </div>
   )
