@@ -21,6 +21,7 @@ import { ProjectsView } from './views/ProjectsView'
 import { DashboardView } from './views/DashboardView'
 import { AccountView } from './views/AccountView'
 import { formatEstimate } from './hooks/useFormat'
+import { useRealtime } from './hooks/useRealtime'
 import type { NavEntry } from './types'
 
 const NAV_VIEWS: NavEntry[] = [
@@ -43,6 +44,7 @@ function AppShell() {
   const [mobileQueueOpen, setMobileQueueOpen] = useState(false)
   const { isEnabled } = useFlags()
   const queueEnabled = isEnabled('queue')
+  useRealtime(isEnabled('realtime'))
   const location = useLocation()
   const navigate = useNavigate()
 

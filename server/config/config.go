@@ -20,16 +20,23 @@ type Config struct {
 	GoogleAppClientIDs []string `envconfig:"GOOGLE_MOBILE_CLIENT_IDS"`
 	// AllowedOrigins is a comma-separated list of allowed frontend origins for CORS and post-auth redirect.
 	AllowedOrigins string `envconfig:"ALLOWED_ORIGINS"`
-	Env            string `envconfig:"ENV" default:"development"`
-	AuthDisabled   bool   `envconfig:"AUTH_DISABLED" default:"false"`
-	FeatureFlags   string `envconfig:"FEATURE_FLAGS"`
+	Env          string `envconfig:"ENV" default:"development"`
+	AuthDisabled bool   `envconfig:"AUTH_DISABLED" default:"false"`
+
+	// Inverted feature flags — features are ON by default.
+	// Set the env var to true to disable the feature (kill switch pattern).
+	QueueDisabled    bool `envconfig:"QUEUE_DISABLED" default:"false"`
+	RealtimeDisabled bool `envconfig:"REALTIME_DISABLED" default:"false"`
 }
 
+// IsFeatureEnabled returns true when the feature is not disabled.
+// Features ship enabled; set FEATURE_DISABLED=true in Railway to kill them.
 func (c Config) IsFeatureEnabled(flag string) bool {
-	for _, f := range strings.Split(c.FeatureFlags, ",") {
-		if strings.TrimSpace(f) == flag {
-			return true
-		}
+	switch flag {
+	case "queue":
+		return !c.QueueDisabled
+	case "realtime":
+		return !c.RealtimeDisabled
 	}
 	return false
 }
