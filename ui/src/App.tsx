@@ -15,6 +15,7 @@ import { AuthErrorPage } from './components/AuthErrorPage'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { BoardView } from './views/BoardView'
 import { ItemsView } from './views/ItemsView'
+import { SprintsView } from './views/SprintsView'
 import { EpicsView } from './views/EpicsView'
 import { ProjectsView } from './views/ProjectsView'
 import { DashboardView } from './views/DashboardView'
@@ -26,6 +27,7 @@ import type { NavEntry } from './types'
 const NAV_VIEWS: NavEntry[] = [
   { id: 'board',      path: '/',          label: 'Board',      icon: '▦' },
   { id: 'items',      path: '/items',     label: 'Items',      icon: '⊞' },
+  { id: 'sprints',    path: '/sprints',   label: 'Sprints',    icon: '↺' },
   { id: 'epics',      path: '/epics',     label: 'Epics',      icon: '◎' },
   { id: 'projects',   path: '/projects',  label: 'Projects',   icon: '▣' },
   { id: 'dashboards', path: '/dashboards',label: 'Dashboards', icon: '◩' },
@@ -118,6 +120,7 @@ function AppShell() {
                 <Route path="/" element={<BoardView />} />
                 <Route path="/items" element={<ItemsView />} />
                 <Route path="/backlog" element={<Navigate to="/items" replace />} />
+                <Route path="/sprints" element={<SprintsView />} />
                 <Route path="/epics" element={<EpicsView />} />
                 <Route path="/projects" element={<ProjectsView />} />
                 <Route path="/dashboards" element={<DashboardView />} />

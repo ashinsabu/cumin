@@ -39,10 +39,15 @@ export type Item = {
 
 export type Sprint = {
   id: string
+  board_id: string
   name: string
+  sprint_number: number
   start_date: string
   end_date: string
   state: 'planning' | 'active' | 'completed'
+  created_at: string
+  days_total: number
+  days_remaining: number
 }
 
 export type Board = {
