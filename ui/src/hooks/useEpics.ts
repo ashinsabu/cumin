@@ -5,7 +5,6 @@ import type { Epic } from '../types'
 
 export const epicKeys = {
   all: ['epics'] as const,
-  list: () => [...epicKeys.all, 'list'] as const,
 }
 
 export function useEpics() {
@@ -40,11 +39,7 @@ export function useUpdateEpic() {
 export function useDeleteEpic() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: string) =>
-      fetch(`${import.meta.env.VITE_API_URL ?? ''}/api/epics/${id}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      }),
+    mutationFn: (id: string) => apiFetch(`/api/epics/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: epicKeys.all })
       qc.invalidateQueries({ queryKey: itemKeys.all })

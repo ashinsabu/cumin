@@ -5,7 +5,6 @@ import type { Project } from '../types'
 
 export const projectKeys = {
   all: ['projects'] as const,
-  list: () => [...projectKeys.all, 'list'] as const,
 }
 
 export function useProjects() {
@@ -40,11 +39,7 @@ export function useUpdateProject() {
 export function useDeleteProject() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: string) =>
-      fetch(`${import.meta.env.VITE_API_URL ?? ''}/api/projects/${id}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      }),
+    mutationFn: (id: string) => apiFetch(`/api/projects/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: projectKeys.all })
       qc.invalidateQueries({ queryKey: itemKeys.all })

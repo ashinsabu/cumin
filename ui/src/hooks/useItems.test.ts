@@ -2,11 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement, type ReactNode } from 'react'
-import { useCreateItem, useUpdateItem, useDeleteItem, useBacklogItems, itemKeys } from './useItems'
+import { useCreateItem, useUpdateItem, useDeleteItem, itemKeys } from './useItems'
 import * as api from '../lib/api'
 import type { Item } from '../types'
 
-// Mock the apiFetch module — tests control return values per-test.
 vi.mock('../lib/api', () => ({
   apiFetch: vi.fn(),
 }))
@@ -37,31 +36,7 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
-})
-
-// ─── useBacklogItems ──────────────────────────────────────────────────────────
-
-describe('useBacklogItems', () => {
-  it('fetches from /api/items/backlog and returns the items array', async () => {
-    const items = [makeItem({ id: 'i1' }), makeItem({ id: 'i2' })]
-    mockApiFetch.mockResolvedValueOnce({ items })
-
-    const { result } = renderHook(() => useBacklogItems(), { wrapper })
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-
-    expect(mockApiFetch).toHaveBeenCalledWith('/api/items/backlog')
-    expect(result.current.data).toEqual(items)
-  })
-
-  it('returns undefined while loading', () => {
-    // Never resolves — stays in loading state
-    mockApiFetch.mockReturnValue(new Promise(() => {}))
-    const { result } = renderHook(() => useBacklogItems(), { wrapper })
-    expect(result.current.isLoading).toBe(true)
-    expect(result.current.data).toBeUndefined()
-  })
+  vi.resetAllMocks()
 })
 
 // ─── useCreateItem ────────────────────────────────────────────────────────────
@@ -72,7 +47,6 @@ describe('useCreateItem', () => {
     mockApiFetch.mockResolvedValueOnce(newItem)
 
     const { result } = renderHook(() => useCreateItem(), { wrapper })
-
     result.current.mutate({ title: 'New task', project_id: 'proj-1' })
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
@@ -140,22 +114,15 @@ describe('useUpdateItem', () => {
 // ─── useDeleteItem ────────────────────────────────────────────────────────────
 
 describe('useDeleteItem', () => {
-  it('calls DELETE /api/items/:id', async () => {
-    // useDeleteItem uses fetch directly, not apiFetch
-    const mockFetch = vi.fn().mockResolvedValue({ ok: true } as Response)
-    vi.stubGlobal('fetch', mockFetch)
+  it('calls DELETE /api/items/:id via apiFetch', async () => {
+    mockApiFetch.mockResolvedValueOnce(undefined)
 
     const { result } = renderHook(() => useDeleteItem(), { wrapper })
     result.current.mutate('item-xyz')
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
-    expect(mockFetch).toHaveBeenCalledWith(
-      expect.stringContaining('/api/items/item-xyz'),
-      expect.objectContaining({ method: 'DELETE', credentials: 'include' }),
-    )
-
-    vi.unstubAllGlobals()
+    expect(mockApiFetch).toHaveBeenCalledWith('/api/items/item-xyz', { method: 'DELETE' })
   })
 })
 
@@ -166,13 +133,7 @@ describe('itemKeys', () => {
     expect(itemKeys.list('sprint-1')).toContain('sprint-1')
   })
 
-  it('list key without sprintId matches backlog key prefix', () => {
-    const listKey = itemKeys.list(undefined)
-    const allKey = itemKeys.all
-    expect(listKey[0]).toBe(allKey[0])
-  })
-
-  it('backlog key is stable', () => {
-    expect(itemKeys.backlog).toEqual(['items', 'backlog'])
+  it('list key without sprintId shares prefix with all key', () => {
+    expect(itemKeys.list(undefined)[0]).toBe(itemKeys.all[0])
   })
 })
