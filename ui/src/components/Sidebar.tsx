@@ -12,7 +12,7 @@ type SidebarProps = {
 }
 
 const NAV_GROUPS = [
-  { label: null,       ids: ['board', 'items'] },
+  { label: null,       ids: ['board', 'items', 'sprints'] },
   { label: 'Organize', ids: ['epics', 'projects'] },
   { label: 'Insights', ids: ['dashboards'] },
 ]

@@ -3,9 +3,12 @@ package views
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+var errNotFound = errors.New("view not found")
 
 type Store struct {
 	DB *pgxpool.Pool

@@ -10,9 +10,6 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-
-var errNotFound = errors.New("view not found")
-
 type Handler struct {
 	store      *Store
 	boardStore *board.Store

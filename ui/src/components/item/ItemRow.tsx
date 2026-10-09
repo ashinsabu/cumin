@@ -1,6 +1,6 @@
 /**
  * ItemRow — a compact, reusable item row for table/list views.
- * Used by: EpicModal, BacklogView, AllItemsView, SprintView (future).
+ * Used by: EpicModal. Also suitable for ItemsView and SprintsView table rows.
  *
  * All interactive badges (status, priority) are self-contained — they call
  * context directly, so the parent just needs to provide `item` and `onSelect`.

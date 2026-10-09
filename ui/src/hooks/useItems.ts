@@ -5,7 +5,6 @@ import type { Item } from '../types'
 export const itemKeys = {
   all: ['items'] as const,
   list: (sprintId?: string) => ['items', sprintId] as const,
-  backlog: ['items', 'backlog'] as const,
 }
 
 export function useItems(sprintId?: string) {
@@ -15,13 +14,6 @@ export function useItems(sprintId?: string) {
       apiFetch<{ items: Item[] }>(sprintId ? `/api/items?sprint_id=${sprintId}` : '/api/items').then(
         (d) => d.items,
       ),
-  })
-}
-
-export function useBacklogItems() {
-  return useQuery({
-    queryKey: itemKeys.backlog,
-    queryFn: () => apiFetch<{ items: Item[] }>('/api/items/backlog').then((d) => d.items),
   })
 }
 
@@ -92,11 +84,7 @@ export function useMoveItem() {
 export function useDeleteItem() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (id: string) =>
-      fetch(`${import.meta.env.VITE_API_URL ?? ''}/api/items/${id}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      }),
+    mutationFn: (id: string) => apiFetch(`/api/items/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: itemKeys.all })
     },

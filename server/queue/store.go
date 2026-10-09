@@ -30,7 +30,9 @@ type Store struct {
 	DB *pgxpool.Pool
 }
 
-func urgencyScore(title string, createdAt time.Time, deadline *time.Time, priority int) float64 {
+// UrgencyScore computes the sort weight for a queue item.
+// The frontend mirrors this in QueueContext.computeUrgencyScore — keep them in sync.
+func UrgencyScore(title string, createdAt time.Time, deadline *time.Time, priority int) float64 {
 	ageScore := math.Min(time.Since(createdAt).Hours()/24.0, 10.0)
 
 	deadlineScore := 0.0
@@ -73,7 +75,7 @@ func (s *Store) List(ctx context.Context, boardID string) ([]QueueItem, error) {
 		if err := rows.Scan(&q.ID, &q.BoardID, &q.CreatedBy, &q.Title, &q.Notes, &q.Deadline, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CompletedAt, &q.CreatedAt); err != nil {
 			return nil, err
 		}
-		q.UrgencyScore = urgencyScore(q.Title, q.CreatedAt, q.Deadline, q.Priority)
+		q.UrgencyScore = UrgencyScore(q.Title, q.CreatedAt, q.Deadline, q.Priority)
 		out = append(out, q)
 	}
 
@@ -95,7 +97,7 @@ func (s *Store) Create(ctx context.Context, boardID, createdBy, title, notes str
 	if err != nil {
 		return nil, err
 	}
-	q.UrgencyScore = urgencyScore(q.Title, q.CreatedAt, q.Deadline, q.Priority)
+	q.UrgencyScore = UrgencyScore(q.Title, q.CreatedAt, q.Deadline, q.Priority)
 	return &q, nil
 }
 
@@ -110,7 +112,7 @@ func (s *Store) Update(ctx context.Context, id, boardID, title, notes string, de
 	if err != nil {
 		return nil, err
 	}
-	q.UrgencyScore = urgencyScore(q.Title, q.CreatedAt, q.Deadline, q.Priority)
+	q.UrgencyScore = UrgencyScore(q.Title, q.CreatedAt, q.Deadline, q.Priority)
 	return &q, nil
 }
 
@@ -125,7 +127,7 @@ func (s *Store) Revive(ctx context.Context, id, boardID string) (*QueueItem, err
 	if err != nil {
 		return nil, err
 	}
-	q.UrgencyScore = urgencyScore(q.Title, q.CreatedAt, q.Deadline, q.Priority)
+	q.UrgencyScore = UrgencyScore(q.Title, q.CreatedAt, q.Deadline, q.Priority)
 	return &q, nil
 }
 
@@ -139,7 +141,7 @@ func (s *Store) Complete(ctx context.Context, id, boardID string) (*QueueItem, e
 	if err != nil {
 		return nil, err
 	}
-	q.UrgencyScore = urgencyScore(q.Title, q.CreatedAt, q.Deadline, q.Priority)
+	q.UrgencyScore = UrgencyScore(q.Title, q.CreatedAt, q.Deadline, q.Priority)
 	return &q, nil
 }
 
