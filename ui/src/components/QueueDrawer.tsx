@@ -496,17 +496,14 @@ function StaleSection({ items }: { items: QueueItem[] }) {
 
 // ─── New item form ─────────────────────────────────────────────────────────────
 
-function NewItemForm({ onCreate, onDiscard }: { onCreate: (t: string, p: number, e: string) => Promise<void>; onDiscard: () => void }) {
+function NewItemForm({ onCreate, onDiscard }: { onCreate: (t: string, p: number, e: string) => void; onDiscard: () => void }) {
   const [title, setTitle] = useState('')
   const [priority, setPriority] = useState(2)
   const [estimate, setEstimate] = useState('')
-  const [saving, setSaving] = useState(false)
 
-  const submit = async () => {
-    if (!title.trim() || saving) return
-    setSaving(true)
-    try { await onCreate(title.trim(), priority, estimate) }
-    catch { setSaving(false) }
+  const submit = () => {
+    if (!title.trim()) return
+    onCreate(title.trim(), priority, estimate)
   }
 
   return (
@@ -561,9 +558,9 @@ function NewItemForm({ onCreate, onDiscard }: { onCreate: (t: string, p: number,
             <button onClick={onDiscard} className="text-sm px-3 py-1.5 rounded-[var(--c-radius-card)] border border-line text-dim hover:bg-surface">
               Cancel
             </button>
-            <button onClick={submit} disabled={!title.trim() || saving}
+            <button onClick={submit} disabled={!title.trim()}
               className="flex-1 text-sm py-1.5 rounded-[var(--c-radius-card)] bg-accent text-white hover:bg-accent/80 disabled:opacity-50 font-medium">
-              {saving ? '...' : 'Add to queue'}
+              Add to queue
             </button>
           </div>
         </div>
@@ -613,10 +610,10 @@ function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: Qu
   const sortedActive = sortItems(activeItems, sortAlgo)
   const urgentCount = activeItems.filter((i) => i.urgency_score > 9).length
 
-  const handleAddNew = async (title: string, priority: number, estimate: string) => {
+  const handleAddNew = (title: string, priority: number, estimate: string) => {
     const estimateMinutes = estimate ? parseEstimate(estimate) : null
-    await createItem({ title, priority, estimate_minutes: estimateMinutes })
     setShowNew(false)
+    createItem({ title, priority, estimate_minutes: estimateMinutes })
   }
 
   const handleDrop = useCallback((targetId: string) => {

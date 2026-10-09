@@ -4,6 +4,21 @@ import { useToast } from './ToastContext'
 
 const API = import.meta.env.VITE_API_URL ?? ''
 
+// Mirrors server/queue/store.go urgencyScore — keeps optimistic items sorted correctly.
+function computeUrgencyScore(title: string, priority: number, deadline: string | null | undefined): number {
+  let deadlineScore = 0
+  if (deadline) {
+    const daysUntil = (new Date(deadline).getTime() - Date.now()) / 86_400_000
+    deadlineScore = Math.max(0, 10 - daysUntil * 2)
+  }
+  let kwScore = 0
+  const lower = title.toLowerCase()
+  for (const kw of ['bug', 'prod', 'blocker', 'critical']) {
+    if (lower.includes(kw)) kwScore += 2
+  }
+  return deadlineScore + kwScore + (4 - priority) * 2
+}
+
 type CreatePayload = {
   title: string
   notes?: string
@@ -59,16 +74,41 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   useEffect(() => { fetchItems() }, [fetchItems])
 
   const createItem = useCallback(async (payload: CreatePayload): Promise<QueueItem> => {
-    const res = await fetch(`${API}/api/queue`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ priority: 2, ...payload }),
-    })
-    if (!res.ok) throw new Error('Failed to create queue item')
-    const item: QueueItem = await res.json()
-    setItems((prev) => [...prev, item].sort((a, b) => b.urgency_score - a.urgency_score))
-    return item
+    const tempId = crypto.randomUUID()
+    const now = new Date().toISOString()
+    const priority = payload.priority ?? 2
+    const tempItem: QueueItem = {
+      id: tempId,
+      board_id: '',
+      created_by: '',
+      title: payload.title,
+      notes: payload.notes ?? '',
+      deadline: payload.deadline ?? null,
+      priority,
+      estimate_minutes: payload.estimate_minutes ?? null,
+      position: 999,
+      urgency_score: computeUrgencyScore(payload.title, priority, payload.deadline),
+      promoted_item_id: null,
+      completed_at: null,
+      created_at: now,
+    }
+    setItems((prev) => [...prev, tempItem].sort((a, b) => b.urgency_score - a.urgency_score))
+
+    try {
+      const res = await fetch(`${API}/api/queue`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ priority: 2, ...payload }),
+      })
+      if (!res.ok) throw new Error('Failed to create queue item')
+      const item: QueueItem = await res.json()
+      setItems((prev) => prev.map((i) => i.id === tempId ? item : i).sort((a, b) => b.urgency_score - a.urgency_score))
+      return item
+    } catch (e) {
+      setItems((prev) => prev.filter((i) => i.id !== tempId))
+      throw e
+    }
   }, [])
 
   const updateItem = useCallback(async (id: string, payload: UpdatePayload): Promise<void> => {
