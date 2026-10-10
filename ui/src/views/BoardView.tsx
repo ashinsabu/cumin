@@ -3,6 +3,7 @@ import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-p
 import { useBoard } from '../context/BoardContext'
 import { useItems, useMoveItem } from '../hooks/useItems'
 import { useBoardStatuses } from '../hooks/useBoardQueries'
+import { useSelectedProject } from '../hooks/useSelectedProject'
 import { ItemCard } from '../components/ItemCard'
 import type { Status } from '../types'
 
@@ -22,7 +23,8 @@ function columnTint(status: Status, middleIdx: number): string {
 
 export function BoardView() {
   const { selectItem } = useBoard()
-  const { data: items = [] } = useItems()
+  const [selectedProject] = useSelectedProject()
+  const { data: items = [] } = useItems({ projectId: selectedProject?.id })
   const { data: statuses = [] } = useBoardStatuses()
   const moveItem = useMoveItem()
 

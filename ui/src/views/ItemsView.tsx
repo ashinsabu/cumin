@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useBoard } from '../context/BoardContext'
 import { useItems } from '../hooks/useItems'
@@ -6,6 +6,7 @@ import { useEpics } from '../hooks/useEpics'
 import { useProjects } from '../hooks/useProjects'
 import { useBoardStatuses } from '../hooks/useBoardQueries'
 import { usePersistentState } from '../hooks/usePersistentState'
+import { useSelectedProject } from '../hooks/useSelectedProject'
 import { useCreateView, type ViewFilters } from '../hooks/useSavedViews'
 import { PRIORITY } from '../constants'
 import { formatEstimate } from '../hooks/useFormat'
@@ -85,6 +86,15 @@ function SaveViewModal({ filters, onClose }: { filters: ViewFilters; onClose: ()
 export function ItemsView() {
   const { selectItem } = useBoard()
   const [searchParams, setSearchParams] = useSearchParams()
+  const [selectedProject] = useSelectedProject()
+
+  // Pre-seed project filter from selected project on first mount (no saved view, no existing param)
+  useEffect(() => {
+    if (selectedProject && !searchParams.get('project_id') && !searchParams.get('view')) {
+      setSearchParams((p) => { p.set('project_id', selectedProject.id); return p }, { replace: true })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProject?.id])
 
   // Filters live in URL params so links are shareable and sidebar can load them.
   const projectFilter = searchParams.get('project_id') ?? 'all'
@@ -129,7 +139,9 @@ export function ItemsView() {
     }, { replace: true })
   }, [setSearchParams])
 
-  const { data: items = [] } = useItems()
+  const { data: items = [] } = useItems({
+    projectId: projectFilter !== 'all' ? projectFilter : undefined,
+  })
   const { data: statuses = [] } = useBoardStatuses()
   const { data: epicList = [] } = useEpics()
   const { data: projectList = [] } = useProjects()

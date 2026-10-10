@@ -79,7 +79,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     const priority = payload.priority ?? 2
     const tempItem: QueueItem = {
       id: tempId,
-      board_id: '',
+      user_id: '',
       created_by: '',
       title: payload.title,
       notes: payload.notes ?? '',
