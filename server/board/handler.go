@@ -147,7 +147,7 @@ func (h *Handler) CreateStatus(ctx context.Context, req CreateStatusRequest) (*S
 		return nil, api.BadRequest("name required")
 	}
 
-	st, err := h.store.CreateStatus(ctx, b.ID, req.Name, req.Position, req.IsInitial, req.IsDone)
+	st, err := h.store.CreateStatus(ctx, b.ID, b.UserID, req.Name, req.Position, req.IsInitial, req.IsDone)
 	if err != nil {
 		return nil, api.Internal("create status failed")
 	}

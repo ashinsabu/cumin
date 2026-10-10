@@ -90,10 +90,10 @@ func (p *Provisioner) ProvisionNewUser(ctx context.Context, userID, name string)
 	for _, s := range statuses {
 		var sid string
 		if err := tx.QueryRow(ctx, `
-			INSERT INTO statuses (board_id, name, position, is_initial, is_done)
-			VALUES ($1, $2, $3, $4, $5)
+			INSERT INTO statuses (board_id, user_id, name, position, is_initial, is_done)
+			VALUES ($1, $2, $3, $4, $5, $6)
 			RETURNING id
-		`, boardID, s.name, s.position, s.isInitial, s.isDone).Scan(&sid); err != nil {
+		`, boardID, userID, s.name, s.position, s.isInitial, s.isDone).Scan(&sid); err != nil {
 			return fmt.Errorf("create status %s: %w", s.name, err)
 		}
 		if s.isInitial {
