@@ -94,13 +94,13 @@ func (s *Store) ListStatuses(ctx context.Context, boardID string) ([]Status, err
 	return out, nil
 }
 
-func (s *Store) CreateStatus(ctx context.Context, boardID, name string, position int, isInitial, isDone bool) (*Status, error) {
+func (s *Store) CreateStatus(ctx context.Context, boardID, userID, name string, position int, isInitial, isDone bool) (*Status, error) {
 	var st Status
 	err := s.DB.QueryRow(ctx, `
-		INSERT INTO statuses (board_id, name, position, is_initial, is_done)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO statuses (board_id, user_id, name, position, is_initial, is_done)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, board_id, name, position, is_initial, is_done, created_at
-	`, boardID, name, position, isInitial, isDone).Scan(&st.ID, &st.BoardID, &st.Name, &st.Position, &st.IsInitial, &st.IsDone, &st.CreatedAt)
+	`, boardID, userID, name, position, isInitial, isDone).Scan(&st.ID, &st.BoardID, &st.Name, &st.Position, &st.IsInitial, &st.IsDone, &st.CreatedAt)
 	if err != nil {
 		return nil, err
 	}

@@ -57,7 +57,7 @@ const itemEnrichedCols = itemAliasedCols + `,
 
 const itemLateralJoin = `LEFT JOIN LATERAL (
 	SELECT transitioned_at FROM status_transitions
-	WHERE item_id = i.id ORDER BY transitioned_at DESC LIMIT 1
+	WHERE item_id = i.id AND to_status_id = i.status_id ORDER BY transitioned_at DESC LIMIT 1
 ) t ON true`
 
 func scanItemEnriched(row interface{ Scan(...any) error }) (*Item, error) {
