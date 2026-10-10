@@ -114,24 +114,35 @@ func (s *Store) GetByID(ctx context.Context, id string) (*Sprint, error) {
 		`SELECT `+sprintCols+` FROM sprints WHERE id = $1`, id))
 }
 
-// CreateNext atomically increments the project's sprint_seq, then inserts a new planning sprint.
+// CreateNext atomically increments the project's sprint_seq and inserts a new planning sprint.
+// Both writes are inside a single transaction — a failed INSERT rolls back the seq increment.
 // boardID is kept until Phase 3 drops the column from sprints.
 func (s *Store) CreateNext(ctx context.Context, boardID, projectID string, startDate time.Time, cadenceDays int) (*Sprint, error) {
 	endDate := startDate.AddDate(0, 0, cadenceDays-1)
 
+	tx, err := s.DB.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
 	var seq int
-	if err := s.DB.QueryRow(ctx,
+	if err := tx.QueryRow(ctx,
 		`UPDATE projects SET sprint_seq = sprint_seq + 1 WHERE id = $1 RETURNING sprint_seq`, projectID,
 	).Scan(&seq); err != nil {
 		return nil, fmt.Errorf("increment sprint_seq: %w", err)
 	}
 
 	name := ComputeName(seq, startDate, endDate)
-	return scanSprint(s.DB.QueryRow(ctx, `
+	sp, err := scanSprint(tx.QueryRow(ctx, `
 		INSERT INTO sprints (board_id, project_id, name, sprint_number, start_date, end_date, state)
 		VALUES ($1, $2, $3, $4, $5, $6, 'planning')
 		RETURNING `+sprintCols,
 		boardID, projectID, name, seq, startDate, endDate))
+	if err != nil {
+		return nil, err
+	}
+	return sp, tx.Commit(ctx)
 }
 
 // Activate transitions planning → active.

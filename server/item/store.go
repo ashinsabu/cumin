@@ -295,11 +295,11 @@ func (s *Store) SoftDelete(ctx context.Context, id string) error {
 	return err
 }
 
-// EpicBelongsToUser checks that the given epic is owned by the given user.
+// EpicBelongsToUser checks that the given epic is owned by the user and not soft-deleted.
 func (s *Store) EpicBelongsToUser(ctx context.Context, epicID, userID string) (bool, error) {
 	var exists bool
 	err := s.DB.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM epics WHERE id = $1 AND user_id = $2)`, epicID, userID,
+		`SELECT EXISTS(SELECT 1 FROM epics WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL)`, epicID, userID,
 	).Scan(&exists)
 	return exists, err
 }

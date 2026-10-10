@@ -30,7 +30,6 @@ type TrashProject struct {
 	Color     string    `json:"color"`
 	DeletedAt time.Time `json:"deleted_at"`
 	ItemCount int64     `json:"item_count"`
-	EpicCount int64     `json:"epic_count"`
 }
 
 type Store struct {
@@ -198,11 +197,9 @@ func IsPrefixConflict(err error) (string, bool) {
 func (s *Store) ListTrash(ctx context.Context, userID string) ([]TrashProject, error) {
 	rows, err := s.DB.Query(ctx, `
 		SELECT p.id, p.name, p.prefix, p.color, p.deleted_at,
-		       COUNT(DISTINCT i.id) AS item_count,
-		       COUNT(DISTINCT e.id) AS epic_count
+		       COUNT(DISTINCT i.id) AS item_count
 		FROM projects p
 		LEFT JOIN items i ON i.project_id = p.id AND i.deleted_at IS NOT NULL
-		LEFT JOIN epics e ON e.user_id = p.user_id AND e.deleted_at IS NOT NULL
 		WHERE p.user_id = $1 AND p.deleted_at IS NOT NULL
 		GROUP BY p.id, p.name, p.prefix, p.color, p.deleted_at
 		ORDER BY p.deleted_at DESC
@@ -215,7 +212,7 @@ func (s *Store) ListTrash(ctx context.Context, userID string) ([]TrashProject, e
 	var out []TrashProject
 	for rows.Next() {
 		var t TrashProject
-		if err := rows.Scan(&t.ID, &t.Name, &t.Prefix, &t.Color, &t.DeletedAt, &t.ItemCount, &t.EpicCount); err != nil {
+		if err := rows.Scan(&t.ID, &t.Name, &t.Prefix, &t.Color, &t.DeletedAt, &t.ItemCount); err != nil {
 			return nil, err
 		}
 		out = append(out, t)
@@ -249,14 +246,4 @@ func (s *Store) EmptyTrash(ctx context.Context, userID string) error {
 	return tx.Commit(ctx)
 }
 
-// NextSeq atomically increments and returns the next item sequence for this project.
-func (s *Store) NextSeq(ctx context.Context, projectID string) (int64, string, error) {
-	var seq int64
-	var prefix string
-	err := s.DB.QueryRow(ctx, `
-		UPDATE projects SET item_seq = item_seq + 1
-		WHERE id = $1
-		RETURNING item_seq, prefix
-	`, projectID).Scan(&seq, &prefix)
-	return seq, prefix, err
-}
+
