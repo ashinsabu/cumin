@@ -14,13 +14,13 @@ type Store struct {
 	DB *pgxpool.Pool
 }
 
-func (s *Store) List(ctx context.Context, boardID string) ([]SavedView, error) {
+func (s *Store) List(ctx context.Context, userID string) ([]SavedView, error) {
 	rows, err := s.DB.Query(ctx, `
-		SELECT id, board_id, name, filters, position, created_at
+		SELECT id, user_id, name, filters, position, created_at
 		FROM saved_views
-		WHERE board_id = $1
+		WHERE user_id = $1
 		ORDER BY position, created_at
-	`, boardID)
+	`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -29,7 +29,7 @@ func (s *Store) List(ctx context.Context, boardID string) ([]SavedView, error) {
 	var out []SavedView
 	for rows.Next() {
 		var v SavedView
-		if err := rows.Scan(&v.ID, &v.BoardID, &v.Name, &v.Filters, &v.Position, &v.CreatedAt); err != nil {
+		if err := rows.Scan(&v.ID, &v.UserID, &v.Name, &v.Filters, &v.Position, &v.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, v)
@@ -37,22 +37,21 @@ func (s *Store) List(ctx context.Context, boardID string) ([]SavedView, error) {
 	return out, nil
 }
 
-func (s *Store) Create(ctx context.Context, boardID, name string, filters json.RawMessage) (*SavedView, error) {
-	// Position = current max + 1 so new views append at the bottom.
+func (s *Store) Create(ctx context.Context, boardID, userID, name string, filters json.RawMessage) (*SavedView, error) {
 	var v SavedView
 	err := s.DB.QueryRow(ctx, `
-		INSERT INTO saved_views (board_id, name, filters, position)
-		VALUES ($1, $2, $3, COALESCE((SELECT MAX(position)+1 FROM saved_views WHERE board_id = $1), 0))
-		RETURNING id, board_id, name, filters, position, created_at
-	`, boardID, name, filters).Scan(&v.ID, &v.BoardID, &v.Name, &v.Filters, &v.Position, &v.CreatedAt)
+		INSERT INTO saved_views (board_id, user_id, name, filters, position)
+		VALUES ($1, $2, $3, $4, COALESCE((SELECT MAX(position)+1 FROM saved_views WHERE user_id = $2), 0))
+		RETURNING id, user_id, name, filters, position, created_at
+	`, boardID, userID, name, filters).Scan(&v.ID, &v.UserID, &v.Name, &v.Filters, &v.Position, &v.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
 	return &v, nil
 }
 
-func (s *Store) Delete(ctx context.Context, id, boardID string) error {
-	tag, err := s.DB.Exec(ctx, `DELETE FROM saved_views WHERE id = $1 AND board_id = $2`, id, boardID)
+func (s *Store) Delete(ctx context.Context, id, userID string) error {
+	tag, err := s.DB.Exec(ctx, `DELETE FROM saved_views WHERE id = $1 AND user_id = $2`, id, userID)
 	if err != nil {
 		return err
 	}

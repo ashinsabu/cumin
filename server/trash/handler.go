@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/ashinsabu/cumin/server/api"
-	"github.com/ashinsabu/cumin/server/board"
+	"github.com/ashinsabu/cumin/server/auth"
 	"github.com/ashinsabu/cumin/server/epic"
 	"github.com/ashinsabu/cumin/server/project"
 	"github.com/go-chi/chi/v5"
@@ -18,11 +18,10 @@ type TrashResponse struct {
 type Handler struct {
 	projectStore *project.Store
 	epicStore    *epic.Store
-	boardStore   *board.Store
 }
 
-func NewHandler(projectStore *project.Store, epicStore *epic.Store, boardStore *board.Store) *Handler {
-	return &Handler{projectStore: projectStore, epicStore: epicStore, boardStore: boardStore}
+func NewHandler(projectStore *project.Store, epicStore *epic.Store) *Handler {
+	return &Handler{projectStore: projectStore, epicStore: epicStore}
 }
 
 func (h *Handler) Routes(r chi.Router) {
@@ -30,22 +29,10 @@ func (h *Handler) Routes(r chi.Router) {
 	r.Delete("/api/trash", api.HandleDelete(h.Empty))
 }
 
-// List returns all soft-deleted projects and epics in the board's trash.
-//
-// @Summary      List trash
-// @Tags         trash
-// @Produce      json
-// @Success      200  {object}  trash.TrashResponse
-// @Failure      404  {object}  api.ErrorResponse
-// @Security     CookieAuth
-// @Router       /api/trash [get]
 func (h *Handler) List(ctx context.Context) (*TrashResponse, error) {
-	b, err := board.GetOrFetch(ctx, h.boardStore)
-	if err != nil {
-		return nil, api.NotFound("board not found")
-	}
+	userID := auth.UserIDFromContext(ctx)
 
-	projects, err := h.projectStore.ListTrash(ctx, b.ID)
+	projects, err := h.projectStore.ListTrash(ctx, userID)
 	if err != nil {
 		return nil, api.Internal("failed to list trash")
 	}
@@ -53,7 +40,7 @@ func (h *Handler) List(ctx context.Context) (*TrashResponse, error) {
 		projects = []project.TrashProject{}
 	}
 
-	epics, err := h.epicStore.ListTrashEpics(ctx, b.ID)
+	epics, err := h.epicStore.ListTrashEpics(ctx, userID)
 	if err != nil {
 		return nil, api.Internal("failed to list trash")
 	}
@@ -64,21 +51,10 @@ func (h *Handler) List(ctx context.Context) (*TrashResponse, error) {
 	return &TrashResponse{Projects: projects, Epics: epics}, nil
 }
 
-// Empty permanently deletes all items in the board's trash.
-//
-// @Summary      Empty trash
-// @Tags         trash
-// @Success      204  "No Content"
-// @Failure      404  {object}  api.ErrorResponse
-// @Security     CookieAuth
-// @Router       /api/trash [delete]
 func (h *Handler) Empty(ctx context.Context) error {
-	b, err := board.GetOrFetch(ctx, h.boardStore)
-	if err != nil {
-		return api.NotFound("board not found")
-	}
+	userID := auth.UserIDFromContext(ctx)
 
-	if err := h.projectStore.EmptyTrash(ctx, b.ID); err != nil {
+	if err := h.projectStore.EmptyTrash(ctx, userID); err != nil {
 		return api.Internal("failed to empty trash")
 	}
 	return nil

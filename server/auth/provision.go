@@ -59,7 +59,6 @@ func (p *Provisioner) ProvisionNewUser(ctx context.Context, userID, name string)
 	defer tx.Rollback(ctx)
 
 	// RACE-001 fix: ON CONFLICT (user_id) DO NOTHING + RETURNING id
-	// If the conflict fires (concurrent provision already ran), RETURNING yields no rows → pgx.ErrNoRows.
 	var boardID string
 	err = tx.QueryRow(ctx, `
 		INSERT INTO boards (user_id, name)
@@ -106,21 +105,20 @@ func (p *Provisioner) ProvisionNewUser(ctx context.Context, userID, name string)
 	projPrefix := defaultProjectPrefix(name)
 	var projectID string
 	if err := tx.QueryRow(ctx, `
-		INSERT INTO projects (board_id, name, prefix, color, description)
-		VALUES ($1, $2, $3, '#6366f1', 'Default project')
+		INSERT INTO projects (board_id, user_id, name, prefix, color, description, sprint_seq)
+		VALUES ($1, $2, $3, $4, '#6366f1', 'Default project', 0)
 		RETURNING id
-	`, boardID, projName, projPrefix).Scan(&projectID); err != nil {
+	`, boardID, userID, projName, projPrefix).Scan(&projectID); err != nil {
 		return fmt.Errorf("create default project: %w", err)
 	}
 
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO epics (board_id, name, type, color, description)
-		VALUES ($1, 'Study', 'recurring', '#6366f1', 'Learning and skill building')
-	`, boardID); err != nil {
+		INSERT INTO epics (board_id, user_id, name, type, color, description)
+		VALUES ($1, $2, 'Study', 'recurring', '#6366f1', 'Learning and skill building')
+	`, boardID, userID); err != nil {
 		return fmt.Errorf("create study epic: %w", err)
 	}
 
-	// Suppress unused variable warning — todoStatusID kept for future use
 	_ = todoStatusID
 
 	return tx.Commit(ctx)

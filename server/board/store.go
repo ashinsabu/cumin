@@ -73,11 +73,12 @@ func (s *Store) NextSeq(ctx context.Context, boardID string) (int64, error) {
 	return seq, err
 }
 
-func (s *Store) ListStatuses(ctx context.Context, boardID string) ([]Status, error) {
+// ListStatuses returns all statuses for the given user.
+func (s *Store) ListStatuses(ctx context.Context, userID string) ([]Status, error) {
 	rows, err := s.DB.Query(ctx, `
 		SELECT id, board_id, name, position, is_initial, is_done, created_at
-		FROM statuses WHERE board_id = $1 ORDER BY position
-	`, boardID)
+		FROM statuses WHERE user_id = $1 ORDER BY position
+	`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -94,6 +95,7 @@ func (s *Store) ListStatuses(ctx context.Context, boardID string) ([]Status, err
 	return out, nil
 }
 
+// CreateStatus adds a new status for a user. boardID is kept for backward compat until Phase 3.
 func (s *Store) CreateStatus(ctx context.Context, boardID, userID, name string, position int, isInitial, isDone bool) (*Status, error) {
 	var st Status
 	err := s.DB.QueryRow(ctx, `
@@ -107,20 +109,15 @@ func (s *Store) CreateStatus(ctx context.Context, boardID, userID, name string, 
 	return &st, nil
 }
 
-// DeleteStatusSafe deletes a status inside a transaction, checking all guards atomically:
-// - cannot delete last done status
-// - cannot delete last initial status
-// - cannot delete if items are assigned to it
-// Returns api.Error for guard violations.
-func (s *Store) DeleteStatusSafe(ctx context.Context, id, boardID string) error {
+// DeleteStatusSafe deletes a status, checking guards atomically.
+func (s *Store) DeleteStatusSafe(ctx context.Context, id, userID string) error {
 	tx, err := s.DB.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(ctx)
 
-	// Lock all statuses for this board to prevent concurrent deletes racing the guards
-	rows, err := tx.Query(ctx, `SELECT id, is_done, is_initial FROM statuses WHERE board_id = $1 FOR UPDATE`, boardID)
+	rows, err := tx.Query(ctx, `SELECT id, is_done, is_initial FROM statuses WHERE user_id = $1 FOR UPDATE`, userID)
 	if err != nil {
 		return err
 	}
@@ -163,7 +160,7 @@ func (s *Store) DeleteStatusSafe(ctx context.Context, id, boardID string) error 
 		return &conflictErr{msg: fmt.Sprintf("status has %d item(s) — reassign them first", itemCount)}
 	}
 
-	if _, err := tx.Exec(ctx, `DELETE FROM statuses WHERE id = $1 AND board_id = $2`, id, boardID); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM statuses WHERE id = $1 AND user_id = $2`, id, userID); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -175,19 +172,19 @@ type conflictErr struct{ msg string }
 func (e *notFoundErr) Error() string { return e.msg }
 func (e *conflictErr) Error() string { return e.msg }
 
-func (s *Store) ReorderStatuses(ctx context.Context, boardID string, ids []string) error {
+func (s *Store) ReorderStatuses(ctx context.Context, userID string, ids []string) error {
 	tx, err := s.DB.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(ctx)
 
-	_, err = tx.Exec(ctx, `UPDATE statuses SET position = -(position + 1) WHERE board_id = $1`, boardID)
+	_, err = tx.Exec(ctx, `UPDATE statuses SET position = -(position + 1) WHERE user_id = $1`, userID)
 	if err != nil {
 		return err
 	}
 	for i, id := range ids {
-		_, err = tx.Exec(ctx, `UPDATE statuses SET position = $1 WHERE id = $2 AND board_id = $3`, i, id, boardID)
+		_, err = tx.Exec(ctx, `UPDATE statuses SET position = $1 WHERE id = $2 AND user_id = $3`, i, id, userID)
 		if err != nil {
 			return err
 		}
@@ -195,8 +192,8 @@ func (s *Store) ReorderStatuses(ctx context.Context, boardID string, ids []strin
 	return tx.Commit(ctx)
 }
 
-func (s *Store) DoneStatusIDs(ctx context.Context, boardID string) ([]string, error) {
-	rows, err := s.DB.Query(ctx, `SELECT id FROM statuses WHERE board_id = $1 AND is_done = true`, boardID)
+func (s *Store) DoneStatusIDs(ctx context.Context, userID string) ([]string, error) {
+	rows, err := s.DB.Query(ctx, `SELECT id FROM statuses WHERE user_id = $1 AND is_done = true`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -213,16 +210,16 @@ func (s *Store) DoneStatusIDs(ctx context.Context, boardID string) ([]string, er
 	return ids, nil
 }
 
-func (s *Store) InitialStatusID(ctx context.Context, boardID string) (string, error) {
+func (s *Store) InitialStatusID(ctx context.Context, userID string) (string, error) {
 	var id string
 	err := s.DB.QueryRow(ctx, `
-		SELECT id FROM statuses WHERE board_id = $1 AND is_initial = true LIMIT 1
-	`, boardID).Scan(&id)
+		SELECT id FROM statuses WHERE user_id = $1 AND is_initial = true LIMIT 1
+	`, userID).Scan(&id)
 	if err != nil {
 		// Fallback to first by position
 		err = s.DB.QueryRow(ctx, `
-			SELECT id FROM statuses WHERE board_id = $1 ORDER BY position LIMIT 1
-		`, boardID).Scan(&id)
+			SELECT id FROM statuses WHERE user_id = $1 ORDER BY position LIMIT 1
+		`, userID).Scan(&id)
 	}
 	return id, err
 }
