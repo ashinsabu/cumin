@@ -5,7 +5,8 @@ import (
 	"time"
 
 	"github.com/ashinsabu/cumin/server/api"
-	"github.com/ashinsabu/cumin/server/board"
+	"github.com/ashinsabu/cumin/server/auth"
+	"github.com/ashinsabu/cumin/server/project"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -32,12 +33,12 @@ type ListResponse struct {
 var validTypes = map[string]bool{"recurring": true, "goal": true, "catchall": true}
 
 type Handler struct {
-	store      *Store
-	boardStore *board.Store
+	store        *Store
+	projectStore *project.Store
 }
 
-func NewHandler(store *Store, boardStore *board.Store) *Handler {
-	return &Handler{store: store, boardStore: boardStore}
+func NewHandler(store *Store, projectStore *project.Store) *Handler {
+	return &Handler{store: store, projectStore: projectStore}
 }
 
 func (h *Handler) Routes(r chi.Router) {
@@ -48,22 +49,13 @@ func (h *Handler) Routes(r chi.Router) {
 	r.Post("/api/epics/{id}/restore", api.HandleDelete(h.Restore))
 }
 
-// List returns all epics for the authenticated user's board.
-//
-// @Summary      List epics
-// @Tags         epics
-// @Produce      json
-// @Success      200  {object}  epic.ListResponse
-// @Failure      404  {object}  api.ErrorResponse
-// @Security     CookieAuth
-// @Router       /api/epics [get]
 func (h *Handler) List(ctx context.Context) (*ListResponse, error) {
-	b, err := board.GetOrFetch(ctx, h.boardStore)
-	if err != nil {
-		return nil, api.NotFound("board not found")
+	userID := auth.UserIDFromContext(ctx)
+	if userID == "" {
+		return nil, api.NotFound("user not found")
 	}
 
-	epics, err := h.store.List(ctx, b.ID)
+	epics, err := h.store.List(ctx, userID)
 	if err != nil {
 		return nil, api.Internal("failed to list epics")
 	}
@@ -73,22 +65,10 @@ func (h *Handler) List(ctx context.Context) (*ListResponse, error) {
 	return &ListResponse{Epics: epics}, nil
 }
 
-// Create creates a new epic on the board.
-//
-// @Summary      Create epic
-// @Tags         epics
-// @Accept       json
-// @Produce      json
-// @Param        body  body  epic.CreateRequest  true  "Epic to create"
-// @Success      200  {object}  epic.Epic
-// @Failure      400  {object}  api.ErrorResponse
-// @Failure      404  {object}  api.ErrorResponse
-// @Security     CookieAuth
-// @Router       /api/epics [post]
 func (h *Handler) Create(ctx context.Context, req CreateRequest) (*Epic, error) {
-	b, err := board.GetOrFetch(ctx, h.boardStore)
-	if err != nil {
-		return nil, api.NotFound("board not found")
+	userID := auth.UserIDFromContext(ctx)
+	if userID == "" {
+		return nil, api.NotFound("user not found")
 	}
 
 	if req.Name == "" {
@@ -104,32 +84,21 @@ func (h *Handler) Create(ctx context.Context, req CreateRequest) (*Epic, error) 
 		req.Color = "#6b7280"
 	}
 
-	return h.store.Create(ctx, b.ID, req.Name, req.Type, req.Color, req.Description, req.Deadline)
-}
-
-// Update updates an existing epic.
-//
-// @Summary      Update epic
-// @Tags         epics
-// @Accept       json
-// @Produce      json
-// @Param        id    path  string            true  "Epic ID"
-// @Param        body  body  epic.UpdateRequest  true  "Fields to update"
-// @Success      200  {object}  epic.Epic
-// @Failure      400  {object}  api.ErrorResponse
-// @Failure      404  {object}  api.ErrorResponse
-// @Security     CookieAuth
-// @Router       /api/epics/{id} [patch]
-func (h *Handler) Update(ctx context.Context, req UpdateRequest) (*Epic, error) {
-	id := api.URLParam(ctx, "id")
-
-	existing, err := h.store.GetByID(ctx, id)
+	// boardID is still required until Phase 3 drops the column.
+	p, err := project.GetOrFetch(ctx, h.projectStore)
 	if err != nil {
-		return nil, api.NotFound("epic not found")
+		return nil, api.Internal("failed to resolve project context")
 	}
 
-	b, err := board.GetOrFetch(ctx, h.boardStore)
-	if err != nil || existing.BoardID != b.ID {
+	return h.store.Create(ctx, p.BoardID, userID, req.Name, req.Type, req.Color, req.Description, req.Deadline)
+}
+
+func (h *Handler) Update(ctx context.Context, req UpdateRequest) (*Epic, error) {
+	id := api.URLParam(ctx, "id")
+	userID := auth.UserIDFromContext(ctx)
+
+	existing, err := h.store.GetByID(ctx, id)
+	if err != nil || existing.UserID != userID {
 		return nil, api.NotFound("epic not found")
 	}
 
@@ -155,52 +124,26 @@ func (h *Handler) Update(ctx context.Context, req UpdateRequest) (*Epic, error) 
 	return h.store.Update(ctx, id, req.Name, req.Type, req.Color, req.Description, req.Deadline)
 }
 
-// Delete soft-deletes an epic and its child items.
-//
-// @Summary      Delete epic
-// @Tags         epics
-// @Param        id  path  string  true  "Epic ID"
-// @Success      204  "No Content"
-// @Failure      404  {object}  api.ErrorResponse
-// @Security     CookieAuth
-// @Router       /api/epics/{id} [delete]
 func (h *Handler) Delete(ctx context.Context) error {
 	id := api.URLParam(ctx, "id")
+	userID := auth.UserIDFromContext(ctx)
 
 	existing, err := h.store.GetByID(ctx, id)
-	if err != nil {
+	if err != nil || existing.UserID != userID {
 		return api.NotFound("epic not found")
 	}
 
-	b, err := board.GetOrFetch(ctx, h.boardStore)
-	if err != nil || existing.BoardID != b.ID {
-		return api.NotFound("epic not found")
-	}
-
-	if err := h.store.SoftDelete(ctx, id, b.ID); err != nil {
+	if err := h.store.SoftDelete(ctx, id, userID); err != nil {
 		return api.Internal("failed to delete epic")
 	}
 	return nil
 }
 
-// Restore restores a soft-deleted epic and its child items.
-//
-// @Summary      Restore epic
-// @Tags         epics
-// @Param        id  path  string  true  "Epic ID"
-// @Success      204  "No Content"
-// @Failure      404  {object}  api.ErrorResponse
-// @Security     CookieAuth
-// @Router       /api/epics/{id}/restore [post]
 func (h *Handler) Restore(ctx context.Context) error {
 	id := api.URLParam(ctx, "id")
+	userID := auth.UserIDFromContext(ctx)
 
-	b, err := board.GetOrFetch(ctx, h.boardStore)
-	if err != nil {
-		return api.NotFound("board not found")
-	}
-
-	if err := h.store.RestoreEpic(ctx, id, b.ID); err != nil {
+	if err := h.store.RestoreEpic(ctx, id, userID); err != nil {
 		return api.Internal("failed to restore epic")
 	}
 	return nil

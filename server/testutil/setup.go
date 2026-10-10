@@ -21,6 +21,7 @@ import (
 	"github.com/ashinsabu/cumin/server/queue"
 	"github.com/ashinsabu/cumin/server/sprint"
 	"github.com/ashinsabu/cumin/server/trash"
+	"github.com/ashinsabu/cumin/server/views"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -35,7 +36,7 @@ type TestEnv struct {
 	Server       *httptest.Server
 	DB           *pgxpool.Pool
 	Hub          *hub.InMemoryHub
-	BoardID      string
+	BoardID      string // kept for backward compat; boards table still exists in Phase 2
 	ProjectID    string
 	EpicID       string
 	TodoStatusID string
@@ -52,7 +53,6 @@ func Setup() (*TestEnv, error) {
 		dbURL = defaultDBURL
 	}
 
-	// Resolve migrations path relative to this source file so tests work from any cwd.
 	_, filename, _, _ := runtime.Caller(0)
 	migrationsPath := filepath.Join(filepath.Dir(filename), "..", "migrations")
 
@@ -65,8 +65,6 @@ func Setup() (*TestEnv, error) {
 		return nil, fmt.Errorf("connect: %w", err)
 	}
 
-	// Ensure the test user row exists. boards.user_id is a FK → users.id.
-	// We use a synthetic google_id / email that is stable across runs.
 	_, err = pool.Exec(ctx, `
 		INSERT INTO users (id, google_id, email, display_name)
 		VALUES ($1, 'test-google-id-integ', 'test-integ@cumin.example', 'Test User')
@@ -77,9 +75,8 @@ func Setup() (*TestEnv, error) {
 		return nil, fmt.Errorf("create test user: %w", err)
 	}
 
-	// Full teardown before each test run so nothing leaks into the shared local dev DB.
-	// Delete in FK order, then delete the board itself so ProvisionNewUser below
-	// recreates statuses + project + epic from scratch.
+	// Full teardown before each test run. boards table still exists in Phase 2 so teardown
+	// can still use board_id for items/epics/sprints/queue_items.
 	var testBoardID string
 	_ = pool.QueryRow(ctx, `SELECT id FROM boards WHERE user_id = $1 LIMIT 1`, TestUserID).Scan(&testBoardID)
 	if testBoardID != "" {
@@ -99,7 +96,6 @@ func Setup() (*TestEnv, error) {
 		}
 	}
 
-	// ProvisionNewUser is idempotent (ON CONFLICT DO NOTHING on board insert).
 	prov := auth.NewProvisioner(pool)
 	if err := prov.ProvisionNewUser(ctx, TestUserID, "Test User"); err != nil {
 		pool.Close()
@@ -117,7 +113,7 @@ func Setup() (*TestEnv, error) {
 
 	var todoStatusID string
 	if err := pool.QueryRow(ctx,
-		`SELECT id FROM statuses WHERE board_id = $1 AND is_initial = true LIMIT 1`, boardID,
+		`SELECT id FROM statuses WHERE user_id = $1 AND is_initial = true LIMIT 1`, TestUserID,
 	).Scan(&todoStatusID); err != nil {
 		pool.Close()
 		return nil, fmt.Errorf("get todo status: %w", err)
@@ -125,7 +121,7 @@ func Setup() (*TestEnv, error) {
 
 	var doneStatusID string
 	if err := pool.QueryRow(ctx,
-		`SELECT id FROM statuses WHERE board_id = $1 AND is_done = true LIMIT 1`, boardID,
+		`SELECT id FROM statuses WHERE user_id = $1 AND is_done = true LIMIT 1`, TestUserID,
 	).Scan(&doneStatusID); err != nil {
 		pool.Close()
 		return nil, fmt.Errorf("get done status: %w", err)
@@ -133,7 +129,7 @@ func Setup() (*TestEnv, error) {
 
 	var projectID string
 	if err := pool.QueryRow(ctx,
-		`SELECT id FROM projects WHERE board_id = $1 AND deleted_at IS NULL ORDER BY created_at LIMIT 1`, boardID,
+		`SELECT id FROM projects WHERE user_id = $1 AND deleted_at IS NULL ORDER BY created_at LIMIT 1`, TestUserID,
 	).Scan(&projectID); err != nil {
 		pool.Close()
 		return nil, fmt.Errorf("get project: %w", err)
@@ -141,13 +137,13 @@ func Setup() (*TestEnv, error) {
 
 	var epicID string
 	if err := pool.QueryRow(ctx,
-		`SELECT id FROM epics WHERE board_id = $1 AND deleted_at IS NULL ORDER BY created_at LIMIT 1`, boardID,
+		`SELECT id FROM epics WHERE user_id = $1 AND deleted_at IS NULL ORDER BY created_at LIMIT 1`, TestUserID,
 	).Scan(&epicID); err != nil {
 		pool.Close()
 		return nil, fmt.Errorf("get epic: %w", err)
 	}
 
-	// Build the chi router — same wiring as main.go, minus CORS (not needed for tests).
+	// Build the chi router — same wiring as main.go, minus CORS.
 	r := chi.NewRouter()
 	r.Use(auth.DevBypass(TestUserID))
 
@@ -157,18 +153,18 @@ func Setup() (*TestEnv, error) {
 	sprintStore := &sprint.Store{DB: pool}
 	itemStore := &item.Store{DB: pool}
 
-	// Wire hub middleware in the same order as main.go.
 	h := hub.New()
-	r.Use(board.ContextMiddleware(boardStore))
+	r.Use(project.ContextMiddleware(projectStore))
 	r.Use(hub.NotifyMiddleware(h))
 
 	board.NewHandler(boardStore).Routes(r)
-	project.NewHandler(projectStore, boardStore).Routes(r)
-	epic.NewHandler(epicStore, boardStore).Routes(r)
-	sprint.NewHandler(sprintStore, boardStore).Routes(r)
-	item.NewHandler(itemStore, boardStore).Routes(r)
-	trash.NewHandler(projectStore, epicStore, boardStore).Routes(r)
-	queue.NewHandler(&queue.Store{DB: pool}, boardStore).Routes(r)
+	project.NewHandler(projectStore).Routes(r)
+	epic.NewHandler(epicStore, projectStore).Routes(r)
+	sprint.NewHandler(sprintStore, boardStore, projectStore).Routes(r)
+	item.NewHandler(itemStore, boardStore, projectStore).Routes(r)
+	trash.NewHandler(projectStore, epicStore).Routes(r)
+	queue.NewHandler(&queue.Store{DB: pool}, projectStore).Routes(r)
+	views.NewHandler(&views.Store{DB: pool}, projectStore).Routes(r)
 	// SSE enabled=true in tests
 	r.Get("/api/events", hub.NewHandler(h, true).Events)
 

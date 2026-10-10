@@ -50,7 +50,6 @@ const itemAliasedCols = `i.id, i.board_id, i.project_id, i.epic_id, i.sprint_id,
 	i.title, i.description, i.priority, i.estimate_minutes, i.position, i.created_at, i.updated_at`
 
 // itemEnrichedCols uses LATERAL join (not correlated scalar subquery) to avoid N+1 index scans.
-// Callers must include "LEFT JOIN LATERAL (...) t ON true" in their FROM clause.
 const itemEnrichedCols = itemAliasedCols + `,
 	e.name, e.color,
 	COALESCE(EXTRACT(EPOCH FROM (NOW() - t.transitioned_at)) / 60, 0)::int`
@@ -82,20 +81,20 @@ func scanItemBase(row interface{ Scan(...any) error }) (*Item, error) {
 }
 
 // FilterParams controls optional server-side filtering for item list queries.
-// Nil pointer fields are ignored (no filter applied for that dimension).
 type FilterParams struct {
-	SprintID  *string // filter to specific sprint
-	ProjectID *string // filter to specific project
-	EpicID    *string // filter to specific epic
-	StatusID  *string // filter to specific status
-	Priority  *int    // filter to specific priority level
-	HideDone  bool    // exclude items whose status has is_done=true
+	SprintID  *string
+	ProjectID *string
+	EpicID    *string
+	StatusID  *string
+	Priority  *int
+	HideDone  bool
 }
 
-func (s *Store) List(ctx context.Context, boardID string, f FilterParams) ([]Item, error) {
-	query := `SELECT ` + itemEnrichedCols + ` FROM items i LEFT JOIN epics e ON i.epic_id = e.id ` + itemLateralJoin + ` WHERE i.board_id = $1 AND i.deleted_at IS NULL`
-	args := []any{boardID}
-	n := 2 // next placeholder index
+func (s *Store) List(ctx context.Context, userID string, f FilterParams) ([]Item, error) {
+	query := `SELECT ` + itemEnrichedCols + ` FROM items i LEFT JOIN epics e ON i.epic_id = e.id ` + itemLateralJoin +
+		` WHERE i.project_id IN (SELECT id FROM projects WHERE user_id = $1 AND deleted_at IS NULL) AND i.deleted_at IS NULL`
+	args := []any{userID}
+	n := 2
 
 	add := func(clause string, val any) {
 		query += fmt.Sprintf(clause, n)
@@ -119,7 +118,7 @@ func (s *Store) List(ctx context.Context, boardID string, f FilterParams) ([]Ite
 		add(` AND i.priority = $%d`, *f.Priority)
 	}
 	if f.HideDone {
-		query += ` AND i.status_id NOT IN (SELECT id FROM statuses WHERE board_id = $1 AND is_done = true)`
+		query += ` AND i.status_id NOT IN (SELECT id FROM statuses WHERE user_id = $1 AND is_done = true)`
 	}
 	query += ` ORDER BY i.priority, i.position, i.created_at`
 
@@ -140,13 +139,14 @@ func (s *Store) List(ctx context.Context, boardID string, f FilterParams) ([]Ite
 	return out, nil
 }
 
-func (s *Store) Backlog(ctx context.Context, boardID string) ([]Item, error) {
+func (s *Store) Backlog(ctx context.Context, userID string) ([]Item, error) {
 	rows, err := s.DB.Query(ctx, `
 		SELECT `+itemEnrichedCols+` FROM items i LEFT JOIN epics e ON i.epic_id = e.id `+itemLateralJoin+`
-		WHERE i.board_id = $1 AND i.sprint_id IS NULL AND i.deleted_at IS NULL
-		  AND i.status_id NOT IN (SELECT id FROM statuses WHERE board_id = $1 AND is_done = true)
+		WHERE i.project_id IN (SELECT id FROM projects WHERE user_id = $1 AND deleted_at IS NULL)
+		  AND i.sprint_id IS NULL AND i.deleted_at IS NULL
+		  AND i.status_id NOT IN (SELECT id FROM statuses WHERE user_id = $1 AND is_done = true)
 		ORDER BY i.priority, i.position
-	`, boardID)
+	`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -168,19 +168,43 @@ func (s *Store) GetByID(ctx context.Context, id string) (*Item, error) {
 	return scanItemEnriched(row)
 }
 
-// Create inserts item + logs initial transition. Returns created item.
-func (s *Store) Create(ctx context.Context, boardID, displayID, statusID, title, description string, epicID, sprintID, projectID *string, priority int, estimate *int) (*Item, error) {
+// GetByIDForUser fetches an item and verifies it belongs to the given user.
+func (s *Store) GetByIDForUser(ctx context.Context, id, userID string) (*Item, error) {
+	row := s.DB.QueryRow(ctx, `SELECT `+itemEnrichedCols+` FROM items i LEFT JOIN epics e ON i.epic_id = e.id `+itemLateralJoin+`
+		WHERE i.id = $1 AND i.deleted_at IS NULL
+		AND i.project_id IN (SELECT id FROM projects WHERE user_id = $2 AND deleted_at IS NULL)`, id, userID)
+	return scanItemEnriched(row)
+}
+
+// CreateForProject atomically validates project ownership via user_id, increments the project
+// item sequence, inserts the item, and logs the initial status transition — all in one transaction.
+func (s *Store) CreateForProject(ctx context.Context, boardID, projectID, userID, statusID, title, description string, epicID, sprintID *string, priority int, estimate *int) (*Item, error) {
 	tx, err := s.DB.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
 
+	var seq int64
+	var prefix string
+	err = tx.QueryRow(ctx, `
+		UPDATE projects SET item_seq = item_seq + 1
+		WHERE id = $1 AND user_id = $2
+		RETURNING item_seq, prefix
+	`, projectID, userID).Scan(&seq, &prefix)
+	if err != nil {
+		return nil, fmt.Errorf("project not found or not owned by this user")
+	}
+	displayID := fmt.Sprintf("%s-%d", prefix, seq)
+
+	pid := &projectID
 	row := tx.QueryRow(ctx, `
-		INSERT INTO items (board_id, project_id, epic_id, sprint_id, status_id, display_id, title, description, priority, estimate_minutes, position)
+		INSERT INTO items (board_id, project_id, epic_id, sprint_id, status_id, display_id,
+		                   title, description, priority, estimate_minutes, position)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-			COALESCE((SELECT MAX(position)+1 FROM items WHERE board_id = $1 AND status_id = $5), 0))
-		RETURNING `+itemCols, boardID, projectID, epicID, sprintID, statusID, displayID, title, description, priority, estimate)
+		    COALESCE((SELECT MAX(position)+1 FROM items WHERE project_id = $2 AND status_id = $5), 0))
+		RETURNING `+itemCols,
+		boardID, pid, epicID, sprintID, statusID, displayID, title, description, priority, estimate)
 	it, err := scanItemBase(row)
 	if err != nil {
 		return nil, err
@@ -227,7 +251,7 @@ func (s *Store) Move(ctx context.Context, id, toStatusID string) (*Item, error) 
 
 	row := tx.QueryRow(ctx, `
 		UPDATE items SET status_id = $2,
-			position = COALESCE((SELECT MAX(position)+1 FROM items WHERE board_id = (SELECT board_id FROM items WHERE id = $1) AND status_id = $2), 0),
+			position = COALESCE((SELECT MAX(position)+1 FROM items WHERE project_id = (SELECT project_id FROM items WHERE id = $1) AND status_id = $2), 0),
 			updated_at = NOW()
 		WHERE id = $1
 		RETURNING `+itemCols, id, toStatusID)
@@ -247,7 +271,7 @@ func (s *Store) Move(ctx context.Context, id, toStatusID string) (*Item, error) 
 	return it, tx.Commit(ctx)
 }
 
-func (s *Store) Reorder(ctx context.Context, boardID, statusID string, ids []string) error {
+func (s *Store) Reorder(ctx context.Context, userID, statusID string, ids []string) error {
 	tx, err := s.DB.Begin(ctx)
 	if err != nil {
 		return err
@@ -257,8 +281,8 @@ func (s *Store) Reorder(ctx context.Context, boardID, statusID string, ids []str
 	for i, id := range ids {
 		_, err := tx.Exec(ctx, `
 			UPDATE items SET position = $1, updated_at = NOW()
-			WHERE id = $2 AND board_id = $3 AND status_id = $4
-		`, i, id, boardID, statusID)
+			WHERE id = $2 AND project_id IN (SELECT id FROM projects WHERE user_id = $3) AND status_id = $4
+		`, i, id, userID, statusID)
 		if err != nil {
 			return err
 		}
@@ -271,66 +295,20 @@ func (s *Store) SoftDelete(ctx context.Context, id string) error {
 	return err
 }
 
-// CreateForProject atomically: validates project ownership via board_id, increments the project
-// item sequence, inserts the item, and logs the initial status transition — all in one transaction.
-// This eliminates the TOCTOU gap where seq could be leaked if the INSERT fails.
-func (s *Store) CreateForProject(ctx context.Context, boardID, projectID, statusID, title, description string, epicID, sprintID *string, priority int, estimate *int) (*Item, error) {
-	tx, err := s.DB.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback(ctx)
-
-	var seq int64
-	var prefix string
-	err = tx.QueryRow(ctx, `
-		UPDATE projects SET item_seq = item_seq + 1
-		WHERE id = $1 AND board_id = $2
-		RETURNING item_seq, prefix
-	`, projectID, boardID).Scan(&seq, &prefix)
-	if err != nil {
-		return nil, fmt.Errorf("project not found or not owned by this board")
-	}
-	displayID := fmt.Sprintf("%s-%d", prefix, seq)
-
-	pid := &projectID
-	row := tx.QueryRow(ctx, `
-		INSERT INTO items (board_id, project_id, epic_id, sprint_id, status_id, display_id,
-		                   title, description, priority, estimate_minutes, position)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-		    COALESCE((SELECT MAX(position)+1 FROM items WHERE board_id = $1 AND status_id = $5), 0))
-		RETURNING `+itemCols,
-		boardID, pid, epicID, sprintID, statusID, displayID, title, description, priority, estimate)
-	it, err := scanItemBase(row)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = tx.Exec(ctx, `
-		INSERT INTO status_transitions (item_id, from_status_id, to_status_id)
-		VALUES ($1, NULL, $2)
-	`, it.ID, statusID)
-	if err != nil {
-		return nil, err
-	}
-
-	return it, tx.Commit(ctx)
-}
-
-// EpicBelongsToBoard checks that the given epic is owned by the given board.
-func (s *Store) EpicBelongsToBoard(ctx context.Context, epicID, boardID string) (bool, error) {
+// EpicBelongsToUser checks that the given epic is owned by the given user.
+func (s *Store) EpicBelongsToUser(ctx context.Context, epicID, userID string) (bool, error) {
 	var exists bool
 	err := s.DB.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM epics WHERE id = $1 AND board_id = $2)`, epicID, boardID,
+		`SELECT EXISTS(SELECT 1 FROM epics WHERE id = $1 AND user_id = $2)`, epicID, userID,
 	).Scan(&exists)
 	return exists, err
 }
 
-// SprintBelongsToBoard checks that the given sprint is owned by the given board.
-func (s *Store) SprintBelongsToBoard(ctx context.Context, sprintID, boardID string) (bool, error) {
+// SprintBelongsToProject checks that the given sprint belongs to the given project.
+func (s *Store) SprintBelongsToProject(ctx context.Context, sprintID, projectID string) (bool, error) {
 	var exists bool
 	err := s.DB.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM sprints WHERE id = $1 AND board_id = $2)`, sprintID, boardID,
+		`SELECT EXISTS(SELECT 1 FROM sprints WHERE id = $1 AND project_id = $2)`, sprintID, projectID,
 	).Scan(&exists)
 	return exists, err
 }
@@ -356,11 +334,12 @@ func (s *Store) Transitions(ctx context.Context, itemID string) ([]StatusTransit
 	return out, nil
 }
 
-func (s *Store) Restore(ctx context.Context, id, boardID string) error {
+func (s *Store) Restore(ctx context.Context, id, userID string) error {
 	tag, err := s.DB.Exec(ctx, `
 		UPDATE items SET deleted_at = NULL
-		WHERE id = $1 AND board_id = $2 AND deleted_at IS NOT NULL
-	`, id, boardID)
+		WHERE id = $1 AND project_id IN (SELECT id FROM projects WHERE user_id = $2)
+		AND deleted_at IS NOT NULL
+	`, id, userID)
 	if err != nil {
 		return err
 	}

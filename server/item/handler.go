@@ -5,10 +5,11 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/ashinsabu/cumin/server/api"
+	"github.com/ashinsabu/cumin/server/auth"
 	"github.com/ashinsabu/cumin/server/board"
+	"github.com/ashinsabu/cumin/server/project"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 )
@@ -52,16 +53,17 @@ type TransitionsResponse struct {
 }
 
 type Handler struct {
-	store      *Store
-	boardStore *board.Store
+	store        *Store
+	boardStore   *board.Store
+	projectStore *project.Store
 }
 
-func NewHandler(store *Store, boardStore *board.Store) *Handler {
-	return &Handler{store: store, boardStore: boardStore}
+func NewHandler(store *Store, boardStore *board.Store, projectStore *project.Store) *Handler {
+	return &Handler{store: store, boardStore: boardStore, projectStore: projectStore}
 }
 
 func (h *Handler) Routes(r chi.Router) {
-	r.Get("/api/items", h.listHTTP) // needs query param access
+	r.Get("/api/items", h.listHTTP)
 	r.Post("/api/items", api.Handle(h.Create))
 	r.Get("/api/items/backlog", api.HandleNoBody(h.Backlog))
 	r.Get("/api/items/{id}", api.HandleNoBody(h.Get))
@@ -73,20 +75,10 @@ func (h *Handler) Routes(r chi.Router) {
 	r.Get("/api/items/{id}/transitions", api.HandleNoBody(h.Transitions))
 }
 
-// listHTTP lists items for the authenticated user's board.
-//
-// @Summary      List items
-// @Tags         items
-// @Produce      json
-// @Param        sprint_id  query   string  false  "Filter by sprint ID"
-// @Success      200  {object}  item.ListResponse
-// @Failure      404  {object}  api.ErrorResponse
-// @Security     CookieAuth
-// @Router       /api/items [get]
 func (h *Handler) listHTTP(w http.ResponseWriter, r *http.Request) {
-	b, err := board.GetOrFetch(r.Context(), h.boardStore)
-	if err != nil {
-		api.WriteError(w, api.NotFound("board not found"))
+	userID := auth.UserIDFromContext(r.Context())
+	if userID == "" {
+		api.WriteError(w, api.NotFound("user not found"))
 		return
 	}
 
@@ -112,7 +104,7 @@ func (h *Handler) listHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	f.HideDone = q.Get("hide_done") == "true"
 
-	items, err := h.store.List(r.Context(), b.ID, f)
+	items, err := h.store.List(r.Context(), userID, f)
 	if err != nil {
 		api.WriteError(w, api.Internal("failed to list items"))
 		return
@@ -123,22 +115,13 @@ func (h *Handler) listHTTP(w http.ResponseWriter, r *http.Request) {
 	api.WriteJSON(w, &ListResponse{Items: items})
 }
 
-// Backlog returns all backlog items (not assigned to a sprint).
-//
-// @Summary      List backlog items
-// @Tags         items
-// @Produce      json
-// @Success      200  {object}  item.ListResponse
-// @Failure      404  {object}  api.ErrorResponse
-// @Security     CookieAuth
-// @Router       /api/items/backlog [get]
 func (h *Handler) Backlog(ctx context.Context) (*ListResponse, error) {
-	b, err := board.GetOrFetch(ctx, h.boardStore)
-	if err != nil {
-		return nil, api.NotFound("board not found")
+	userID := auth.UserIDFromContext(ctx)
+	if userID == "" {
+		return nil, api.NotFound("user not found")
 	}
 
-	items, err := h.store.Backlog(ctx, b.ID)
+	items, err := h.store.Backlog(ctx, userID)
 	if err != nil {
 		return nil, api.Internal("failed to list backlog")
 	}
@@ -148,45 +131,19 @@ func (h *Handler) Backlog(ctx context.Context) (*ListResponse, error) {
 	return &ListResponse{Items: items}, nil
 }
 
-// Get returns a single item by ID.
-//
-// @Summary      Get item
-// @Tags         items
-// @Produce      json
-// @Param        id  path  string  true  "Item ID"
-// @Success      200  {object}  item.Item
-// @Failure      404  {object}  api.ErrorResponse
-// @Security     CookieAuth
-// @Router       /api/items/{id} [get]
 func (h *Handler) Get(ctx context.Context) (*Item, error) {
-	b, err := board.GetOrFetch(ctx, h.boardStore)
+	userID := auth.UserIDFromContext(ctx)
+	it, err := h.store.GetByIDForUser(ctx, api.URLParam(ctx, "id"), userID)
 	if err != nil {
-		return nil, api.NotFound("board not found")
-	}
-
-	it, err := h.store.GetByID(ctx, api.URLParam(ctx, "id"))
-	if err != nil || it.BoardID != b.ID {
 		return nil, api.NotFound("item not found")
 	}
 	return it, nil
 }
 
-// Create creates a new item on the board.
-//
-// @Summary      Create item
-// @Tags         items
-// @Accept       json
-// @Produce      json
-// @Param        body  body  item.CreateRequest  true  "Item to create"
-// @Success      200  {object}  item.Item
-// @Failure      400  {object}  api.ErrorResponse
-// @Failure      404  {object}  api.ErrorResponse
-// @Security     CookieAuth
-// @Router       /api/items [post]
 func (h *Handler) Create(ctx context.Context, req CreateRequest) (*Item, error) {
-	b, err := board.GetOrFetch(ctx, h.boardStore)
-	if err != nil {
-		return nil, api.NotFound("board not found")
+	userID := auth.UserIDFromContext(ctx)
+	if userID == "" {
+		return nil, api.NotFound("user not found")
 	}
 
 	if req.Title == "" {
@@ -199,40 +156,38 @@ func (h *Handler) Create(ctx context.Context, req CreateRequest) (*Item, error) 
 		req.Priority = 4
 	}
 
-	// F02: validate epic and sprint belong to this board
+	// Validate project belongs to user before any DB writes.
+	proj, err := h.projectStore.GetByID(ctx, req.ProjectID)
+	if err != nil || proj.UserID != userID {
+		return nil, api.BadRequest("project_id is invalid")
+	}
+
 	if req.EpicID != nil && *req.EpicID != "" {
-		ok, err := h.store.EpicBelongsToBoard(ctx, *req.EpicID, b.ID)
+		ok, err := h.store.EpicBelongsToUser(ctx, *req.EpicID, userID)
 		if err != nil || !ok {
 			return nil, api.BadRequest("epic_id is invalid")
 		}
 	}
 	if req.SprintID != nil && *req.SprintID != "" {
-		ok, err := h.store.SprintBelongsToBoard(ctx, *req.SprintID, b.ID)
+		ok, err := h.store.SprintBelongsToProject(ctx, *req.SprintID, req.ProjectID)
 		if err != nil || !ok {
 			return nil, api.BadRequest("sprint_id is invalid")
 		}
 	}
 
-	statusID, err := h.boardStore.InitialStatusID(ctx, b.ID)
+	statusID, err := h.boardStore.InitialStatusID(ctx, userID)
 	if err != nil {
 		return nil, api.Internal("no statuses configured")
 	}
 
-	// F01 + TX-001: CreateForProject atomically validates project ownership and increments seq in same tx
-	it, err := h.store.CreateForProject(ctx, b.ID, req.ProjectID, statusID, req.Title, req.Description,
+	it, err := h.store.CreateForProject(ctx, proj.BoardID, req.ProjectID, userID, statusID, req.Title, req.Description,
 		req.EpicID, req.SprintID, req.Priority, req.EstimateMinutes)
 	if err != nil {
-		if strings.Contains(err.Error(), "project not found") {
-			return nil, api.BadRequest("invalid project_id or project not accessible")
-		}
 		return nil, api.Internal("failed to create item")
 	}
 	return it, nil
 }
 
-// UpdateRequest uses explicit sentinel fields so callers can clear epic/sprint.
-// ClearEpic=true → set epic_id to NULL. ClearSprint=true → set sprint_id to NULL.
-// Priority uses -1 as "not provided" sentinel (valid range 0–4).
 type updateParsed struct {
 	title       string
 	description string
@@ -242,27 +197,11 @@ type updateParsed struct {
 	estimate    *int
 }
 
-// Update updates an existing item.
-//
-// @Summary      Update item
-// @Tags         items
-// @Accept       json
-// @Produce      json
-// @Param        id    path  string            true  "Item ID"
-// @Param        body  body  item.UpdateRequest  true  "Fields to update"
-// @Success      200  {object}  item.Item
-// @Failure      400  {object}  api.ErrorResponse
-// @Failure      404  {object}  api.ErrorResponse
-// @Security     CookieAuth
-// @Router       /api/items/{id} [patch]
 func (h *Handler) Update(ctx context.Context, req UpdateRequest) (*Item, error) {
-	b, err := board.GetOrFetch(ctx, h.boardStore)
-	if err != nil {
-		return nil, api.NotFound("board not found")
-	}
+	userID := auth.UserIDFromContext(ctx)
 
-	it, err := h.store.GetByID(ctx, api.URLParam(ctx, "id"))
-	if err != nil || it.BoardID != b.ID {
+	it, err := h.store.GetByIDForUser(ctx, api.URLParam(ctx, "id"), userID)
+	if err != nil {
 		return nil, api.NotFound("item not found")
 	}
 
@@ -280,11 +219,10 @@ func (h *Handler) Update(ctx context.Context, req UpdateRequest) (*Item, error) 
 	if req.Description != "" {
 		p.description = req.Description
 	}
-	// ClearEpic explicitly sets epic to null; otherwise keep existing or set new value
 	if req.ClearEpic {
 		p.epicID = nil
 	} else if req.EpicID != nil {
-		ok, err := h.store.EpicBelongsToBoard(ctx, *req.EpicID, b.ID)
+		ok, err := h.store.EpicBelongsToUser(ctx, *req.EpicID, userID)
 		if err != nil || !ok {
 			return nil, api.BadRequest("epic_id is invalid")
 		}
@@ -293,9 +231,11 @@ func (h *Handler) Update(ctx context.Context, req UpdateRequest) (*Item, error) 
 	if req.ClearSprint {
 		p.sprintID = nil
 	} else if req.SprintID != nil {
-		ok, err := h.store.SprintBelongsToBoard(ctx, *req.SprintID, b.ID)
-		if err != nil || !ok {
-			return nil, api.BadRequest("sprint_id is invalid")
+		if it.ProjectID != nil {
+			ok, err := h.store.SprintBelongsToProject(ctx, *req.SprintID, *it.ProjectID)
+			if err != nil || !ok {
+				return nil, api.BadRequest("sprint_id is invalid")
+			}
 		}
 		p.sprintID = req.SprintID
 	}
@@ -309,45 +249,21 @@ func (h *Handler) Update(ctx context.Context, req UpdateRequest) (*Item, error) 
 	return h.store.Update(ctx, it.ID, p.title, p.description, p.epicID, p.sprintID, p.priority, p.estimate)
 }
 
-// Delete soft-deletes an item.
-//
-// @Summary      Delete item
-// @Tags         items
-// @Param        id  path  string  true  "Item ID"
-// @Success      204  "No Content"
-// @Failure      404  {object}  api.ErrorResponse
-// @Security     CookieAuth
-// @Router       /api/items/{id} [delete]
 func (h *Handler) Delete(ctx context.Context) error {
-	b, err := board.GetOrFetch(ctx, h.boardStore)
-	if err != nil {
-		return api.NotFound("board not found")
-	}
+	userID := auth.UserIDFromContext(ctx)
 
-	it, err := h.store.GetByID(ctx, api.URLParam(ctx, "id"))
-	if err != nil || it.BoardID != b.ID {
+	it, err := h.store.GetByIDForUser(ctx, api.URLParam(ctx, "id"), userID)
+	if err != nil {
 		return api.NotFound("item not found")
 	}
 
 	return h.store.SoftDelete(ctx, it.ID)
 }
 
-// Restore restores a soft-deleted item.
-//
-// @Summary      Restore item
-// @Tags         items
-// @Param        id  path  string  true  "Item ID"
-// @Success      204  "No Content"
-// @Failure      404  {object}  api.ErrorResponse
-// @Security     CookieAuth
-// @Router       /api/items/{id}/restore [post]
 func (h *Handler) Restore(ctx context.Context) error {
 	id := api.URLParam(ctx, "id")
-	b, err := board.GetOrFetch(ctx, h.boardStore)
-	if err != nil {
-		return api.NotFound("board not found")
-	}
-	if err := h.store.Restore(ctx, id, b.ID); err != nil {
+	userID := auth.UserIDFromContext(ctx)
+	if err := h.store.Restore(ctx, id, userID); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return api.NotFound("item not found")
 		}
@@ -356,27 +272,11 @@ func (h *Handler) Restore(ctx context.Context) error {
 	return nil
 }
 
-// Move moves an item to a different status column.
-//
-// @Summary      Move item
-// @Tags         items
-// @Accept       json
-// @Produce      json
-// @Param        id    path  string          true  "Item ID"
-// @Param        body  body  item.MoveRequest  true  "Target status"
-// @Success      200  {object}  item.Item
-// @Failure      400  {object}  api.ErrorResponse
-// @Failure      404  {object}  api.ErrorResponse
-// @Security     CookieAuth
-// @Router       /api/items/{id}/move [post]
 func (h *Handler) Move(ctx context.Context, req MoveRequest) (*Item, error) {
-	b, err := board.GetOrFetch(ctx, h.boardStore)
-	if err != nil {
-		return nil, api.NotFound("board not found")
-	}
+	userID := auth.UserIDFromContext(ctx)
 
-	it, err := h.store.GetByID(ctx, api.URLParam(ctx, "id"))
-	if err != nil || it.BoardID != b.ID {
+	it, err := h.store.GetByIDForUser(ctx, api.URLParam(ctx, "id"), userID)
+	if err != nil {
 		return nil, api.NotFound("item not found")
 	}
 
@@ -384,8 +284,7 @@ func (h *Handler) Move(ctx context.Context, req MoveRequest) (*Item, error) {
 		return nil, api.BadRequest("status_id required")
 	}
 
-	// Validate target status belongs to same board
-	statuses, err := h.boardStore.ListStatuses(ctx, b.ID)
+	statuses, err := h.boardStore.ListStatuses(ctx, userID)
 	if err != nil {
 		return nil, api.Internal("failed to validate status")
 	}
@@ -397,39 +296,27 @@ func (h *Handler) Move(ctx context.Context, req MoveRequest) (*Item, error) {
 		}
 	}
 	if !validStatus {
-		return nil, api.BadRequest("status_id does not belong to this board")
+		return nil, api.BadRequest("status_id does not belong to this user")
 	}
 
 	return h.store.Move(ctx, it.ID, req.StatusID)
 }
 
-// Reorder reorders items within a status column.
-//
-// @Summary      Reorder items
-// @Tags         items
-// @Accept       json
-// @Produce      json
-// @Param        body  body  item.ReorderRequest  true  "Status and ordered item IDs"
-// @Success      200  {object}  item.ListResponse
-// @Failure      400  {object}  api.ErrorResponse
-// @Failure      404  {object}  api.ErrorResponse
-// @Security     CookieAuth
-// @Router       /api/items/reorder [put]
 func (h *Handler) Reorder(ctx context.Context, req ReorderRequest) (*ListResponse, error) {
-	b, err := board.GetOrFetch(ctx, h.boardStore)
-	if err != nil {
-		return nil, api.NotFound("board not found")
+	userID := auth.UserIDFromContext(ctx)
+	if userID == "" {
+		return nil, api.NotFound("user not found")
 	}
 
 	if req.StatusID == "" || len(req.IDs) == 0 {
 		return nil, api.BadRequest("status_id and ids required")
 	}
 
-	if err := h.store.Reorder(ctx, b.ID, req.StatusID, req.IDs); err != nil {
+	if err := h.store.Reorder(ctx, userID, req.StatusID, req.IDs); err != nil {
 		return nil, api.Internal("reorder failed")
 	}
 
-	items, err := h.store.List(ctx, b.ID, FilterParams{})
+	items, err := h.store.List(ctx, userID, FilterParams{})
 	if err != nil {
 		return nil, api.Internal("failed to list items after reorder")
 	}
@@ -439,24 +326,11 @@ func (h *Handler) Reorder(ctx context.Context, req ReorderRequest) (*ListRespons
 	return &ListResponse{Items: items}, nil
 }
 
-// Transitions returns available status transitions for an item.
-//
-// @Summary      List item transitions
-// @Tags         items
-// @Produce      json
-// @Param        id  path  string  true  "Item ID"
-// @Success      200  {object}  item.TransitionsResponse
-// @Failure      404  {object}  api.ErrorResponse
-// @Security     CookieAuth
-// @Router       /api/items/{id}/transitions [get]
 func (h *Handler) Transitions(ctx context.Context) (*TransitionsResponse, error) {
-	b, err := board.GetOrFetch(ctx, h.boardStore)
-	if err != nil {
-		return nil, api.NotFound("board not found")
-	}
+	userID := auth.UserIDFromContext(ctx)
 
-	it, err := h.store.GetByID(ctx, api.URLParam(ctx, "id"))
-	if err != nil || it.BoardID != b.ID {
+	it, err := h.store.GetByIDForUser(ctx, api.URLParam(ctx, "id"), userID)
+	if err != nil {
 		return nil, api.NotFound("item not found")
 	}
 

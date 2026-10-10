@@ -5,13 +5,13 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/ashinsabu/cumin/server/board"
+	"github.com/ashinsabu/cumin/server/auth"
 )
 
-// Handler serves the SSE endpoint for real-time board sync.
+// Handler serves the SSE endpoint for real-time sync.
 type Handler struct {
 	hub     Notifier
-	enabled bool // controlled by FEATURE_FLAGS=realtime
+	enabled bool
 }
 
 func NewHandler(n Notifier, enabled bool) *Handler {
@@ -19,16 +19,8 @@ func NewHandler(n Notifier, enabled bool) *Handler {
 }
 
 // Events streams change notifications to a connected client.
-// On any successful mutation to the board, the client receives "data: ping\n\n"
+// On any successful mutation, the client receives "data: ping\n\n"
 // and should invalidate its local query cache.
-//
-// @Summary      Subscribe to board change events
-// @Tags         meta
-// @Produce      text/event-stream
-// @Success      200  "SSE stream"
-// @Failure      404  {object}  api.ErrorResponse  "feature not enabled"
-// @Security     CookieAuth
-// @Router       /api/events [get]
 func (h *Handler) Events(w http.ResponseWriter, r *http.Request) {
 	if !h.enabled {
 		http.Error(w, `{"error":"not found"}`, http.StatusNotFound)
@@ -41,24 +33,21 @@ func (h *Handler) Events(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	boardID := board.IDFromContext(r.Context())
-	if boardID == "" {
-		http.Error(w, `{"error":"board not found"}`, http.StatusNotFound)
+	userID := auth.UserIDFromContext(r.Context())
+	if userID == "" {
+		http.Error(w, `{"error":"user not authenticated"}`, http.StatusNotFound)
 		return
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no") // disable Railway/nginx proxy buffering
+	w.Header().Set("X-Accel-Buffering", "no")
 	w.WriteHeader(http.StatusOK)
-	// Flush headers + initial retry directive immediately so the browser's EventSource
-	// considers the connection established before any event fires. Without this, Railway's
-	// reverse proxy may buffer the response and the client never sees a 200.
 	fmt.Fprintf(w, "retry: 5000\n\n")
 	flusher.Flush()
 
-	ch, unsub := h.hub.Subscribe(boardID)
+	ch, unsub := h.hub.Subscribe(userID)
 	defer unsub()
 
 	ticker := time.NewTicker(15 * time.Second)
@@ -70,7 +59,7 @@ func (h *Handler) Events(w http.ResponseWriter, r *http.Request) {
 			return
 		case <-ch:
 			if _, err := fmt.Fprintf(w, "data: ping\n\n"); err != nil {
-				return // client disconnected
+				return
 			}
 			flusher.Flush()
 		case <-ticker.C:

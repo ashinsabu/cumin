@@ -10,6 +10,7 @@ import (
 type Epic struct {
 	ID          string     `json:"id"`
 	BoardID     string     `json:"board_id"`
+	UserID      string     `json:"user_id"`
 	Name        string     `json:"name"`
 	Type        string     `json:"type"`
 	Color       string     `json:"color"`
@@ -30,11 +31,11 @@ type Store struct {
 	DB *pgxpool.Pool
 }
 
-func (s *Store) List(ctx context.Context, boardID string) ([]Epic, error) {
+func (s *Store) List(ctx context.Context, userID string) ([]Epic, error) {
 	rows, err := s.DB.Query(ctx, `
-		SELECT id, board_id, name, type, color, deadline, description, created_at
-		FROM epics WHERE board_id = $1 AND deleted_at IS NULL ORDER BY created_at
-	`, boardID)
+		SELECT id, board_id, user_id, name, type, color, deadline, description, created_at
+		FROM epics WHERE user_id = $1 AND deleted_at IS NULL ORDER BY created_at
+	`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +44,7 @@ func (s *Store) List(ctx context.Context, boardID string) ([]Epic, error) {
 	var out []Epic
 	for rows.Next() {
 		var e Epic
-		if err := rows.Scan(&e.ID, &e.BoardID, &e.Name, &e.Type, &e.Color, &e.Deadline, &e.Description, &e.CreatedAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.BoardID, &e.UserID, &e.Name, &e.Type, &e.Color, &e.Deadline, &e.Description, &e.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, e)
@@ -54,23 +55,23 @@ func (s *Store) List(ctx context.Context, boardID string) ([]Epic, error) {
 func (s *Store) GetByID(ctx context.Context, id string) (*Epic, error) {
 	var e Epic
 	err := s.DB.QueryRow(ctx, `
-		SELECT id, board_id, name, type, color, deadline, description, created_at
+		SELECT id, board_id, user_id, name, type, color, deadline, description, created_at
 		FROM epics WHERE id = $1 AND deleted_at IS NULL
-	`, id).Scan(&e.ID, &e.BoardID, &e.Name, &e.Type, &e.Color, &e.Deadline, &e.Description, &e.CreatedAt)
+	`, id).Scan(&e.ID, &e.BoardID, &e.UserID, &e.Name, &e.Type, &e.Color, &e.Deadline, &e.Description, &e.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
 	return &e, nil
 }
 
-func (s *Store) Create(ctx context.Context, boardID, name, typ, color, description string, deadline *time.Time) (*Epic, error) {
+func (s *Store) Create(ctx context.Context, boardID, userID, name, typ, color, description string, deadline *time.Time) (*Epic, error) {
 	var e Epic
 	err := s.DB.QueryRow(ctx, `
-		INSERT INTO epics (board_id, name, type, color, deadline, description)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, board_id, name, type, color, deadline, description, created_at
-	`, boardID, name, typ, color, deadline, description).Scan(
-		&e.ID, &e.BoardID, &e.Name, &e.Type, &e.Color, &e.Deadline, &e.Description, &e.CreatedAt)
+		INSERT INTO epics (board_id, user_id, name, type, color, deadline, description)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING id, board_id, user_id, name, type, color, deadline, description, created_at
+	`, boardID, userID, name, typ, color, deadline, description).Scan(
+		&e.ID, &e.BoardID, &e.UserID, &e.Name, &e.Type, &e.Color, &e.Deadline, &e.Description, &e.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -82,9 +83,9 @@ func (s *Store) Update(ctx context.Context, id, name, typ, color, description st
 	err := s.DB.QueryRow(ctx, `
 		UPDATE epics SET name = $2, type = $3, color = $4, deadline = $5, description = $6
 		WHERE id = $1 AND deleted_at IS NULL
-		RETURNING id, board_id, name, type, color, deadline, description, created_at
+		RETURNING id, board_id, user_id, name, type, color, deadline, description, created_at
 	`, id, name, typ, color, deadline, description).Scan(
-		&e.ID, &e.BoardID, &e.Name, &e.Type, &e.Color, &e.Deadline, &e.Description, &e.CreatedAt)
+		&e.ID, &e.BoardID, &e.UserID, &e.Name, &e.Type, &e.Color, &e.Deadline, &e.Description, &e.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +93,7 @@ func (s *Store) Update(ctx context.Context, id, name, typ, color, description st
 }
 
 // SoftDelete sets deleted_at on the epic and cascades to its items.
-func (s *Store) SoftDelete(ctx context.Context, id, boardID string) error {
+func (s *Store) SoftDelete(ctx context.Context, id, userID string) error {
 	tx, err := s.DB.Begin(ctx)
 	if err != nil {
 		return err
@@ -102,9 +103,9 @@ func (s *Store) SoftDelete(ctx context.Context, id, boardID string) error {
 	var ts time.Time
 	err = tx.QueryRow(ctx, `
 		UPDATE epics SET deleted_at = NOW()
-		WHERE id = $1 AND board_id = $2 AND deleted_at IS NULL
+		WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
 		RETURNING deleted_at
-	`, id, boardID).Scan(&ts)
+	`, id, userID).Scan(&ts)
 	if err != nil {
 		return err
 	}
@@ -121,7 +122,7 @@ func (s *Store) SoftDelete(ctx context.Context, id, boardID string) error {
 }
 
 // RestoreEpic restores the epic and cascade-batch items.
-func (s *Store) RestoreEpic(ctx context.Context, id, boardID string) error {
+func (s *Store) RestoreEpic(ctx context.Context, id, userID string) error {
 	tx, err := s.DB.Begin(ctx)
 	if err != nil {
 		return err
@@ -130,8 +131,8 @@ func (s *Store) RestoreEpic(ctx context.Context, id, boardID string) error {
 
 	var ts time.Time
 	err = tx.QueryRow(ctx, `
-		SELECT deleted_at FROM epics WHERE id = $1 AND board_id = $2 AND deleted_at IS NOT NULL
-	`, id, boardID).Scan(&ts)
+		SELECT deleted_at FROM epics WHERE id = $1 AND user_id = $2 AND deleted_at IS NOT NULL
+	`, id, userID).Scan(&ts)
 	if err != nil {
 		return err
 	}
@@ -151,15 +152,15 @@ func (s *Store) RestoreEpic(ctx context.Context, id, boardID string) error {
 	return tx.Commit(ctx)
 }
 
-func (s *Store) ListTrashEpics(ctx context.Context, boardID string) ([]TrashEpic, error) {
+func (s *Store) ListTrashEpics(ctx context.Context, userID string) ([]TrashEpic, error) {
 	rows, err := s.DB.Query(ctx, `
 		SELECT e.id, e.name, e.color, e.deleted_at, COUNT(i.id) AS item_count
 		FROM epics e
 		LEFT JOIN items i ON i.epic_id = e.id AND i.deleted_at IS NOT NULL
-		WHERE e.board_id = $1 AND e.deleted_at IS NOT NULL
+		WHERE e.user_id = $1 AND e.deleted_at IS NOT NULL
 		GROUP BY e.id, e.name, e.color, e.deleted_at
 		ORDER BY e.deleted_at DESC
-	`, boardID)
+	`, userID)
 	if err != nil {
 		return nil, err
 	}

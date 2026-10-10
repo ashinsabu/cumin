@@ -6,17 +6,18 @@ import (
 	"errors"
 
 	"github.com/ashinsabu/cumin/server/api"
-	"github.com/ashinsabu/cumin/server/board"
+	"github.com/ashinsabu/cumin/server/auth"
+	"github.com/ashinsabu/cumin/server/project"
 	"github.com/go-chi/chi/v5"
 )
 
 type Handler struct {
-	store      *Store
-	boardStore *board.Store
+	store        *Store
+	projectStore *project.Store
 }
 
-func NewHandler(store *Store, boardStore *board.Store) *Handler {
-	return &Handler{store: store, boardStore: boardStore}
+func NewHandler(store *Store, projectStore *project.Store) *Handler {
+	return &Handler{store: store, projectStore: projectStore}
 }
 
 func (h *Handler) Routes(r chi.Router) {
@@ -35,11 +36,8 @@ type CreateRequest struct {
 }
 
 func (h *Handler) List(ctx context.Context) (*ListResponse, error) {
-	b, err := board.GetOrFetch(ctx, h.boardStore)
-	if err != nil {
-		return nil, api.NotFound("board not found")
-	}
-	views, err := h.store.List(ctx, b.ID)
+	userID := auth.UserIDFromContext(ctx)
+	views, err := h.store.List(ctx, userID)
 	if err != nil {
 		return nil, api.Internal("failed to list views")
 	}
@@ -53,15 +51,19 @@ func (h *Handler) Create(ctx context.Context, req CreateRequest) (*SavedView, er
 	if req.Name == "" {
 		return nil, api.BadRequest("name is required")
 	}
-	b, err := board.GetOrFetch(ctx, h.boardStore)
+	userID := auth.UserIDFromContext(ctx)
+
+	// boardID required until Phase 3 drops the column.
+	p, err := project.GetOrFetch(ctx, h.projectStore)
 	if err != nil {
-		return nil, api.NotFound("board not found")
+		return nil, api.Internal("failed to resolve project context")
 	}
+
 	filters := req.Filters
 	if len(filters) == 0 {
 		filters = json.RawMessage("{}")
 	}
-	v, err := h.store.Create(ctx, b.ID, req.Name, filters)
+	v, err := h.store.Create(ctx, p.BoardID, userID, req.Name, filters)
 	if err != nil {
 		return nil, api.Internal("failed to create view")
 	}
@@ -70,11 +72,8 @@ func (h *Handler) Create(ctx context.Context, req CreateRequest) (*SavedView, er
 
 func (h *Handler) Delete(ctx context.Context) error {
 	id := api.URLParam(ctx, "id")
-	b, err := board.GetOrFetch(ctx, h.boardStore)
-	if err != nil {
-		return api.NotFound("board not found")
-	}
-	if err := h.store.Delete(ctx, id, b.ID); err != nil {
+	userID := auth.UserIDFromContext(ctx)
+	if err := h.store.Delete(ctx, id, userID); err != nil {
 		if errors.Is(err, errNotFound) {
 			return api.NotFound("view not found")
 		}

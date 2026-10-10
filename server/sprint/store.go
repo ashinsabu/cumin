@@ -12,7 +12,7 @@ import (
 
 type Sprint struct {
 	ID            string    `json:"id"`
-	BoardID       string    `json:"board_id"`
+	ProjectID     string    `json:"project_id"`
 	Name          string    `json:"name"`
 	SprintNumber  int       `json:"sprint_number"`
 	StartDate     time.Time `json:"start_date"`
@@ -32,11 +32,11 @@ type Store struct {
 	DB *pgxpool.Pool
 }
 
-const sprintCols = `id, board_id, name, sprint_number, start_date, end_date, state, created_at`
+const sprintCols = `id, project_id, name, sprint_number, start_date, end_date, state, created_at`
 
 func scanSprint(row interface{ Scan(...any) error }) (*Sprint, error) {
 	var sp Sprint
-	if err := row.Scan(&sp.ID, &sp.BoardID, &sp.Name, &sp.SprintNumber,
+	if err := row.Scan(&sp.ID, &sp.ProjectID, &sp.Name, &sp.SprintNumber,
 		&sp.StartDate, &sp.EndDate, &sp.State, &sp.CreatedAt); err != nil {
 		return nil, err
 	}
@@ -83,11 +83,11 @@ func ComputeName(number int, start, end time.Time) string {
 	return fmt.Sprintf("Sprint %d (%s Half %d)", number, time.Month(best.month).String(), best.half)
 }
 
-func (s *Store) List(ctx context.Context, boardID string) ([]Sprint, error) {
+func (s *Store) List(ctx context.Context, projectID string) ([]Sprint, error) {
 	rows, err := s.DB.Query(ctx, `
-		SELECT `+sprintCols+` FROM sprints WHERE board_id = $1
+		SELECT `+sprintCols+` FROM sprints WHERE project_id = $1
 		ORDER BY sprint_number DESC, start_date DESC
-	`, boardID)
+	`, projectID)
 	if err != nil {
 		return nil, err
 	}
@@ -104,9 +104,9 @@ func (s *Store) List(ctx context.Context, boardID string) ([]Sprint, error) {
 	return out, nil
 }
 
-func (s *Store) GetActive(ctx context.Context, boardID string) (*Sprint, error) {
+func (s *Store) GetActive(ctx context.Context, projectID string) (*Sprint, error) {
 	return scanSprint(s.DB.QueryRow(ctx,
-		`SELECT `+sprintCols+` FROM sprints WHERE board_id = $1 AND state = 'active'`, boardID))
+		`SELECT `+sprintCols+` FROM sprints WHERE project_id = $1 AND state = 'active'`, projectID))
 }
 
 func (s *Store) GetByID(ctx context.Context, id string) (*Sprint, error) {
@@ -114,28 +114,27 @@ func (s *Store) GetByID(ctx context.Context, id string) (*Sprint, error) {
 		`SELECT `+sprintCols+` FROM sprints WHERE id = $1`, id))
 }
 
-// CreateNext atomically increments the board's sprint_seq, then inserts a new planning sprint.
-// cadenceDays is the inclusive length: startDate + cadenceDays - 1 = endDate.
-func (s *Store) CreateNext(ctx context.Context, boardID string, startDate time.Time, cadenceDays int) (*Sprint, error) {
+// CreateNext atomically increments the project's sprint_seq, then inserts a new planning sprint.
+// boardID is kept until Phase 3 drops the column from sprints.
+func (s *Store) CreateNext(ctx context.Context, boardID, projectID string, startDate time.Time, cadenceDays int) (*Sprint, error) {
 	endDate := startDate.AddDate(0, 0, cadenceDays-1)
 
 	var seq int
 	if err := s.DB.QueryRow(ctx,
-		`UPDATE boards SET sprint_seq = sprint_seq + 1 WHERE id = $1 RETURNING sprint_seq`, boardID,
+		`UPDATE projects SET sprint_seq = sprint_seq + 1 WHERE id = $1 RETURNING sprint_seq`, projectID,
 	).Scan(&seq); err != nil {
 		return nil, fmt.Errorf("increment sprint_seq: %w", err)
 	}
 
 	name := ComputeName(seq, startDate, endDate)
 	return scanSprint(s.DB.QueryRow(ctx, `
-		INSERT INTO sprints (board_id, name, sprint_number, start_date, end_date, state)
-		VALUES ($1, $2, $3, $4, $5, 'planning')
+		INSERT INTO sprints (board_id, project_id, name, sprint_number, start_date, end_date, state)
+		VALUES ($1, $2, $3, $4, $5, $6, 'planning')
 		RETURNING `+sprintCols,
-		boardID, name, seq, startDate, endDate))
+		boardID, projectID, name, seq, startDate, endDate))
 }
 
 // Activate transitions planning → active.
-// The unique partial index on (board_id) WHERE state='active' prevents concurrent activations.
 func (s *Store) Activate(ctx context.Context, id string) (*Sprint, error) {
 	sp, err := scanSprint(s.DB.QueryRow(ctx,
 		`UPDATE sprints SET state = 'active' WHERE id = $1 AND state = 'planning' RETURNING `+sprintCols, id))
@@ -149,8 +148,8 @@ func (s *Store) Activate(ctx context.Context, id string) (*Sprint, error) {
 }
 
 // Close transitions the sprint active → completed, spills unfinished items, and atomically creates
-// the next sprint (planning) so there is always a destination for future items.
-func (s *Store) Close(ctx context.Context, sprintID, boardID string, cadenceDays int, doneStatusIDs []string) (*CloseResult, error) {
+// the next sprint (planning).
+func (s *Store) Close(ctx context.Context, sprintID, boardID, projectID string, cadenceDays int, doneStatusIDs []string) (*CloseResult, error) {
 	tx, err := s.DB.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -170,7 +169,7 @@ func (s *Store) Close(ctx context.Context, sprintID, boardID string, cadenceDays
 
 	var nextSeq int
 	if err = tx.QueryRow(ctx,
-		`UPDATE boards SET sprint_seq = sprint_seq + 1 WHERE id = $1 RETURNING sprint_seq`, boardID,
+		`UPDATE projects SET sprint_seq = sprint_seq + 1 WHERE id = $1 RETURNING sprint_seq`, projectID,
 	).Scan(&nextSeq); err != nil {
 		return nil, err
 	}
@@ -181,11 +180,11 @@ func (s *Store) Close(ctx context.Context, sprintID, boardID string, cadenceDays
 
 	var next Sprint
 	err = tx.QueryRow(ctx, `
-		INSERT INTO sprints (board_id, name, sprint_number, start_date, end_date, state)
-		VALUES ($1, $2, $3, $4, $5, 'planning')
+		INSERT INTO sprints (board_id, project_id, name, sprint_number, start_date, end_date, state)
+		VALUES ($1, $2, $3, $4, $5, $6, 'planning')
 		RETURNING `+sprintCols,
-		boardID, nextName, nextSeq, nextStart, nextEnd,
-	).Scan(&next.ID, &next.BoardID, &next.Name, &next.SprintNumber,
+		boardID, projectID, nextName, nextSeq, nextStart, nextEnd,
+	).Scan(&next.ID, &next.ProjectID, &next.Name, &next.SprintNumber,
 		&next.StartDate, &next.EndDate, &next.State, &next.CreatedAt)
 	if err != nil {
 		return nil, err

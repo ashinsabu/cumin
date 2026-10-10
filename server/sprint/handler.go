@@ -5,12 +5,13 @@ import (
 	"time"
 
 	"github.com/ashinsabu/cumin/server/api"
+	"github.com/ashinsabu/cumin/server/auth"
 	"github.com/ashinsabu/cumin/server/board"
+	"github.com/ashinsabu/cumin/server/project"
 	"github.com/go-chi/chi/v5"
 )
 
 type CreateRequest struct {
-	// StartDate is optional; defaults to today if omitted.
 	StartDate *time.Time `json:"start_date"`
 }
 
@@ -27,19 +28,19 @@ type ListResponse struct {
 	Sprints []Sprint `json:"sprints"`
 }
 
-// State machine: planning → active → completed (no skipping, no reversal)
 var validTransitions = map[string]string{
 	"planning": "active",
 	"active":   "completed",
 }
 
 type Handler struct {
-	store      *Store
-	boardStore *board.Store
+	store        *Store
+	boardStore   *board.Store
+	projectStore *project.Store
 }
 
-func NewHandler(store *Store, boardStore *board.Store) *Handler {
-	return &Handler{store: store, boardStore: boardStore}
+func NewHandler(store *Store, boardStore *board.Store, projectStore *project.Store) *Handler {
+	return &Handler{store: store, boardStore: boardStore, projectStore: projectStore}
 }
 
 func (h *Handler) Routes(r chi.Router) {
@@ -51,21 +52,12 @@ func (h *Handler) Routes(r chi.Router) {
 	r.Get("/api/sprints/{id}/spillover-preview", api.HandleNoBody(h.SpilloverPreview))
 }
 
-// List returns all sprints for the authenticated user's board.
-//
-// @Summary      List sprints
-// @Tags         sprints
-// @Produce      json
-// @Success      200  {object}  sprint.ListResponse
-// @Failure      404  {object}  api.ErrorResponse
-// @Security     CookieAuth
-// @Router       /api/sprints [get]
 func (h *Handler) List(ctx context.Context) (*ListResponse, error) {
-	b, err := board.GetOrFetch(ctx, h.boardStore)
+	p, err := project.GetOrFetch(ctx, h.projectStore)
 	if err != nil {
-		return nil, api.NotFound("board not found")
+		return nil, api.NotFound("project not found")
 	}
-	sprints, err := h.store.List(ctx, b.ID)
+	sprints, err := h.store.List(ctx, p.ID)
 	if err != nil {
 		return nil, api.Internal("failed to list sprints")
 	}
@@ -75,42 +67,22 @@ func (h *Handler) List(ctx context.Context) (*ListResponse, error) {
 	return &ListResponse{Sprints: sprints}, nil
 }
 
-// GetActive returns the currently active sprint.
-//
-// @Summary      Get active sprint
-// @Tags         sprints
-// @Produce      json
-// @Success      200  {object}  sprint.Sprint
-// @Failure      404  {object}  api.ErrorResponse
-// @Security     CookieAuth
-// @Router       /api/sprints/active [get]
 func (h *Handler) GetActive(ctx context.Context) (*Sprint, error) {
-	b, err := board.GetOrFetch(ctx, h.boardStore)
+	p, err := project.GetOrFetch(ctx, h.projectStore)
 	if err != nil {
-		return nil, api.NotFound("board not found")
+		return nil, api.NotFound("project not found")
 	}
-	sp, err := h.store.GetActive(ctx, b.ID)
+	sp, err := h.store.GetActive(ctx, p.ID)
 	if err != nil {
 		return nil, api.NotFound("no active sprint")
 	}
 	return sp, nil
 }
 
-// Create creates a new planning sprint.
-//
-// @Summary      Create sprint
-// @Tags         sprints
-// @Accept       json
-// @Produce      json
-// @Param        body  body  sprint.CreateRequest  true  "Sprint start date (optional)"
-// @Success      200  {object}  sprint.Sprint
-// @Failure      404  {object}  api.ErrorResponse
-// @Security     CookieAuth
-// @Router       /api/sprints [post]
 func (h *Handler) Create(ctx context.Context, req CreateRequest) (*Sprint, error) {
-	b, err := board.GetOrFetch(ctx, h.boardStore)
+	p, err := project.GetOrFetch(ctx, h.projectStore)
 	if err != nil {
-		return nil, api.NotFound("board not found")
+		return nil, api.NotFound("project not found")
 	}
 
 	startDate := time.Now().UTC().Truncate(24 * time.Hour)
@@ -118,39 +90,30 @@ func (h *Handler) Create(ctx context.Context, req CreateRequest) (*Sprint, error
 		startDate = req.StartDate.UTC().Truncate(24 * time.Hour)
 	}
 
-	cadence := b.SprintCadenceDays
+	cadence := p.SprintCadenceDays
 	if cadence <= 0 {
 		cadence = 14
 	}
 
-	sp, err := h.store.CreateNext(ctx, b.ID, startDate, cadence)
+	sp, err := h.store.CreateNext(ctx, p.BoardID, p.ID, startDate, cadence)
 	if err != nil {
 		return nil, api.Internal("failed to create sprint")
 	}
 	return sp, nil
 }
 
-// Activate transitions a sprint from planning to active.
-//
-// @Summary      Activate sprint
-// @Tags         sprints
-// @Produce      json
-// @Param        id  path  string  true  "Sprint ID"
-// @Success      200  {object}  sprint.Sprint
-// @Failure      404  {object}  api.ErrorResponse
-// @Failure      409  {object}  api.ErrorResponse
-// @Security     CookieAuth
-// @Router       /api/sprints/{id}/activate [post]
 func (h *Handler) Activate(ctx context.Context) (*Sprint, error) {
 	id := api.URLParam(ctx, "id")
+	userID := auth.UserIDFromContext(ctx)
 
 	sp, err := h.store.GetByID(ctx, id)
 	if err != nil {
 		return nil, api.NotFound("sprint not found")
 	}
 
-	b, err := board.GetOrFetch(ctx, h.boardStore)
-	if err != nil || sp.BoardID != b.ID {
+	// Verify sprint belongs to this user via its project.
+	proj, err := h.projectStore.GetByID(ctx, sp.ProjectID)
+	if err != nil || proj.UserID != userID {
 		return nil, api.NotFound("sprint not found")
 	}
 
@@ -165,27 +128,17 @@ func (h *Handler) Activate(ctx context.Context) (*Sprint, error) {
 	return activated, nil
 }
 
-// Close closes an active sprint and spills incomplete items to a new planning sprint.
-//
-// @Summary      Close sprint
-// @Tags         sprints
-// @Produce      json
-// @Param        id  path  string  true  "Sprint ID"
-// @Success      200  {object}  sprint.CloseResponse
-// @Failure      404  {object}  api.ErrorResponse
-// @Failure      409  {object}  api.ErrorResponse
-// @Security     CookieAuth
-// @Router       /api/sprints/{id}/close [post]
 func (h *Handler) Close(ctx context.Context) (*CloseResponse, error) {
 	id := api.URLParam(ctx, "id")
+	userID := auth.UserIDFromContext(ctx)
 
 	sp, err := h.store.GetByID(ctx, id)
 	if err != nil {
 		return nil, api.NotFound("sprint not found")
 	}
 
-	b, err := board.GetOrFetch(ctx, h.boardStore)
-	if err != nil || sp.BoardID != b.ID {
+	proj, err := h.projectStore.GetByID(ctx, sp.ProjectID)
+	if err != nil || proj.UserID != userID {
 		return nil, api.NotFound("sprint not found")
 	}
 
@@ -193,47 +146,38 @@ func (h *Handler) Close(ctx context.Context) (*CloseResponse, error) {
 		return nil, api.Conflict("sprint must be 'active' to close (current: " + sp.State + ")")
 	}
 
-	doneIDs, err := h.boardStore.DoneStatusIDs(ctx, b.ID)
+	doneIDs, err := h.boardStore.DoneStatusIDs(ctx, userID)
 	if err != nil {
 		return nil, api.Internal("failed to resolve done statuses")
 	}
 
-	cadence := b.SprintCadenceDays
+	cadence := proj.SprintCadenceDays
 	if cadence <= 0 {
 		cadence = 14
 	}
 
-	result, err := h.store.Close(ctx, id, b.ID, cadence, doneIDs)
+	result, err := h.store.Close(ctx, id, proj.BoardID, proj.ID, cadence, doneIDs)
 	if err != nil {
 		return nil, api.Conflict("close failed — check sprint state and try again")
 	}
 	return &CloseResponse{SpilledCount: result.SpilledCount, NextSprint: result.NextSprint}, nil
 }
 
-// SpilloverPreview returns the count of items that would spill to the next sprint on close.
-//
-// @Summary      Spillover preview
-// @Tags         sprints
-// @Produce      json
-// @Param        id  path  string  true  "Sprint ID"
-// @Success      200  {object}  sprint.SpilloverPreviewResponse
-// @Failure      404  {object}  api.ErrorResponse
-// @Security     CookieAuth
-// @Router       /api/sprints/{id}/spillover-preview [get]
 func (h *Handler) SpilloverPreview(ctx context.Context) (*SpilloverPreviewResponse, error) {
 	id := api.URLParam(ctx, "id")
+	userID := auth.UserIDFromContext(ctx)
 
 	sp, err := h.store.GetByID(ctx, id)
 	if err != nil {
 		return nil, api.NotFound("sprint not found")
 	}
 
-	b, err := board.GetOrFetch(ctx, h.boardStore)
-	if err != nil || sp.BoardID != b.ID {
+	proj, err := h.projectStore.GetByID(ctx, sp.ProjectID)
+	if err != nil || proj.UserID != userID {
 		return nil, api.NotFound("sprint not found")
 	}
 
-	doneIDs, err := h.boardStore.DoneStatusIDs(ctx, b.ID)
+	doneIDs, err := h.boardStore.DoneStatusIDs(ctx, userID)
 	if err != nil {
 		return nil, api.Internal("failed to resolve done statuses")
 	}
