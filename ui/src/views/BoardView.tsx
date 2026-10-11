@@ -4,28 +4,20 @@ import { useBoard } from '../context/BoardContext'
 import { useItems, useMoveItem } from '../hooks/useItems'
 import { useBoardStatuses } from '../hooks/useBoardQueries'
 import { useSelectedProject } from '../hooks/useSelectedProject'
+import { useActiveSprint } from '../hooks/useSprints'
+import { usePersistentState } from '../hooks/usePersistentState'
 import { ItemCard } from '../components/ItemCard'
+import { statusDisplayColor } from '../components/ui'
 import type { Status } from '../types'
-
-// Middle column tints cycle: red first (blocked-like), then blue (in-progress-like), then remainder
-const MIDDLE_TINTS = [
-  'bg-red-500/[0.08] border-red-500/15',
-  'bg-blue-500/[0.08] border-blue-500/15',
-  'bg-amber-500/[0.08] border-amber-500/15',
-  'bg-violet-500/[0.08] border-violet-500/15',
-]
-
-function columnTint(status: Status, middleIdx: number): string {
-  if (status.is_initial) return 'bg-zinc-500/[0.07] border-zinc-500/15'
-  if (status.is_done) return 'bg-emerald-500/[0.08] border-emerald-500/15'
-  return MIDDLE_TINTS[middleIdx % MIDDLE_TINTS.length]
-}
 
 export function BoardView() {
   const { selectItem } = useBoard()
   const [selectedProject] = useSelectedProject()
-  const { data: items = [] } = useItems({ projectId: selectedProject?.id })
+  // 'project' = scoped to selected project, 'all' = all projects visible. Persisted.
+  const [boardScope, setBoardScope] = usePersistentState<'project' | 'all'>('cumin:board:scope', 'project')
+  const { data: items = [] } = useItems({ projectId: boardScope === 'project' ? selectedProject?.id : undefined })
   const { data: statuses = [] } = useBoardStatuses()
+  const { data: activeSprint } = useActiveSprint()
   const moveItem = useMoveItem()
 
   // pendingMoves is the source of truth for in-flight drags. It's pure React
@@ -52,18 +44,92 @@ export function BoardView() {
     })
   }
 
+  const doneItems = statuses.length
+    ? items.filter((i) => statuses.find((s) => s.id === i.status_id)?.is_done)
+    : []
+  const progress = items.length ? Math.round((doneItems.length / items.length) * 100) : 0
+  const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+  const daysLeft = activeSprint
+    ? Math.ceil((new Date(activeSprint.end_date).getTime() - Date.now()) / 86400000)
+    : null
+
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
+      {activeSprint ? (
+        <div className="shrink-0 border-b border-line bg-surface">
+          <div className="flex items-center gap-3 px-4 py-2 text-xs text-dim">
+            <span className="font-semibold text-ink text-sm">{activeSprint.name}</span>
+            <span className="text-ghost/40">·</span>
+            <span>{fmtDate(activeSprint.start_date)} – {fmtDate(activeSprint.end_date)}</span>
+            <span className="text-ghost/40">·</span>
+            <span>
+              <span className="font-semibold text-ink/80">{doneItems.length}/{items.length}</span>
+              {' '}done
+            </span>
+            <div className="ml-auto flex items-center gap-3">
+              {/* Scope toggle — persists across reloads */}
+              <button
+                onClick={() => setBoardScope((s) => s === 'project' ? 'all' : 'project')}
+                className="flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-[var(--c-radius-card)] bg-line/60 hover:bg-line transition-colors"
+                title={boardScope === 'project' ? 'Switch to all projects' : 'Switch to current project'}
+              >
+                {boardScope === 'all' ? (
+                  <span className="text-dim">All projects</span>
+                ) : (
+                  <>
+                    {selectedProject && (
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: selectedProject.color || '#6b7280' }} />
+                    )}
+                    <span className="text-dim">{selectedProject?.name ?? 'Project'}</span>
+                  </>
+                )}
+              </button>
+              {daysLeft !== null && (
+                <span className={`font-semibold ${
+                  daysLeft <= 1 ? 'text-red-400' : daysLeft <= 3 ? 'text-amber-400' : 'text-dim'
+                }`}>
+                  {daysLeft <= 0 ? 'Overdue' : `${daysLeft}d left`}
+                </span>
+              )}
+            </div>
+          </div>
+          {items.length > 0 && (
+            <div className="h-0.5 bg-line">
+              <div className="h-full bg-accent/60 transition-all duration-500" style={{ width: `${progress}%` }} />
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="shrink-0 flex items-center gap-3 px-4 py-2 border-b border-line bg-surface">
+          <span className="text-xs text-ghost">No active sprint</span>
+          <button
+            onClick={() => setBoardScope((s) => s === 'project' ? 'all' : 'project')}
+            className="flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-[var(--c-radius-card)] bg-line/60 hover:bg-line transition-colors ml-auto"
+          >
+            {boardScope === 'all' ? (
+              <span className="text-dim">All projects</span>
+            ) : (
+              <>
+                {selectedProject && (
+                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: selectedProject.color || '#6b7280' }} />
+                )}
+                <span className="text-dim">{selectedProject?.name ?? 'Project'}</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
       <div className="flex-1 overflow-x-auto">
         <div className="flex gap-3 p-4 min-h-full">
           {statuses.map((status, idx) => {
             const columnItems = displayItems.filter((i) => i.status_id === status.id)
             const middleIdx = statuses.slice(0, idx).filter((s) => !s.is_initial && !s.is_done).length
-            const tint = columnTint(status, middleIdx)
+            const color = statusDisplayColor(status, middleIdx)
             return (
               <div key={status.id} className="min-w-[200px] flex-1 flex flex-col">
                 <div className="flex items-center gap-2 mb-2 px-1">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-dim">
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                  <h3 className="text-xs font-bold uppercase tracking-wider" style={{ color }}>
                     {status.name}
                   </h3>
                   <span className="text-xs font-medium px-1.5 py-0.5 rounded-full text-dim bg-line">
@@ -75,11 +141,10 @@ export function BoardView() {
                     <div
                       ref={provided.innerRef}
                       {...provided.droppableProps}
-                      className={`flex flex-col gap-2 flex-1 rounded-[var(--c-radius-card)] p-2.5 min-h-[200px] transition-colors border ${
-                        snapshot.isDraggingOver
-                          ? 'bg-accent/5 border-accent/20'
-                          : tint
-                      }`}
+                      className={`flex flex-col gap-2 flex-1 rounded-[var(--c-radius-card)] p-2.5 min-h-[200px] transition-colors border`}
+                      style={snapshot.isDraggingOver
+                        ? { backgroundColor: 'var(--c-accent, #6366f1)08', borderColor: 'var(--c-accent, #6366f1)30' }
+                        : { backgroundColor: color + '0d', borderColor: color + '25' }}
                     >
                       {columnItems.map((item, index) => (
                         <Draggable key={item.id} draggableId={item.id} index={index}>
