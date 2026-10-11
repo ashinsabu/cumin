@@ -1,8 +1,32 @@
 import { useState, useRef, useEffect, type ReactNode } from 'react'
+import type { Status } from '../types'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 export const PRESET_COLORS = ['#6b7280', '#6366f1', '#8b5cf6', '#ec4899', '#f97316', '#eab308', '#22c55e', '#14b8a6', '#3b82f6']
+
+// ─── Status utilities ────────────────────────────────────────────────────────
+
+const STATUS_MIDDLE_COLORS = ['#ef4444', '#3b82f6', '#f59e0b', '#8b5cf6']
+
+export function statusDisplayColor(status: Pick<Status, 'is_initial' | 'is_done' | 'color'>, middleIndex = 0): string {
+  if (status.color) return status.color
+  if (status.is_initial) return '#71717a'
+  if (status.is_done) return '#22c55e'
+  return STATUS_MIDDLE_COLORS[middleIndex % STATUS_MIDDLE_COLORS.length]
+}
+
+export function StatusBadge({ status, middleIndex = 0, className }: { status: Status; middleIndex?: number; className?: string }) {
+  const color = statusDisplayColor(status, middleIndex)
+  return (
+    <span
+      className={`text-xs font-semibold px-2 py-0.5 rounded-[var(--c-radius-card)] border ${className ?? ''}`}
+      style={{ backgroundColor: color + '18', color, borderColor: color + '30' }}
+    >
+      {status.name}
+    </span>
+  )
+}
 
 // ─── Primitives ──────────────────────────────────────────────────────────────
 

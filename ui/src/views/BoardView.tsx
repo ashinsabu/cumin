@@ -8,7 +8,6 @@ import { useActiveSprint } from '../hooks/useSprints'
 import { usePersistentState } from '../hooks/usePersistentState'
 import { ItemCard } from '../components/ItemCard'
 import { statusDisplayColor } from '../components/ui'
-import type { Status } from '../types'
 
 export function BoardView() {
   const { selectItem } = useBoard()

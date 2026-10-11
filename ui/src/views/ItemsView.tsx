@@ -52,7 +52,7 @@ function InlineStatusPicker({ item, statuses, middleStatuses }: { item: Item; st
       </button>
       {open && (
         <div className="absolute z-50 top-full mt-1 left-0 min-w-[140px] bg-raised border border-line rounded-[var(--c-radius-card)] shadow-lg py-1">
-          {statuses.map((s, i) => {
+          {statuses.map((s) => {
             const mIdx = middleStatuses.indexOf(s)
             const color = statusDisplayColor(s, mIdx >= 0 ? mIdx : 0)
             return (
@@ -312,7 +312,6 @@ export function ItemsView() {
 
   function renderCell(col: ColumnConfig, item: Item) {
     const priority = PRIORITY[item.priority] ?? PRIORITY[4]
-    const status = statuses.find((s) => s.id === item.status_id)
     const project = projectList.find((p) => p.id === item.project_id)
     const epic = item.epic_id ? epicList.find((e) => e.id === item.epic_id) : undefined
 
