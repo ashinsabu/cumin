@@ -3,12 +3,7 @@ import { motion } from 'framer-motion'
 import { useCreateEpic } from '../hooks/useEpics'
 import type { CreateEpicPayload } from '../context/BoardContext'
 import { fade, modalScale } from '../lib/motionVariants'
-
-const PRESET_COLORS = [
-  '#6366f1', '#8b5cf6', '#ec4899', '#e11d48',
-  '#f97316', '#eab308', '#22c55e', '#14b8a6',
-  '#3b82f6', '#06b6d4', '#6b7280', '#a16207',
-]
+import { PRESET_COLORS, ColorPicker } from './ui'
 
 const TYPE_OPTIONS: { value: CreateEpicPayload['type']; label: string }[] = [
   { value: 'goal', label: 'Goal' },
@@ -97,17 +92,7 @@ export function CreateEpicModal({ onClose }: { onClose: () => void }) {
 
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-dim">Color</label>
-            <div className="flex gap-2 flex-wrap">
-              {PRESET_COLORS.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setColor(c)}
-                  className={`w-6 h-6 rounded-full transition-transform ${color === c ? 'scale-110' : 'hover:scale-110'}`}
-                  style={{ backgroundColor: c, outline: color === c ? `3px solid ${c}` : undefined, outlineOffset: '2px' }}
-                />
-              ))}
-            </div>
+            <ColorPicker value={color} onChange={setColor} />
           </div>
 
           <div className="flex flex-col gap-1.5">
