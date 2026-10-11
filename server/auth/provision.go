@@ -2,12 +2,10 @@ package auth
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"unicode"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -58,19 +56,15 @@ func (p *Provisioner) ProvisionNewUser(ctx context.Context, userID, name string)
 	}
 	defer tx.Rollback(ctx)
 
-	// RACE-001 fix: ON CONFLICT (user_id) DO NOTHING + RETURNING id
-	var boardID string
-	err = tx.QueryRow(ctx, `
-		INSERT INTO boards (user_id, name)
-		VALUES ($1, 'Life')
-		ON CONFLICT (user_id) DO NOTHING
-		RETURNING id
-	`, userID).Scan(&boardID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil // already provisioned by a concurrent request
-		}
-		return fmt.Errorf("create board: %w", err)
+	// RACE-001 fix: guard against concurrent provisioning via a unique sentinel row in users.
+	// Boards table no longer exists (dropped in migration 017).
+	// We use INSERT INTO statuses ON CONFLICT to detect re-provisioning.
+	var existingCount int
+	if err := tx.QueryRow(ctx, `SELECT COUNT(*) FROM statuses WHERE user_id = $1`, userID).Scan(&existingCount); err != nil {
+		return fmt.Errorf("check existing statuses: %w", err)
+	}
+	if existingCount > 0 {
+		return nil // already provisioned
 	}
 
 	statuses := []struct {
@@ -89,10 +83,10 @@ func (p *Provisioner) ProvisionNewUser(ctx context.Context, userID, name string)
 	for _, s := range statuses {
 		var sid string
 		if err := tx.QueryRow(ctx, `
-			INSERT INTO statuses (board_id, user_id, name, position, is_initial, is_done)
-			VALUES ($1, $2, $3, $4, $5, $6)
+			INSERT INTO statuses (user_id, name, position, is_initial, is_done)
+			VALUES ($1, $2, $3, $4, $5)
 			RETURNING id
-		`, boardID, userID, s.name, s.position, s.isInitial, s.isDone).Scan(&sid); err != nil {
+		`, userID, s.name, s.position, s.isInitial, s.isDone).Scan(&sid); err != nil {
 			return fmt.Errorf("create status %s: %w", s.name, err)
 		}
 		if s.isInitial {
@@ -105,17 +99,17 @@ func (p *Provisioner) ProvisionNewUser(ctx context.Context, userID, name string)
 	projPrefix := defaultProjectPrefix(name)
 	var projectID string
 	if err := tx.QueryRow(ctx, `
-		INSERT INTO projects (board_id, user_id, name, prefix, color, description, sprint_seq)
-		VALUES ($1, $2, $3, $4, '#6366f1', 'Default project', 0)
+		INSERT INTO projects (user_id, name, prefix, color, description, sprint_seq)
+		VALUES ($1, $2, $3, '#6366f1', 'Default project', 0)
 		RETURNING id
-	`, boardID, userID, projName, projPrefix).Scan(&projectID); err != nil {
+	`, userID, projName, projPrefix).Scan(&projectID); err != nil {
 		return fmt.Errorf("create default project: %w", err)
 	}
 
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO epics (board_id, user_id, name, type, color, description)
-		VALUES ($1, $2, 'Study', 'recurring', '#6366f1', 'Learning and skill building')
-	`, boardID, userID); err != nil {
+		INSERT INTO epics (user_id, name, type, color, description)
+		VALUES ($1, 'Study', 'recurring', '#6366f1', 'Learning and skill building')
+	`, userID); err != nil {
 		return fmt.Errorf("create study epic: %w", err)
 	}
 

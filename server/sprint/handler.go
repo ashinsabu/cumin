@@ -43,6 +43,7 @@ func NewHandler(store *Store, boardStore *board.Store, projectStore *project.Sto
 	return &Handler{store: store, boardStore: boardStore, projectStore: projectStore}
 }
 
+
 func (h *Handler) Routes(r chi.Router) {
 	r.Get("/api/sprints", api.HandleNoBody(h.List))
 	r.Post("/api/sprints", api.Handle(h.Create))
@@ -95,7 +96,7 @@ func (h *Handler) Create(ctx context.Context, req CreateRequest) (*Sprint, error
 		cadence = 14
 	}
 
-	sp, err := h.store.CreateNext(ctx, p.BoardID, p.ID, startDate, cadence)
+	sp, err := h.store.CreateNext(ctx, p.ID, startDate, cadence)
 	if err != nil {
 		return nil, api.Internal("failed to create sprint")
 	}
@@ -156,7 +157,7 @@ func (h *Handler) Close(ctx context.Context) (*CloseResponse, error) {
 		cadence = 14
 	}
 
-	result, err := h.store.Close(ctx, id, proj.BoardID, proj.ID, cadence, doneIDs)
+	result, err := h.store.Close(ctx, id, proj.ID, cadence, doneIDs)
 	if err != nil {
 		return nil, api.Conflict("close failed — check sprint state and try again")
 	}

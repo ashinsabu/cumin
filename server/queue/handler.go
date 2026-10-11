@@ -99,13 +99,7 @@ func (h *Handler) Create(ctx context.Context, req CreateRequest) (*QueueItem, er
 	}
 	userID := auth.UserIDFromContext(ctx)
 
-	// boardID required until Phase 3 drops the column.
-	p, err := project.GetOrFetch(ctx, h.projectStore)
-	if err != nil {
-		return nil, api.Internal("failed to resolve project context")
-	}
-
-	q, err := h.store.Create(ctx, p.BoardID, userID, userID, req.Title, req.Notes, req.Deadline, req.Priority, req.EstimateMinutes)
+	q, err := h.store.Create(ctx, userID, userID, req.Title, req.Notes, req.Deadline, req.Priority, req.EstimateMinutes)
 	if err != nil {
 		return nil, api.Internal("failed to create queue item")
 	}
@@ -159,13 +153,7 @@ func (h *Handler) Promote(ctx context.Context, req PromoteRequest) (*PromoteResu
 	}
 	userID := auth.UserIDFromContext(ctx)
 
-	// boardID required until Phase 3 drops the column.
-	p, err := project.GetOrFetch(ctx, h.projectStore)
-	if err != nil {
-		return nil, api.Internal("failed to resolve project context")
-	}
-
-	result, err := h.store.Promote(ctx, id, p.BoardID, userID, req.ProjectID, req.StatusID, req.EpicID)
+	result, err := h.store.Promote(ctx, id, userID, req.ProjectID, req.StatusID, req.EpicID)
 	if err != nil {
 		return nil, api.Internal("failed to promote queue item")
 	}

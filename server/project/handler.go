@@ -70,13 +70,7 @@ func (h *Handler) Create(ctx context.Context, req CreateRequest) (*Project, erro
 		req.Color = "#6b7280"
 	}
 
-	// Use the current project's boardID to satisfy the NOT NULL constraint until Phase 3.
-	p, err := GetOrFetch(ctx, h.store)
-	if err != nil {
-		return nil, api.Internal("failed to resolve board context")
-	}
-
-	created, err := h.store.Create(ctx, p.BoardID, userID, req.Name, req.Prefix, req.Color, req.Description)
+	created, err := h.store.Create(ctx, userID, req.Name, req.Prefix, req.Color, req.Description)
 	if err != nil {
 		if strings.Contains(err.Error(), "idx_projects_board_prefix") || strings.Contains(err.Error(), "idx_projects_user_prefix") {
 			return nil, api.Conflict("prefix already in use")

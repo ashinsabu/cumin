@@ -11,7 +11,6 @@ import (
 
 type Item struct {
 	ID              string     `json:"id"`
-	BoardID         string     `json:"board_id"`
 	ProjectID       *string    `json:"project_id"`
 	EpicID          *string    `json:"epic_id"`
 	SprintID        *string    `json:"sprint_id"`
@@ -43,10 +42,10 @@ type Store struct {
 	DB *pgxpool.Pool
 }
 
-const itemCols = `id, board_id, project_id, epic_id, sprint_id, status_id, display_id,
+const itemCols = `id, project_id, epic_id, sprint_id, status_id, display_id,
 	title, description, priority, estimate_minutes, position, created_at, updated_at`
 
-const itemAliasedCols = `i.id, i.board_id, i.project_id, i.epic_id, i.sprint_id, i.status_id, i.display_id,
+const itemAliasedCols = `i.id, i.project_id, i.epic_id, i.sprint_id, i.status_id, i.display_id,
 	i.title, i.description, i.priority, i.estimate_minutes, i.position, i.created_at, i.updated_at`
 
 // itemEnrichedCols uses LATERAL join (not correlated scalar subquery) to avoid N+1 index scans.
@@ -61,7 +60,7 @@ const itemLateralJoin = `LEFT JOIN LATERAL (
 
 func scanItemEnriched(row interface{ Scan(...any) error }) (*Item, error) {
 	var it Item
-	err := row.Scan(&it.ID, &it.BoardID, &it.ProjectID, &it.EpicID, &it.SprintID, &it.StatusID, &it.DisplayID,
+	err := row.Scan(&it.ID, &it.ProjectID, &it.EpicID, &it.SprintID, &it.StatusID, &it.DisplayID,
 		&it.Title, &it.Description, &it.Priority, &it.EstimateMinutes, &it.Position, &it.CreatedAt, &it.UpdatedAt,
 		&it.EpicName, &it.EpicColor, &it.TimeInStatusMinutes)
 	if err != nil {
@@ -72,7 +71,7 @@ func scanItemEnriched(row interface{ Scan(...any) error }) (*Item, error) {
 
 func scanItemBase(row interface{ Scan(...any) error }) (*Item, error) {
 	var it Item
-	err := row.Scan(&it.ID, &it.BoardID, &it.ProjectID, &it.EpicID, &it.SprintID, &it.StatusID, &it.DisplayID,
+	err := row.Scan(&it.ID, &it.ProjectID, &it.EpicID, &it.SprintID, &it.StatusID, &it.DisplayID,
 		&it.Title, &it.Description, &it.Priority, &it.EstimateMinutes, &it.Position, &it.CreatedAt, &it.UpdatedAt)
 	if err != nil {
 		return nil, err
@@ -178,7 +177,7 @@ func (s *Store) GetByIDForUser(ctx context.Context, id, userID string) (*Item, e
 
 // CreateForProject atomically validates project ownership via user_id, increments the project
 // item sequence, inserts the item, and logs the initial status transition — all in one transaction.
-func (s *Store) CreateForProject(ctx context.Context, boardID, projectID, userID, statusID, title, description string, epicID, sprintID *string, priority int, estimate *int) (*Item, error) {
+func (s *Store) CreateForProject(ctx context.Context, projectID, userID, statusID, title, description string, epicID, sprintID *string, priority int, estimate *int) (*Item, error) {
 	tx, err := s.DB.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -199,12 +198,12 @@ func (s *Store) CreateForProject(ctx context.Context, boardID, projectID, userID
 
 	pid := &projectID
 	row := tx.QueryRow(ctx, `
-		INSERT INTO items (board_id, project_id, epic_id, sprint_id, status_id, display_id,
+		INSERT INTO items (project_id, epic_id, sprint_id, status_id, display_id,
 		                   title, description, priority, estimate_minutes, position)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-		    COALESCE((SELECT MAX(position)+1 FROM items WHERE project_id = $2 AND status_id = $5), 0))
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
+		    COALESCE((SELECT MAX(position)+1 FROM items WHERE project_id = $1 AND status_id = $4), 0))
 		RETURNING `+itemCols,
-		boardID, pid, epicID, sprintID, statusID, displayID, title, description, priority, estimate)
+		pid, epicID, sprintID, statusID, displayID, title, description, priority, estimate)
 	it, err := scanItemBase(row)
 	if err != nil {
 		return nil, err

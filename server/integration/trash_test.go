@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 	"testing"
+
+	"github.com/ashinsabu/cumin/server/testutil"
 )
 
 type trashProjectJSON struct {
@@ -27,11 +29,11 @@ func TestTrash_List_ReturnsEmptyLists(t *testing.T) {
 	// Ensure no deleted projects/epics exist for our board by cleaning up first.
 	ctx := context.Background()
 	testEnv.DB.Exec(ctx,
-		`UPDATE projects SET deleted_at = NULL WHERE board_id = $1 AND deleted_at IS NOT NULL`,
-		testEnv.BoardID)
+		`UPDATE projects SET deleted_at = NULL WHERE user_id = $1 AND deleted_at IS NOT NULL`,
+		testutil.TestUserID)
 	testEnv.DB.Exec(ctx,
-		`UPDATE epics SET deleted_at = NULL WHERE board_id = $1 AND deleted_at IS NOT NULL`,
-		testEnv.BoardID)
+		`UPDATE epics SET deleted_at = NULL WHERE user_id = $1 AND deleted_at IS NOT NULL`,
+		testutil.TestUserID)
 
 	resp := mustDo(t, testEnv.Server, "GET", "/api/trash", nil)
 	assertStatus(t, resp, http.StatusOK)

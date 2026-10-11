@@ -9,7 +9,6 @@ import (
 
 type Project struct {
 	ID                      string    `json:"id"`
-	BoardID                 string    `json:"board_id"`
 	UserID                  string    `json:"user_id"`
 	Name                    string    `json:"name"`
 	Prefix                  string    `json:"prefix"`
@@ -36,12 +35,12 @@ type Store struct {
 	DB *pgxpool.Pool
 }
 
-const projectCols = `id, board_id, user_id, name, prefix, item_seq, sprint_seq, color, description,
+const projectCols = `id, user_id, name, prefix, item_seq, sprint_seq, color, description,
 	sprint_cadence_days, sprint_start_day, available_hours_per_sprint, created_at`
 
 func scanProject(row interface{ Scan(...any) error }) (*Project, error) {
 	var p Project
-	err := row.Scan(&p.ID, &p.BoardID, &p.UserID, &p.Name, &p.Prefix, &p.ItemSeq, &p.SprintSeq,
+	err := row.Scan(&p.ID, &p.UserID, &p.Name, &p.Prefix, &p.ItemSeq, &p.SprintSeq,
 		&p.Color, &p.Description, &p.SprintCadenceDays, &p.SprintStartDay, &p.AvailableHoursPerSprint, &p.CreatedAt)
 	if err != nil {
 		return nil, err
@@ -85,12 +84,12 @@ func (s *Store) GetDefaultForUser(ctx context.Context, userID string) (*Project,
 	`, userID))
 }
 
-func (s *Store) Create(ctx context.Context, boardID, userID, name, prefix, color, description string) (*Project, error) {
+func (s *Store) Create(ctx context.Context, userID, name, prefix, color, description string) (*Project, error) {
 	return scanProject(s.DB.QueryRow(ctx, `
-		INSERT INTO projects (board_id, user_id, name, prefix, color, description)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO projects (user_id, name, prefix, color, description)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING `+projectCols,
-		boardID, userID, name, prefix, color, description))
+		userID, name, prefix, color, description))
 }
 
 func (s *Store) Update(ctx context.Context, id, name, color, description string) (*Project, error) {

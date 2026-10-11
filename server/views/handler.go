@@ -53,17 +53,11 @@ func (h *Handler) Create(ctx context.Context, req CreateRequest) (*SavedView, er
 	}
 	userID := auth.UserIDFromContext(ctx)
 
-	// boardID required until Phase 3 drops the column.
-	p, err := project.GetOrFetch(ctx, h.projectStore)
-	if err != nil {
-		return nil, api.Internal("failed to resolve project context")
-	}
-
 	filters := req.Filters
 	if len(filters) == 0 {
 		filters = json.RawMessage("{}")
 	}
-	v, err := h.store.Create(ctx, p.BoardID, userID, req.Name, filters)
+	v, err := h.store.Create(ctx, userID, req.Name, filters)
 	if err != nil {
 		return nil, api.Internal("failed to create view")
 	}

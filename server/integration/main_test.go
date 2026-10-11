@@ -24,7 +24,7 @@ func TestMain(m *testing.M) {
 	// The board, statuses, project, and epic are intentionally kept — tests use them.
 	ctx := context.Background()
 	if _, err := env.DB.Exec(ctx,
-		`DELETE FROM items WHERE board_id = $1`, env.BoardID,
+		`DELETE FROM items WHERE project_id IN (SELECT id FROM projects WHERE user_id = (SELECT id FROM users WHERE google_id = 'test-google-id-integ'))`,
 	); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to clean starter items: %v\n", err)
 		os.Exit(1)
