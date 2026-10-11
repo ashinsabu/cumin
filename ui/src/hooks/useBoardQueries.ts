@@ -65,3 +65,14 @@ export function useReorderStatuses() {
     },
   })
 }
+
+export function useUpdateStatusColor() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, color }: { id: string; color: string | null }) =>
+      apiFetch<Status>(`/api/board/statuses/${id}`, { method: 'PATCH', body: JSON.stringify({ color }) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: boardKeys.statuses })
+    },
+  })
+}

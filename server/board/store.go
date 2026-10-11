@@ -27,6 +27,7 @@ type Status struct {
 	Position  int       `json:"position"`
 	IsInitial bool      `json:"is_initial"`
 	IsDone    bool      `json:"is_done"`
+	Color     *string   `json:"color"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -75,7 +76,7 @@ func (s *Store) NextSeq(ctx context.Context, boardID string) (int64, error) {
 
 func (s *Store) ListStatuses(ctx context.Context, boardID string) ([]Status, error) {
 	rows, err := s.DB.Query(ctx, `
-		SELECT id, board_id, name, position, is_initial, is_done, created_at
+		SELECT id, board_id, name, position, is_initial, is_done, color, created_at
 		FROM statuses WHERE board_id = $1 ORDER BY position
 	`, boardID)
 	if err != nil {
@@ -86,7 +87,7 @@ func (s *Store) ListStatuses(ctx context.Context, boardID string) ([]Status, err
 	var out []Status
 	for rows.Next() {
 		var st Status
-		if err := rows.Scan(&st.ID, &st.BoardID, &st.Name, &st.Position, &st.IsInitial, &st.IsDone, &st.CreatedAt); err != nil {
+		if err := rows.Scan(&st.ID, &st.BoardID, &st.Name, &st.Position, &st.IsInitial, &st.IsDone, &st.Color, &st.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, st)
@@ -94,13 +95,25 @@ func (s *Store) ListStatuses(ctx context.Context, boardID string) ([]Status, err
 	return out, nil
 }
 
-func (s *Store) CreateStatus(ctx context.Context, boardID, userID, name string, position int, isInitial, isDone bool) (*Status, error) {
+func (s *Store) CreateStatus(ctx context.Context, boardID, userID, name string, position int, isInitial, isDone bool, color *string) (*Status, error) {
 	var st Status
 	err := s.DB.QueryRow(ctx, `
-		INSERT INTO statuses (board_id, user_id, name, position, is_initial, is_done)
-		VALUES ($1, $2, $3, $4, $5, $6)
-		RETURNING id, board_id, name, position, is_initial, is_done, created_at
-	`, boardID, userID, name, position, isInitial, isDone).Scan(&st.ID, &st.BoardID, &st.Name, &st.Position, &st.IsInitial, &st.IsDone, &st.CreatedAt)
+		INSERT INTO statuses (board_id, user_id, name, position, is_initial, is_done, color)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING id, board_id, name, position, is_initial, is_done, color, created_at
+	`, boardID, userID, name, position, isInitial, isDone, color).Scan(&st.ID, &st.BoardID, &st.Name, &st.Position, &st.IsInitial, &st.IsDone, &st.Color, &st.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &st, nil
+}
+
+func (s *Store) UpdateStatusColor(ctx context.Context, boardID, statusID string, color *string) (*Status, error) {
+	var st Status
+	err := s.DB.QueryRow(ctx, `
+		UPDATE statuses SET color = $3 WHERE id = $2 AND board_id = $1
+		RETURNING id, board_id, name, position, is_initial, is_done, color, created_at
+	`, boardID, statusID, color).Scan(&st.ID, &st.BoardID, &st.Name, &st.Position, &st.IsInitial, &st.IsDone, &st.Color, &st.CreatedAt)
 	if err != nil {
 		return nil, err
 	}

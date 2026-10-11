@@ -4,6 +4,7 @@ export type Status = {
   is_done: boolean
   is_initial: boolean
   position: number
+  color?: string
 }
 
 export type Epic = {

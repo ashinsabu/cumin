@@ -15,10 +15,15 @@ type UpdateRequest struct {
 }
 
 type CreateStatusRequest struct {
-	Name      string `json:"name"`
-	Position  int    `json:"position"`
-	IsInitial bool   `json:"is_initial"`
-	IsDone    bool   `json:"is_done"`
+	Name      string  `json:"name"`
+	Position  int     `json:"position"`
+	IsInitial bool    `json:"is_initial"`
+	IsDone    bool    `json:"is_done"`
+	Color     *string `json:"color"`
+}
+
+type UpdateStatusColorRequest struct {
+	Color *string `json:"color"`
 }
 
 type ReorderStatusesRequest struct {
@@ -42,6 +47,7 @@ func (h *Handler) Routes(r chi.Router) {
 	r.Patch("/api/board", api.Handle(h.Update))
 	r.Get("/api/board/statuses", api.HandleNoBody(h.ListStatuses))
 	r.Post("/api/board/statuses", api.Handle(h.CreateStatus))
+	r.Patch("/api/board/statuses/{id}", api.Handle(h.UpdateStatusColor))
 	r.Delete("/api/board/statuses/{id}", api.HandleDelete(h.DeleteStatus))
 	r.Put("/api/board/statuses/reorder", api.Handle(h.ReorderStatuses))
 }
@@ -147,9 +153,35 @@ func (h *Handler) CreateStatus(ctx context.Context, req CreateStatusRequest) (*S
 		return nil, api.BadRequest("name required")
 	}
 
-	st, err := h.store.CreateStatus(ctx, b.ID, b.UserID, req.Name, req.Position, req.IsInitial, req.IsDone)
+	st, err := h.store.CreateStatus(ctx, b.ID, b.UserID, req.Name, req.Position, req.IsInitial, req.IsDone, req.Color)
 	if err != nil {
 		return nil, api.Internal("create status failed")
+	}
+	return st, nil
+}
+
+// UpdateStatusColor sets the display color for a status column.
+//
+// @Summary      Update status color
+// @Tags         board
+// @Accept       json
+// @Produce      json
+// @Param        id    path  string                         true  "Status ID"
+// @Param        body  body  board.UpdateStatusColorRequest true  "Color to set"
+// @Success      200  {object}  board.Status
+// @Failure      404  {object}  api.ErrorResponse
+// @Security     CookieAuth
+// @Router       /api/board/statuses/{id} [patch]
+func (h *Handler) UpdateStatusColor(ctx context.Context, req UpdateStatusColorRequest) (*Status, error) {
+	b, err := GetOrFetch(ctx, h.store)
+	if err != nil {
+		return nil, api.NotFound("board not found")
+	}
+
+	id := api.URLParam(ctx, "id")
+	st, err := h.store.UpdateStatusColor(ctx, b.ID, id, req.Color)
+	if err != nil {
+		return nil, api.Internal("update status color failed")
 	}
 	return st, nil
 }
