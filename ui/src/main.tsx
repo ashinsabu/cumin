@@ -11,6 +11,7 @@ import { BoardProvider } from './context/BoardContext'
 import { FlagsProvider } from './context/FlagsContext'
 import { ToastProvider } from './context/ToastContext'
 import { QueueProvider } from './context/QueueContext'
+import { ProjectProvider } from './context/ProjectContext'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import './index.css'
 import App from './App'
@@ -37,13 +38,15 @@ createRoot(document.getElementById('root')!, {
           <BrowserRouter>
             <QueryClientProvider client={queryClient}>
               <AuthProvider>
-                <ToastProvider>
-                  <BoardProvider>
-                    <QueueProvider>
-                      <App />
-                    </QueueProvider>
-                  </BoardProvider>
-                </ToastProvider>
+                <ProjectProvider>
+                  <ToastProvider>
+                    <BoardProvider>
+                      <QueueProvider>
+                        <App />
+                      </QueueProvider>
+                    </BoardProvider>
+                  </ToastProvider>
+                </ProjectProvider>
               </AuthProvider>
               <ReactQueryDevtools initialIsOpen={false} />
             </QueryClientProvider>
