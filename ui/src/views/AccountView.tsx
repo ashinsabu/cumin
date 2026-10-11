@@ -1,8 +1,15 @@
 import { useState, useEffect } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { PRESETS } from '../themes/index'
+import { epicKeys } from '../hooks/useEpics'
+import { projectKeys } from '../hooks/useProjects'
+import { itemKeys } from '../hooks/useItems'
+import { useBoardStatuses, useUpdateStatusColor } from '../hooks/useBoardQueries'
+import { ColorPicker, statusDisplayColor } from '../components/ui'
 import type { Preset } from '../themes/types'
+import type { Status } from '../types'
 
 const PRESET_IDS: Preset['id'][] = ['cyber', 'glass', 'minimal']
 
@@ -28,6 +35,7 @@ function RecentlyDeletedSection() {
   const [loading, setLoading]   = useState(true)
   const [restoring, setRestoring] = useState<string | null>(null)
   const [error, setError]       = useState('')
+  const qc = useQueryClient()
 
   async function load() {
     setLoading(true)
@@ -48,7 +56,13 @@ function RecentlyDeletedSection() {
     try {
       const res = await fetch(`/api/${type}/${id}/restore`, { method: 'POST', credentials: 'include' })
       if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || 'Restore failed') }
-      else await load()
+      else {
+        // Invalidate TanStack Query cache so views reflect restored data immediately
+        if (type === 'epics') qc.invalidateQueries({ queryKey: epicKeys.all })
+        else qc.invalidateQueries({ queryKey: projectKeys.all })
+        qc.invalidateQueries({ queryKey: itemKeys.all })
+        await load()
+      }
     } catch { setError('Network error') }
     finally { setRestoring(null) }
   }
@@ -192,13 +206,99 @@ function AppearanceSection() {
   )
 }
 
+// ── Board section ─────────────────────────────────────────────────────────────
+
+function StatusColorRow({ status, middleIndex }: { status: Status; middleIndex: number }) {
+  const [expanded, setExpanded] = useState(false)
+  const [pendingColor, setPendingColor] = useState(status.color ?? '')
+  const updateColor = useUpdateStatusColor()
+
+  const currentColor = statusDisplayColor(status, middleIndex)
+
+  function handleApply() {
+    updateColor.mutate({ id: status.id, color: pendingColor || null }, {
+      onSuccess: () => setExpanded(false),
+    })
+  }
+
+  function handleClear() {
+    updateColor.mutate({ id: status.id, color: null }, {
+      onSuccess: () => { setPendingColor(''); setExpanded(false) },
+    })
+  }
+
+  return (
+    <div className="border-b border-line last:border-0">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-surface transition-colors"
+      >
+        <span className="w-3 h-3 rounded-full shrink-0 border border-line/50" style={{ backgroundColor: currentColor }} />
+        <span className="text-sm text-ink flex-1 text-left">{status.name}</span>
+        <span className="text-xs text-ghost">{status.is_initial ? 'initial' : status.is_done ? 'done' : 'in-progress'}</span>
+        {status.color && <span className="text-xs font-mono text-dim">{status.color}</span>}
+        <span className="text-ghost/40 text-xs">{expanded ? '▲' : '▼'}</span>
+      </button>
+      {expanded && (
+        <div className="px-4 pb-4 space-y-3">
+          <p className="text-xs text-ghost">Custom color overrides the default. Clear to use the default.</p>
+          <ColorPicker value={pendingColor || currentColor} onChange={setPendingColor} />
+          <div className="flex items-center gap-2 pt-1">
+            <button
+              onClick={handleApply}
+              disabled={updateColor.isPending}
+              className="px-3 py-1.5 text-xs font-semibold rounded-[var(--c-radius-card)] bg-accent/10 text-accent hover:bg-accent/20 disabled:opacity-50 transition-colors"
+            >
+              {updateColor.isPending ? '…' : 'Apply'}
+            </button>
+            {status.color && (
+              <button
+                onClick={handleClear}
+                disabled={updateColor.isPending}
+                className="px-3 py-1.5 text-xs rounded-[var(--c-radius-card)] text-ghost hover:text-dim hover:bg-line disabled:opacity-50 transition-colors"
+              >
+                Clear custom
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function BoardSection() {
+  const { data: statuses = [] } = useBoardStatuses()
+  const middleStatuses = statuses.filter((s) => !s.is_initial && !s.is_done)
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-base font-semibold text-ink">Board</h2>
+        <p className="text-xs text-ghost mt-0.5">Customize status colors used across the board and item views.</p>
+      </div>
+      {statuses.length === 0 ? (
+        <div className="py-8 text-center text-sm text-ghost border border-line rounded-[var(--c-radius-card)]">No statuses configured.</div>
+      ) : (
+        <div className="rounded-[var(--c-radius-card)] border border-line overflow-hidden bg-surface">
+          {statuses.map((s) => (
+            <StatusColorRow key={s.id} status={s} middleIndex={middleStatuses.indexOf(s)} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main view ─────────────────────────────────────────────────────────────────
 
-type Section = 'profile' | 'appearance' | 'recently-deleted'
+type Section = 'profile' | 'appearance' | 'board' | 'recently-deleted'
 
 const SECTIONS: { id: Section; label: string }[] = [
   { id: 'profile',           label: 'Profile' },
   { id: 'appearance',        label: 'Appearance' },
+  { id: 'board',             label: 'Board' },
   { id: 'recently-deleted',  label: 'Recently Deleted' },
 ]
 
@@ -235,6 +335,7 @@ export function AccountView() {
         <div className="max-w-lg">
           {active === 'profile'          && <ProfileSection />}
           {active === 'appearance'       && <AppearanceSection />}
+          {active === 'board'            && <BoardSection />}
           {active === 'recently-deleted' && <RecentlyDeletedSection />}
         </div>
       </div>
