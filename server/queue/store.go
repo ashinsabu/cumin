@@ -93,14 +93,14 @@ func (s *Store) List(ctx context.Context, userID string) ([]QueueItem, error) {
 	return out, nil
 }
 
-func (s *Store) Create(ctx context.Context, boardID, userID, createdBy, title, notes string, deadline *time.Time, priority int, estimateMinutes *int) (*QueueItem, error) {
+func (s *Store) Create(ctx context.Context, userID, createdBy, title, notes string, deadline *time.Time, priority int, estimateMinutes *int) (*QueueItem, error) {
 	var q QueueItem
 	err := s.DB.QueryRow(ctx, `
-		INSERT INTO queue_items (board_id, user_id, created_by, title, notes, deadline, priority, estimate_minutes, position)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
-		    COALESCE((SELECT MAX(position)+1 FROM queue_items WHERE user_id=$2 AND deleted_at IS NULL), 0))
+		INSERT INTO queue_items (user_id, created_by, title, notes, deadline, priority, estimate_minutes, position)
+		VALUES ($1, $2, $3, $4, $5, $6, $7,
+		    COALESCE((SELECT MAX(position)+1 FROM queue_items WHERE user_id=$1 AND deleted_at IS NULL), 0))
 		RETURNING `+listCols+`
-	`, boardID, userID, createdBy, title, notes, deadline, priority, estimateMinutes).Scan(
+	`, userID, createdBy, title, notes, deadline, priority, estimateMinutes).Scan(
 		&q.ID, &q.UserID, &q.CreatedBy, &q.Title, &q.Notes, &q.Deadline, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CompletedAt, &q.CreatedAt)
 	if err != nil {
 		return nil, err
@@ -209,7 +209,7 @@ type PromoteResult struct {
 	ItemDisplay string `json:"item_display_id"`
 }
 
-func (s *Store) Promote(ctx context.Context, queueID, boardID, userID, projectID, statusID string, epicID *string) (*PromoteResult, error) {
+func (s *Store) Promote(ctx context.Context, queueID, userID, projectID, statusID string, epicID *string) (*PromoteResult, error) {
 	tx, err := s.DB.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -242,11 +242,11 @@ func (s *Store) Promote(ctx context.Context, queueID, boardID, userID, projectID
 
 	var itemID string
 	err = tx.QueryRow(ctx, `
-		INSERT INTO items (board_id, project_id, epic_id, status_id, display_id, title, description, priority, estimate_minutes, position)
-		VALUES ($1, $2, $3, $4, $5, $6, '', $7, $8,
-		    COALESCE((SELECT MAX(position)+1 FROM items WHERE project_id=$2 AND status_id=$4), 0))
+		INSERT INTO items (project_id, epic_id, status_id, display_id, title, description, priority, estimate_minutes, position)
+		VALUES ($1, $2, $3, $4, $5, '', $6, $7,
+		    COALESCE((SELECT MAX(position)+1 FROM items WHERE project_id=$1 AND status_id=$3), 0))
 		RETURNING id
-	`, boardID, projectID, epicID, statusID, displayID, title, priority, estimateMinutes).Scan(&itemID)
+	`, projectID, epicID, statusID, displayID, title, priority, estimateMinutes).Scan(&itemID)
 	if err != nil {
 		return nil, err
 	}

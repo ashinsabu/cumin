@@ -84,13 +84,7 @@ func (h *Handler) Create(ctx context.Context, req CreateRequest) (*Epic, error) 
 		req.Color = "#6b7280"
 	}
 
-	// boardID is still required until Phase 3 drops the column.
-	p, err := project.GetOrFetch(ctx, h.projectStore)
-	if err != nil {
-		return nil, api.Internal("failed to resolve project context")
-	}
-
-	return h.store.Create(ctx, p.BoardID, userID, req.Name, req.Type, req.Color, req.Description, req.Deadline)
+	return h.store.Create(ctx, userID, req.Name, req.Type, req.Color, req.Description, req.Deadline)
 }
 
 func (h *Handler) Update(ctx context.Context, req UpdateRequest) (*Epic, error) {

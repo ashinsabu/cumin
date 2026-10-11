@@ -180,7 +180,7 @@ func (h *Handler) Create(ctx context.Context, req CreateRequest) (*Item, error) 
 		return nil, api.Internal("no statuses configured")
 	}
 
-	it, err := h.store.CreateForProject(ctx, proj.BoardID, req.ProjectID, userID, statusID, req.Title, req.Description,
+	it, err := h.store.CreateForProject(ctx, req.ProjectID, userID, statusID, req.Title, req.Description,
 		req.EpicID, req.SprintID, req.Priority, req.EstimateMinutes)
 	if err != nil {
 		return nil, api.Internal("failed to create item")

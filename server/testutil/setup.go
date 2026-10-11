@@ -36,7 +36,6 @@ type TestEnv struct {
 	Server       *httptest.Server
 	DB           *pgxpool.Pool
 	Hub          *hub.InMemoryHub
-	BoardID      string // kept for backward compat; boards table still exists in Phase 2
 	ProjectID    string
 	EpicID       string
 	TodoStatusID string
@@ -75,24 +74,19 @@ func Setup() (*TestEnv, error) {
 		return nil, fmt.Errorf("create test user: %w", err)
 	}
 
-	// Full teardown before each test run. boards table still exists in Phase 2 so teardown
-	// can still use board_id for items/epics/sprints/queue_items.
-	var testBoardID string
-	_ = pool.QueryRow(ctx, `SELECT id FROM boards WHERE user_id = $1 LIMIT 1`, TestUserID).Scan(&testBoardID)
-	if testBoardID != "" {
-		for _, q := range []string{
-			`DELETE FROM queue_items        WHERE board_id = $1`,
-			`DELETE FROM status_transitions WHERE item_id IN (SELECT id FROM items WHERE board_id = $1)`,
-			`DELETE FROM items              WHERE board_id = $1`,
-			`DELETE FROM epics              WHERE board_id = $1`,
-			`DELETE FROM sprints            WHERE board_id = $1`,
-			`DELETE FROM projects           WHERE board_id = $1`,
-			`DELETE FROM boards             WHERE id = $1`, // cascades to statuses
-		} {
-			if _, err = pool.Exec(ctx, q, testBoardID); err != nil {
-				pool.Close()
-				return nil, fmt.Errorf("clean test data: %w", err)
-			}
+	// Full teardown before each test run, scoped by user_id.
+	for _, q := range []string{
+		`DELETE FROM queue_items        WHERE user_id = $1`,
+		`DELETE FROM status_transitions WHERE item_id IN (SELECT id FROM items WHERE project_id IN (SELECT id FROM projects WHERE user_id = $1))`,
+		`DELETE FROM items              WHERE project_id IN (SELECT id FROM projects WHERE user_id = $1)`,
+		`DELETE FROM epics              WHERE user_id = $1`,
+		`DELETE FROM sprints            WHERE project_id IN (SELECT id FROM projects WHERE user_id = $1)`,
+		`DELETE FROM projects           WHERE user_id = $1`,
+		`DELETE FROM statuses           WHERE user_id = $1`,
+	} {
+		if _, err = pool.Exec(ctx, q, TestUserID); err != nil {
+			pool.Close()
+			return nil, fmt.Errorf("clean test data: %w", err)
 		}
 	}
 
@@ -100,15 +94,6 @@ func Setup() (*TestEnv, error) {
 	if err := prov.ProvisionNewUser(ctx, TestUserID, "Test User"); err != nil {
 		pool.Close()
 		return nil, fmt.Errorf("provision: %w", err)
-	}
-
-	// Read back the IDs we need in tests.
-	var boardID string
-	if err := pool.QueryRow(ctx,
-		`SELECT id FROM boards WHERE user_id = $1 AND deleted_at IS NULL`, TestUserID,
-	).Scan(&boardID); err != nil {
-		pool.Close()
-		return nil, fmt.Errorf("get board: %w", err)
 	}
 
 	var todoStatusID string
@@ -165,7 +150,6 @@ func Setup() (*TestEnv, error) {
 	trash.NewHandler(projectStore, epicStore).Routes(r)
 	queue.NewHandler(&queue.Store{DB: pool}, projectStore).Routes(r)
 	views.NewHandler(&views.Store{DB: pool}, projectStore).Routes(r)
-	// SSE enabled=true in tests
 	r.Get("/api/events", hub.NewHandler(h, true).Events)
 
 	server := httptest.NewServer(r)
@@ -174,7 +158,6 @@ func Setup() (*TestEnv, error) {
 		Server:       server,
 		DB:           pool,
 		Hub:          h,
-		BoardID:      boardID,
 		ProjectID:    projectID,
 		EpicID:       epicID,
 		TodoStatusID: todoStatusID,

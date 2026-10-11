@@ -116,8 +116,7 @@ func (s *Store) GetByID(ctx context.Context, id string) (*Sprint, error) {
 
 // CreateNext atomically increments the project's sprint_seq and inserts a new planning sprint.
 // Both writes are inside a single transaction — a failed INSERT rolls back the seq increment.
-// boardID is kept until Phase 3 drops the column from sprints.
-func (s *Store) CreateNext(ctx context.Context, boardID, projectID string, startDate time.Time, cadenceDays int) (*Sprint, error) {
+func (s *Store) CreateNext(ctx context.Context, projectID string, startDate time.Time, cadenceDays int) (*Sprint, error) {
 	endDate := startDate.AddDate(0, 0, cadenceDays-1)
 
 	tx, err := s.DB.Begin(ctx)
@@ -135,10 +134,10 @@ func (s *Store) CreateNext(ctx context.Context, boardID, projectID string, start
 
 	name := ComputeName(seq, startDate, endDate)
 	sp, err := scanSprint(tx.QueryRow(ctx, `
-		INSERT INTO sprints (board_id, project_id, name, sprint_number, start_date, end_date, state)
-		VALUES ($1, $2, $3, $4, $5, $6, 'planning')
+		INSERT INTO sprints (project_id, name, sprint_number, start_date, end_date, state)
+		VALUES ($1, $2, $3, $4, $5, 'planning')
 		RETURNING `+sprintCols,
-		boardID, projectID, name, seq, startDate, endDate))
+		projectID, name, seq, startDate, endDate))
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +159,7 @@ func (s *Store) Activate(ctx context.Context, id string) (*Sprint, error) {
 
 // Close transitions the sprint active → completed, spills unfinished items, and atomically creates
 // the next sprint (planning).
-func (s *Store) Close(ctx context.Context, sprintID, boardID, projectID string, cadenceDays int, doneStatusIDs []string) (*CloseResult, error) {
+func (s *Store) Close(ctx context.Context, sprintID, projectID string, cadenceDays int, doneStatusIDs []string) (*CloseResult, error) {
 	tx, err := s.DB.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -191,10 +190,10 @@ func (s *Store) Close(ctx context.Context, sprintID, boardID, projectID string, 
 
 	var next Sprint
 	err = tx.QueryRow(ctx, `
-		INSERT INTO sprints (board_id, project_id, name, sprint_number, start_date, end_date, state)
-		VALUES ($1, $2, $3, $4, $5, $6, 'planning')
+		INSERT INTO sprints (project_id, name, sprint_number, start_date, end_date, state)
+		VALUES ($1, $2, $3, $4, $5, 'planning')
 		RETURNING `+sprintCols,
-		boardID, projectID, nextName, nextSeq, nextStart, nextEnd,
+		projectID, nextName, nextSeq, nextStart, nextEnd,
 	).Scan(&next.ID, &next.ProjectID, &next.Name, &next.SprintNumber,
 		&next.StartDate, &next.EndDate, &next.State, &next.CreatedAt)
 	if err != nil {

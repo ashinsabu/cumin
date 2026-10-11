@@ -37,13 +37,13 @@ func (s *Store) List(ctx context.Context, userID string) ([]SavedView, error) {
 	return out, nil
 }
 
-func (s *Store) Create(ctx context.Context, boardID, userID, name string, filters json.RawMessage) (*SavedView, error) {
+func (s *Store) Create(ctx context.Context, userID, name string, filters json.RawMessage) (*SavedView, error) {
 	var v SavedView
 	err := s.DB.QueryRow(ctx, `
-		INSERT INTO saved_views (board_id, user_id, name, filters, position)
-		VALUES ($1, $2, $3, $4, COALESCE((SELECT MAX(position)+1 FROM saved_views WHERE user_id = $2), 0))
+		INSERT INTO saved_views (user_id, name, filters, position)
+		VALUES ($1, $2, $3, COALESCE((SELECT MAX(position)+1 FROM saved_views WHERE user_id = $1), 0))
 		RETURNING id, user_id, name, filters, position, created_at
-	`, boardID, userID, name, filters).Scan(&v.ID, &v.UserID, &v.Name, &v.Filters, &v.Position, &v.CreatedAt)
+	`, userID, name, filters).Scan(&v.ID, &v.UserID, &v.Name, &v.Filters, &v.Position, &v.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
