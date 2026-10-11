@@ -39,7 +39,7 @@ export function EpicModal({ epic, onClose }: { epic: Epic; onClose: () => void }
   const [mode, setMode] = useState<PanelMode>('open')
   const [name, setName] = useState(epic.name)
   const [description, setDescription] = useState(epic.description ?? '')
-  const [saving, setSaving] = useState(false)
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [saveError, setSaveError] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showQuickAdd, setShowQuickAdd] = useState(false)
@@ -66,16 +66,21 @@ export function EpicModal({ epic, onClose }: { epic: Epic; onClose: () => void }
 
   async function handleSave() {
     if (!name.trim()) return
-    setSaving(true); setSaveError('')
+    setSaveState('saving'); setSaveError('')
+    const start = Date.now()
     try {
       await updateEpicMutation.mutateAsync({
         id: epic.id,
         payload: { name: name.trim(), description },
       })
+      // Enforce minimum 500ms so "Saving…" doesn't flicker
+      const elapsed = Date.now() - start
+      if (elapsed < 500) await new Promise((r) => setTimeout(r, 500 - elapsed))
+      setSaveState('saved')
+      setTimeout(() => setSaveState('idle'), 1500)
     } catch (err: any) {
       setSaveError(err.message)
-    } finally {
-      setSaving(false)
+      setSaveState('idle')
     }
   }
 
@@ -263,10 +268,14 @@ export function EpicModal({ epic, onClose }: { epic: Epic; onClose: () => void }
               </button>
               <div className="flex items-center gap-3">
                 {saveError && <p className="text-xs text-red-500">{saveError}</p>}
-                {isDirty && (
-                  <button type="button" onClick={handleSave} disabled={saving || !name.trim()}
-                    className="px-4 py-1.5 text-sm font-semibold rounded bg-accent text-white hover:opacity-90 disabled:opacity-40 transition-opacity">
-                    {saving ? 'Saving…' : 'Save'}
+                {(isDirty || saveState !== 'idle') && (
+                  <button type="button" onClick={handleSave} disabled={saveState === 'saving' || !name.trim()}
+                    className={`px-4 py-1.5 text-sm font-semibold rounded transition-all duration-200 ${
+                      saveState === 'saved'
+                        ? 'bg-green-500/15 text-green-400'
+                        : 'bg-accent text-white hover:opacity-90 disabled:opacity-40'
+                    }`}>
+                    {saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? '✓ Saved' : 'Save'}
                   </button>
                 )}
               </div>
