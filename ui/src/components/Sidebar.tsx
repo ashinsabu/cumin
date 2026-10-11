@@ -15,7 +15,7 @@ type SidebarProps = {
 
 const NAV_GROUPS = [
   { label: null,       ids: ['board', 'items', 'sprints'] },
-  { label: 'Organize', ids: ['epics', 'projects'] },
+  { label: 'Organize', ids: ['epics'] },
   { label: 'Insights', ids: ['dashboards'] },
 ]
 
@@ -68,8 +68,8 @@ function ProjectSwitcher({
           onClick={() => { onNewProject(); onClose() }}
           className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-dim hover:bg-surface hover:text-ink transition-colors"
         >
-          <span className="text-base leading-none">+</span>
-          <span>New project</span>
+          <span className="text-xs opacity-60">⚙</span>
+          <span>Manage projects</span>
         </button>
       </div>
     </div>
