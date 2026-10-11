@@ -8,6 +8,7 @@ import { useBoardStatuses } from '../hooks/useBoardQueries'
 import { useEpics } from '../hooks/useEpics'
 import { parseEstimate, formatEstimate } from '../hooks/useFormat'
 import { PRIORITY } from '../constants'
+import { Select } from './ui'
 import type { QueueItem } from '../types'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -119,15 +120,16 @@ function ConvertSheet({ item, onClose, onConverted }: ConvertSheetProps) {
   return (
     <div className="mt-3 pt-3 border-t border-line space-y-2">
       <p className="text-xs font-semibold text-dim uppercase tracking-wide">Convert to item</p>
-      <select value={projectId} onChange={(e) => setProjectId(e.target.value)}
-        className="w-full text-sm bg-surface border border-line rounded-[var(--c-radius-card)] px-2.5 py-2 text-ink">
-        {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-      </select>
-      <select value={epicId} onChange={(e) => setEpicId(e.target.value)}
-        className="w-full text-sm bg-surface border border-line rounded-[var(--c-radius-card)] px-2.5 py-2 text-dim">
-        <option value="">No epic</option>
-        {epics.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
-      </select>
+      <Select
+        value={projectId}
+        onChange={setProjectId}
+        options={projects.map((p) => ({ value: p.id, label: p.name }))}
+      />
+      <Select
+        value={epicId}
+        onChange={setEpicId}
+        options={[{ value: '', label: 'No epic' }, ...epics.map((e) => ({ value: e.id, label: e.name }))]}
+      />
       {initialStatus && <p className="text-xs text-ghost">Status: {initialStatus.name} · Priority &amp; estimate carried over</p>}
       <div className="flex gap-2">
         <button onClick={onClose} className="flex-1 text-sm py-2 rounded-[var(--c-radius-card)] border border-line text-dim hover:bg-surface">Cancel</button>
@@ -154,6 +156,20 @@ function itemToDraft(item: QueueItem): CardDraft {
   }
 }
 
+// Parse "2d", "1w", "3h", "1m" → ISO date string. m = months (not minutes, deadlines context).
+function parseDueIn(text: string): string {
+  const s = text.trim().toLowerCase()
+  const n = parseFloat(s)
+  if (!n || n <= 0) return ''
+  const d = new Date()
+  if (s.endsWith('h'))  d.setHours(d.getHours() + n)
+  else if (s.endsWith('d')) d.setDate(d.getDate() + n)
+  else if (s.endsWith('w')) d.setDate(d.getDate() + n * 7)
+  else if (s.endsWith('m')) d.setMonth(d.getMonth() + n)
+  else return ''
+  return d.toISOString().slice(0, 10)
+}
+
 type ExpandedEditorProps = {
   item: QueueItem
   onClose: () => void
@@ -163,6 +179,7 @@ type ExpandedEditorProps = {
 function ExpandedEditor({ item, onClose, onArchive }: ExpandedEditorProps) {
   const { updateItem } = useQueue()
   const [draft, setDraft] = useState<CardDraft>(itemToDraft(item))
+  const [dueIn, setDueIn] = useState('')
   const [converting, setConverting] = useState(false)
   const [converted, setConverted] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -228,29 +245,58 @@ function ExpandedEditor({ item, onClose, onArchive }: ExpandedEditorProps) {
             )
           })}
         </div>
-        {/* Estimate + Deadline row */}
-        <div className="flex gap-2">
-          <div className="flex-1 space-y-1">
-            <p className="text-[10px] font-medium text-ghost uppercase tracking-wide">Estimate</p>
-            <div className="flex gap-1 flex-wrap">
-              {['15m','30m','1h','2h'].map((t) => (
-                <button key={t} type="button" onClick={() => setDraft((d) => ({ ...d, estimate: d.estimate === t ? '' : t }))}
-                  className={`px-1.5 py-0.5 rounded text-xs font-medium transition-colors cursor-pointer border ${
-                    draft.estimate === t ? 'text-accent border-accent bg-accent/10' : 'text-ghost border-transparent'
-                  }`}>
-                  {t}
-                </button>
-              ))}
-              <input value={['15m','30m','1h','2h'].includes(draft.estimate) ? '' : draft.estimate}
-                onChange={(e) => setDraft((d) => ({ ...d, estimate: e.target.value }))}
-                placeholder="other"
-                className="w-10 text-xs bg-transparent border-b border-line text-ink focus:outline-none focus:border-accent/50 placeholder:text-ghost pb-0.5" />
-            </div>
+        {/* Estimate row */}
+        <div className="space-y-1">
+          <p className="text-[10px] font-medium text-ghost uppercase tracking-wide">Estimate</p>
+          <div className="flex items-center gap-1">
+            {['15m','30m','1h','2h'].map((t) => (
+              <button key={t} type="button" onClick={() => setDraft((d) => ({ ...d, estimate: d.estimate === t ? '' : t }))}
+                className={`px-2 py-0.5 rounded text-xs font-medium transition-colors cursor-pointer border ${
+                  draft.estimate === t ? 'text-accent border-accent bg-accent/10' : 'text-ghost border-transparent hover:border-line'
+                }`}>
+                {t}
+              </button>
+            ))}
+            <span className="text-ghost/30 mx-0.5 text-xs">|</span>
+            <input value={['15m','30m','1h','2h'].includes(draft.estimate) ? '' : draft.estimate}
+              onChange={(e) => setDraft((d) => ({ ...d, estimate: e.target.value }))}
+              placeholder="4h"
+              className="w-10 text-xs bg-transparent border-b border-line text-ink focus:outline-none focus:border-accent/50 placeholder:text-ghost" />
           </div>
-          <div className="w-[90px] space-y-1">
-            <p className="text-[10px] font-medium text-ghost uppercase tracking-wide">Deadline</p>
-            <input type="date" value={draft.deadline} onChange={(e) => setDraft((d) => ({ ...d, deadline: e.target.value }))}
-              className="w-full text-xs bg-surface border border-line rounded px-1.5 py-1 text-ink focus:outline-none focus:border-accent/50" />
+        </div>
+        {/* Due in row */}
+        <div className="space-y-1">
+          <p className="text-[10px] font-medium text-ghost uppercase tracking-wide">Due in</p>
+          <div className="flex items-center gap-2">
+            <input
+              value={dueIn}
+              onChange={(e) => setDueIn(e.target.value)}
+              onBlur={() => {
+                if (!dueIn.trim()) return
+                const d = parseDueIn(dueIn)
+                if (d) setDraft((prev) => ({ ...prev, deadline: d }))
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const d = parseDueIn(dueIn)
+                  if (d) setDraft((prev) => ({ ...prev, deadline: d }))
+                }
+              }}
+              placeholder="2d, 1w, 3h, 1m…"
+              className="flex-1 text-xs bg-surface border border-line rounded-[var(--c-radius-card)] px-2 py-1 text-ink focus:outline-none focus:border-accent/50 placeholder:text-ghost"
+            />
+            {draft.deadline && (
+              <>
+                <span className="text-[10px] text-ghost shrink-0">
+                  {new Date(draft.deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                </span>
+                <button type="button"
+                  onClick={() => { setDueIn(''); setDraft((d) => ({ ...d, deadline: '' })) }}
+                  className="text-ghost/40 hover:text-ghost transition-colors text-sm shrink-0">
+                  ×
+                </button>
+              </>
+            )}
           </div>
         </div>
         {/* Notes */}
@@ -259,18 +305,18 @@ function ExpandedEditor({ item, onClose, onArchive }: ExpandedEditorProps) {
           rows={2}
           className="w-full text-xs leading-relaxed bg-surface border border-line rounded-[var(--c-radius-card)] px-2.5 py-1.5 text-dim resize-none focus:outline-none focus:border-accent/50 placeholder:text-ghost" />
         {!converting ? (
-          <div className="flex items-center gap-1.5">
-            <button onClick={() => setConverting(true)}
-              className="flex-1 text-xs py-1.5 rounded-[var(--c-radius-card)] bg-accent/10 text-accent hover:bg-accent/20 font-medium transition-colors whitespace-nowrap">
-              Convert ↗
-            </button>
+          <div className="flex items-center gap-2 pt-0.5">
             <button onClick={onArchive}
-              className="text-xs px-2.5 py-1.5 rounded-[var(--c-radius-card)] border border-line text-dim hover:text-ink transition-colors">
-              Remove
+              className="text-xs text-ghost/50 hover:text-dim transition-colors">
+              Dismiss
+            </button>
+            <button onClick={() => setConverting(true)}
+              className="text-xs text-dim hover:text-ink transition-colors">
+              Add to board →
             </button>
             <button onClick={handleClose}
-              className="text-xs px-2.5 py-1.5 rounded-[var(--c-radius-card)] border border-line text-ghost hover:text-dim transition-colors">
-              {saving ? '…' : 'Done'}
+              className="ml-auto text-xs px-2.5 py-1.5 rounded-[var(--c-radius-card)] bg-surface border border-line text-dim hover:text-ink transition-colors">
+              {saving ? '…' : 'Save'}
             </button>
           </div>
         ) : (
@@ -360,25 +406,29 @@ function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchiv
             )}
           </AnimatePresence>
         </div>
-        {/* Full-height action columns */}
-        <button
-          onClick={handleDone}
-          title="Mark done"
-          className={`w-8 shrink-0 flex items-center justify-center border-l transition-colors text-sm font-bold ${
-            done
-              ? 'border-green-500/30 bg-green-500/20 text-green-500'
-              : 'border-line/20 bg-green-500/5 text-green-500/40 hover:bg-green-500/15 hover:text-green-500'
-          }`}
-        >
-          ✓
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); onArchive() }}
-          title="Dismiss"
-          className="w-8 shrink-0 flex items-center justify-center border-l border-line/20 bg-accent/5 text-accent/30 hover:bg-accent/15 hover:text-accent transition-colors text-base font-bold"
-        >
-          ×
-        </button>
+        {/* Action columns — only visible when expanded to avoid cluttering collapsed items */}
+        {expanded && (
+          <>
+            <button
+              onClick={handleDone}
+              title="Mark done"
+              className={`w-8 shrink-0 flex items-center justify-center border-l transition-colors text-sm font-bold ${
+                done
+                  ? 'border-green-500/30 bg-green-500/20 text-green-500'
+                  : 'border-line/20 bg-green-500/5 text-green-500/40 hover:bg-green-500/15 hover:text-green-500'
+              }`}
+            >
+              ✓
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onArchive() }}
+              title="Dismiss"
+              className="w-8 shrink-0 flex items-center justify-center border-l border-line/20 text-ghost/30 hover:text-dim hover:bg-surface transition-colors text-base"
+            >
+              ×
+            </button>
+          </>
+        )}
       </div>
     </div>
   )
@@ -394,6 +444,8 @@ function StaleSection({ items }: { items: QueueItem[] }) {
   const { data: epics = [] } = useEpics()
   const [convertingId, setConvertingId] = useState<string | null>(null)
   const [convertedIds, setConvertedIds] = useState<Set<string>>(new Set())
+  const [convertingProjectId, setConvertingProjectId] = useState('')
+  const [convertingEpicId, setConvertingEpicId] = useState('')
 
   if (items.length === 0) return null
 
@@ -433,15 +485,18 @@ function StaleSection({ items }: { items: QueueItem[] }) {
 
                     {isConverting ? (
                       <div className="mt-2 space-y-1.5">
-                        <select defaultValue={projects[0]?.id ?? ''} id={`proj-${item.id}`}
-                          className="w-full text-xs bg-surface border border-line rounded px-2 py-1.5 text-ink">
-                          {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                        </select>
-                        <select defaultValue="" id={`epic-${item.id}`}
-                          className="w-full text-xs bg-surface border border-line rounded px-2 py-1.5 text-dim">
-                          <option value="">No epic</option>
-                          {epics.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
-                        </select>
+                        <Select
+                          size="xs"
+                          value={convertingProjectId || projects[0]?.id || ''}
+                          onChange={setConvertingProjectId}
+                          options={projects.map((p) => ({ value: p.id, label: p.name }))}
+                        />
+                        <Select
+                          size="xs"
+                          value={convertingEpicId}
+                          onChange={setConvertingEpicId}
+                          options={[{ value: '', label: 'No epic' }, ...epics.map((e) => ({ value: e.id, label: e.name }))]}
+                        />
                         <div className="flex gap-1.5">
                           <button onClick={() => setConvertingId(null)}
                             className="flex-1 text-xs py-1.5 rounded border border-line text-ghost hover:text-dim">
@@ -449,10 +504,9 @@ function StaleSection({ items }: { items: QueueItem[] }) {
                           </button>
                           <button
                             onClick={async () => {
-                              const projEl = document.getElementById(`proj-${item.id}`) as HTMLSelectElement
-                              const epicEl = document.getElementById(`epic-${item.id}`) as HTMLSelectElement
-                              if (!projEl || !initialStatus) return
-                              await promoteItem(item.id, { project_id: projEl.value, status_id: initialStatus.id, epic_id: epicEl.value || null })
+                              const projectId = convertingProjectId || projects[0]?.id
+                              if (!projectId || !initialStatus) return
+                              await promoteItem(item.id, { project_id: projectId, status_id: initialStatus.id, epic_id: convertingEpicId || null })
                               setConvertedIds((s) => new Set([...s, item.id]))
                               setConvertingId(null)
                             }}
@@ -642,17 +696,19 @@ function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: Qu
           <span className="text-xs px-1.5 py-0.5 rounded bg-accent/10 text-accent font-bold">{urgentCount} urgent</span>
         )}
         <div className="flex items-center gap-1.5 ml-auto">
-          <select
+          <Select
+            size="xs"
             value={sortAlgo}
-            onChange={(e) => onSortChange(e.target.value as SortAlgo)}
-            className="text-xs bg-surface border border-line rounded px-2 py-1 text-dim focus:outline-none"
-          >
-            <option value="auto">Auto</option>
-            <option value="priority">Priority</option>
-            <option value="deadline">Deadline</option>
-            <option value="shortest">Shortest</option>
-            <option value="custom">Custom</option>
-          </select>
+            onChange={(v) => onSortChange(v as SortAlgo)}
+            options={[
+              { value: 'auto',     label: 'Auto' },
+              { value: 'priority', label: 'Priority' },
+              { value: 'deadline', label: 'Deadline' },
+              { value: 'shortest', label: 'Shortest' },
+              { value: 'custom',   label: 'Custom' },
+            ]}
+            className="w-24"
+          />
           <button
             onClick={() => { setShowNew(true); setExpandedId(null) }}
             title="Add to queue"
