@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect, forwardRef } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 
 const beltSpring = { type: 'spring', damping: 28, stiffness: 380, mass: 0.8 } as const
@@ -173,39 +173,35 @@ function parseDueIn(text: string): string {
 type ExpandedEditorProps = {
   item: QueueItem
   onClose: () => void
-  onArchive: () => void
 }
 
-function ExpandedEditor({ item, onClose, onArchive }: ExpandedEditorProps) {
+function ExpandedEditor({ item, onClose }: ExpandedEditorProps) {
   const { updateItem } = useQueue()
   const [draft, setDraft] = useState<CardDraft>(itemToDraft(item))
   const [dueIn, setDueIn] = useState('')
   const [converting, setConverting] = useState(false)
   const [converted, setConverted] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
   const originalRef = useRef<CardDraft>(itemToDraft(item))
-
-  const isDirty = () => {
-    const o = originalRef.current
-    return draft.title !== o.title || draft.priority !== o.priority ||
-      draft.estimate !== o.estimate || draft.deadline !== o.deadline || draft.notes !== o.notes
-  }
+  const draftRef = useRef(draft)
+  useEffect(() => { draftRef.current = draft }, [draft])
 
   const save = useCallback(async () => {
-    if (!isDirty() || !draft.title.trim()) return
-    setSaving(true)
+    const d = draftRef.current
+    const o = originalRef.current
+    const dirty = d.title !== o.title || d.priority !== o.priority ||
+      d.estimate !== o.estimate || d.deadline !== o.deadline || d.notes !== o.notes
+    if (!dirty || !d.title.trim()) return
     try {
       await updateItem(item.id, {
-        title: draft.title.trim(),
-        notes: draft.notes,
-        deadline: draft.deadline ? `${draft.deadline}T00:00:00Z` : null,
-        priority: draft.priority,
-        estimate_minutes: draft.estimate ? parseEstimate(draft.estimate) : null,
+        title: d.title.trim(),
+        notes: d.notes,
+        deadline: d.deadline ? `${d.deadline}T00:00:00Z` : null,
+        priority: d.priority,
+        estimate_minutes: d.estimate ? parseEstimate(d.estimate) : null,
       })
-      originalRef.current = { ...draft, title: draft.title.trim() }
+      originalRef.current = { ...d, title: d.title.trim() }
     } catch { /* silently ignore */ }
-    setSaving(false)
-  }, [draft, item.id, updateItem])
+  }, [item.id, updateItem])
 
   const handleClose = () => { save(); setConverting(false); onClose() }
 
@@ -228,6 +224,7 @@ function ExpandedEditor({ item, onClose, onArchive }: ExpandedEditorProps) {
           autoFocus
           value={draft.title}
           onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
+          onBlur={save}
           className="w-full text-sm bg-surface border border-line rounded-[var(--c-radius-card)] px-2.5 py-1.5 text-ink focus:outline-none focus:border-accent/50"
           placeholder="Title"
         />
@@ -301,22 +298,15 @@ function ExpandedEditor({ item, onClose, onArchive }: ExpandedEditorProps) {
         </div>
         {/* Notes */}
         <textarea value={draft.notes} onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
+          onBlur={save}
           placeholder="Notes..."
           rows={2}
           className="w-full text-xs leading-relaxed bg-surface border border-line rounded-[var(--c-radius-card)] px-2.5 py-1.5 text-dim resize-none focus:outline-none focus:border-accent/50 placeholder:text-ghost" />
         {!converting ? (
           <div className="flex items-center gap-2 pt-0.5">
-            <button onClick={onArchive}
-              className="text-xs text-ghost/50 hover:text-dim transition-colors">
-              Dismiss
-            </button>
             <button onClick={() => setConverting(true)}
               className="text-xs text-dim hover:text-ink transition-colors">
               Add to board →
-            </button>
-            <button onClick={handleClose}
-              className="ml-auto text-xs px-2.5 py-1.5 rounded-[var(--c-radius-card)] bg-surface border border-line text-dim hover:text-ink transition-colors">
-              {saving ? '…' : 'Save'}
             </button>
           </div>
         ) : (
@@ -346,7 +336,7 @@ type BeltItemProps = {
   onDragEnd: () => void
 }
 
-function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchive, onComplete, isDragOver, dragging, onDragStart, onDragOver, onDrop, onDragEnd }: BeltItemProps) {
+const BeltItem = forwardRef<HTMLDivElement, BeltItemProps>(function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchive, onComplete, isDragOver, dragging, onDragStart, onDragOver, onDrop, onDragEnd }, ref) {
   const isFirst = index === 0
   const [done, setDone] = useState(false)
 
@@ -358,6 +348,7 @@ function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchiv
 
   return (
     <div
+      ref={ref}
       className={`relative group/belt transition-opacity ${dragging ? 'opacity-40' : 'opacity-100'}`}
       draggable
       onDragStart={onDragStart}
@@ -401,7 +392,7 @@ function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchiv
           <AnimatePresence initial={false}>
             {expanded && (
               <div onClick={(e) => e.stopPropagation()}>
-                <ExpandedEditor item={item} onClose={onCollapse} onArchive={() => { onArchive(); onCollapse() }} />
+                <ExpandedEditor item={item} onClose={onCollapse} />
               </div>
             )}
           </AnimatePresence>
@@ -412,10 +403,8 @@ function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchiv
           title="Mark done"
           className={`w-8 shrink-0 flex items-center justify-center border-l transition-all text-sm font-bold ${
             done
-              ? 'border-green-500/30 bg-green-500/20 text-green-500 opacity-100'
-              : expanded
-                ? 'border-line/20 bg-green-500/5 text-green-500/40 hover:bg-green-500/15 hover:text-green-500 opacity-100'
-                : 'border-transparent text-green-500/0 hover:text-green-500 hover:border-line/20 hover:bg-green-500/10 opacity-0 group-hover/belt:opacity-100'
+              ? 'border-green-500/30 bg-green-500/20 text-green-500'
+              : 'border-line/20 text-green-500/30 hover:text-green-500 hover:bg-green-500/15 hover:border-green-500/20'
           }`}
         >
           ✓
@@ -423,16 +412,14 @@ function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchiv
         <button
           onClick={(e) => { e.stopPropagation(); onArchive() }}
           title="Dismiss"
-          className={`w-8 shrink-0 flex items-center justify-center border-l border-line/20 text-ghost/30 hover:text-dim hover:bg-surface transition-all text-base ${
-            expanded ? 'opacity-100' : 'opacity-0 group-hover/belt:opacity-100 border-transparent hover:border-line/20'
-          }`}
+          className="w-8 shrink-0 flex items-center justify-center border-l border-line/20 text-ghost/25 hover:text-accent hover:bg-accent/10 hover:border-accent/20 transition-all text-base"
         >
           ×
         </button>
       </div>
     </div>
   )
-}
+})
 
 // ─── Stale (archived) section ─────────────────────────────────────────────────
 
@@ -779,6 +766,18 @@ function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: Qu
     createItem({ title, priority, estimate_minutes: estimateMinutes })
   }
 
+  const expandedItemRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!expandedId) return
+    const handler = (e: MouseEvent) => {
+      if (expandedItemRef.current && !expandedItemRef.current.contains(e.target as Node)) {
+        setExpandedId(null)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [expandedId])
+
   const handleDrop = useCallback((targetId: string) => {
     if (!draggingId || draggingId === targetId) return
     const currentOrder = sortedActive.map((i) => i.id)
@@ -852,6 +851,7 @@ function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: Qu
                 transition={beltSpring}
               >
                 <BeltItem
+                  ref={expandedId === item.id ? expandedItemRef : null}
                   item={item}
                   index={index}
                   total={sortedActive.length}
