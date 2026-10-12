@@ -438,7 +438,10 @@ function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchiv
 
 function StaleSection({ items }: { items: QueueItem[] }) {
   const [open, setOpen] = useState(false)
-  const { reviveItem, archiveItem, promoteItem } = useQueue()
+  const [selectMode, setSelectMode] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [busy, setBusy] = useState(false)
+  const { reviveItem, archiveItem, completeItem, promoteItem } = useQueue()
   const { data: projects = [] } = useProjects()
   const { data: statuses = [] } = useBoardStatuses()
   const { data: epics = [] } = useEpics()
@@ -449,19 +452,64 @@ function StaleSection({ items }: { items: QueueItem[] }) {
 
   if (items.length === 0) return null
 
+  const visibleItems = items.filter((i) => !convertedIds.has(i.id))
+  const allSelected = visibleItems.length > 0 && visibleItems.every((i) => selected.has(i.id))
   const initialStatus = statuses.find((s) => s.is_initial) ?? statuses[0]
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  const toggleAll = () => {
+    setSelected(allSelected ? new Set() : new Set(visibleItems.map((i) => i.id)))
+  }
+
+  const exitSelectMode = () => { setSelectMode(false); setSelected(new Set()) }
+
+  const runBulk = async (action: (id: string) => Promise<void> | void) => {
+    if (!selected.size || busy) return
+    setBusy(true)
+    await Promise.all([...selected].map((id) => action(id)))
+    setSelected(new Set())
+    setBusy(false)
+    if (visibleItems.filter((i) => !selected.has(i.id)).length === 0) exitSelectMode()
+  }
+
+  const bulkRevive  = () => runBulk((id) => reviveItem(id))
+  const bulkDelete  = () => runBulk((id) => archiveItem(id))
+  const bulkDone    = () => runBulk((id) => completeItem(id))
 
   return (
     <div className="border-t border-line/30 mt-auto shrink-0">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-ghost hover:text-dim transition-colors"
-      >
-        <span className="flex-1 text-left font-medium">
-          {open ? '↑' : '↓'} Yesterday · {items.length} item{items.length !== 1 ? 's' : ''}
-        </span>
-        <span className="text-ghost/40">auto-archived</span>
-      </button>
+      {/* Section header */}
+      <div className="flex items-center px-3 py-2 gap-1">
+        <button
+          onClick={() => setOpen((o) => !o)}
+          className="flex-1 flex items-center gap-1.5 text-xs text-ghost hover:text-dim transition-colors text-left"
+        >
+          <span className="font-medium">
+            {open ? '↑' : '↓'} Yesterday · {items.length} item{items.length !== 1 ? 's' : ''}
+          </span>
+          <span className="text-ghost/40">auto-archived</span>
+        </button>
+        {open && !selectMode && (
+          <button
+            onClick={() => setSelectMode(true)}
+            className="text-[10px] px-1.5 py-0.5 rounded border border-line/40 text-ghost/50 hover:text-dim hover:border-line transition-colors shrink-0"
+          >
+            Select
+          </button>
+        )}
+        {open && selectMode && (
+          <button onClick={exitSelectMode} className="text-[10px] text-ghost/50 hover:text-dim transition-colors shrink-0">
+            Cancel
+          </button>
+        )}
+      </div>
 
       <AnimatePresence initial={false}>
         {open && (
@@ -472,18 +520,43 @@ function StaleSection({ items }: { items: QueueItem[] }) {
             transition={{ ...beltSpring, damping: 35 }}
             className="overflow-hidden"
           >
-            {items.map((item) => {
-              if (convertedIds.has(item.id)) return null
+            {/* Select-all row */}
+            {selectMode && (
+              <div className="flex items-center gap-2 px-3 py-1.5 border-b border-line/10 bg-raised/20">
+                <input type="checkbox" checked={allSelected} onChange={toggleAll}
+                  className="accent-[color:var(--c-accent)] w-3.5 h-3.5 cursor-pointer" />
+                <span className="text-[10px] text-ghost">
+                  {selected.size > 0 ? `${selected.size} selected` : 'Select all'}
+                </span>
+              </div>
+            )}
+
+            {visibleItems.map((item) => {
               const isConverting = convertingId === item.id
+              const isSelected = selected.has(item.id)
 
               return (
-                <div key={item.id} className="flex items-stretch border-b border-line/10 last:border-0 opacity-50 hover:opacity-70 transition-opacity">
-                  <div className="w-1 shrink-0 bg-line/30" />
+                <div
+                  key={item.id}
+                  className={`flex items-stretch border-b border-line/10 last:border-0 transition-opacity ${
+                    selectMode && isSelected ? 'opacity-100 bg-accent/5' : 'opacity-50 hover:opacity-70'
+                  }`}
+                  onClick={selectMode ? () => toggleSelect(item.id) : undefined}
+                  style={selectMode ? { cursor: 'pointer' } : undefined}
+                >
+                  {selectMode && (
+                    <div className="flex items-center pl-3 pr-1 shrink-0">
+                      <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(item.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="accent-[color:var(--c-accent)] w-3.5 h-3.5 cursor-pointer" />
+                    </div>
+                  )}
+                  {!selectMode && <div className="w-1 shrink-0 bg-line/30" />}
                   <div className="flex-1 min-w-0 px-3 py-2.5">
                     <p className="text-xs text-dim leading-snug truncate">{item.title}</p>
                     <p className="text-[10px] text-ghost mt-0.5">{relativeTime(item.created_at)}</p>
 
-                    {isConverting ? (
+                    {!selectMode && isConverting ? (
                       <div className="mt-2 space-y-1.5">
                         <Select
                           size="xs"
@@ -515,7 +588,7 @@ function StaleSection({ items }: { items: QueueItem[] }) {
                           </button>
                         </div>
                       </div>
-                    ) : (
+                    ) : !selectMode && (
                       <div className="flex items-center gap-1.5 mt-1.5">
                         <button
                           onClick={() => reviveItem(item.id)}
@@ -541,6 +614,42 @@ function StaleSection({ items }: { items: QueueItem[] }) {
                 </div>
               )
             })}
+
+            {/* Floating bulk action bar */}
+            <AnimatePresence>
+              {selectMode && selected.size > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 6 }}
+                  transition={{ duration: 0.15 }}
+                  className="flex items-center gap-1.5 px-3 py-2.5 border-t border-accent/20 bg-raised"
+                >
+                  <span className="text-[10px] text-ghost shrink-0 mr-0.5">{selected.size}</span>
+                  <button
+                    onClick={bulkRevive}
+                    disabled={busy}
+                    className="flex-1 text-[10px] py-1.5 rounded border border-line text-dim hover:text-ink hover:border-accent/40 transition-colors disabled:opacity-40 font-medium"
+                  >
+                    ↩ Revive
+                  </button>
+                  <button
+                    onClick={bulkDone}
+                    disabled={busy}
+                    className="flex-1 text-[10px] py-1.5 rounded border border-green-500/30 text-green-500/70 hover:bg-green-500/10 hover:text-green-500 transition-colors disabled:opacity-40 font-medium"
+                  >
+                    ✓ Done
+                  </button>
+                  <button
+                    onClick={bulkDelete}
+                    disabled={busy}
+                    className="flex-1 text-[10px] py-1.5 rounded border border-line text-ghost hover:text-accent hover:border-accent/30 transition-colors disabled:opacity-40"
+                  >
+                    × Delete
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
         )}
       </AnimatePresence>

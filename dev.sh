@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Idempotent local dev: exactly one instance of DB + Go server + Vite.
-# Logs written to tmp/server.log and tmp/ui.log (truncated each run, gitignored).
+# Safe to run on any machine with: Go, Node/npm, Docker.
+# Logs → tmp/server.log + tmp/ui.log (truncated each run, gitignored).
 # Usage: ./dev.sh  or  make dev  (from server/)
 set -e
 
@@ -23,6 +24,23 @@ kill_port() {
   fi
 }
 
+wait_for() {
+  local url=$1 label=$2 max_wait=$3
+  for i in $(seq 1 $((max_wait * 2))); do
+    if curl -sf "$url" > /dev/null 2>&1; then
+      echo "  $label ready"
+      return 0
+    fi
+    if [ $((i % 10)) -eq 0 ]; then
+      echo "  ($label still starting…)"
+    fi
+    sleep 0.5
+  done
+  echo ""
+  echo "ERROR: $label didn't become ready in ${max_wait}s"
+  return 1
+}
+
 # ── Tear down any stale instances ────────────────────────────────────────────
 echo "▸ Cleaning up stale processes..."
 pkill -f "go run ./cmd/cumin" 2>/dev/null || true
@@ -43,42 +61,36 @@ done
 echo "  DB ready"
 
 # ── Backend ─────────────────────────────────────────────────────────────────
-echo "▸ Starting Go server (port 8080) — logs → tmp/server.log"
+echo "▸ Starting Go server (port 8080)…"
 cd "$ROOT/server"
 go run ./cmd/cumin/main.go >> "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 
-# Wait until healthy before starting UI.
-for i in $(seq 1 40); do
-  if curl -sf http://localhost:8080/healthz > /dev/null 2>&1; then
-    echo "  Server ready (pid $SERVER_PID)"
-    break
-  fi
-  # Surface startup errors early so the user isn't waiting blind.
-  if [ $i -eq 10 ]; then
-    echo "  (server still starting — last log line: $(tail -1 "$SERVER_LOG" 2>/dev/null || echo 'none'))"
-  fi
-  sleep 0.5
-  if [ $i -eq 40 ]; then
-    echo ""
-    echo "ERROR: server didn't become healthy after 20s. Last lines:"
-    tail -20 "$SERVER_LOG"
-    kill $SERVER_PID 2>/dev/null
-    exit 1
-  fi
-done
+if ! wait_for "http://localhost:8080/healthz" "Server" 20; then
+  echo "Last server log lines:"
+  tail -20 "$SERVER_LOG"
+  kill $SERVER_PID 2>/dev/null
+  exit 1
+fi
 
 # ── Frontend ─────────────────────────────────────────────────────────────────
-echo "▸ Starting Vite (port 3000) — logs → tmp/ui.log"
+echo "▸ Starting Vite (port 3000)…"
 cd "$ROOT/ui"
 npm run dev >> "$UI_LOG" 2>&1 &
 UI_PID=$!
 
+if ! wait_for "http://localhost:3000" "UI" 30; then
+  echo "Last UI log lines:"
+  tail -20 "$UI_LOG"
+  kill $SERVER_PID $UI_PID 2>/dev/null
+  exit 1
+fi
+
 echo ""
 echo "  ✓ Board:   http://localhost:3000"
 echo "  ✓ API:     http://localhost:8080/healthz"
-echo "  ✓ Logs:    tail -f tmp/server.log  |  tail -f tmp/ui.log"
-echo "  Press Ctrl-C to stop all."
+echo "  ✓ Logs:    tmp/server.log  |  tmp/ui.log"
+echo "  Press Ctrl-C to stop."
 echo ""
 echo "━━━ server logs ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
@@ -86,15 +98,13 @@ echo "━━━ server logs ━━━━━━━━━━━━━━━━━�
 cleanup() {
   echo ""
   echo "Stopping..."
-  kill $SERVER_PID $UI_PID 2>/dev/null || true
+  kill $SERVER_PID $UI_PID $TAIL_PID 2>/dev/null || true
   docker compose stop db
   exit 0
 }
 trap cleanup INT TERM
 
-# Stream server logs to the terminal (the interesting ones — filter noise).
 tail -f "$SERVER_LOG" &
 TAIL_PID=$!
-trap "cleanup; kill $TAIL_PID 2>/dev/null" INT TERM
 
 wait $SERVER_PID $UI_PID
