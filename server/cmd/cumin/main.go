@@ -65,7 +65,6 @@ func main() {
 	r.Use(applogger.RequestLogger)
 	r.Use(middleware.Recoverer)
 
-	// Browser-navigation routes: no CORS needed (not XHR, Origin header from Google would be blocked)
 	r.Get("/healthz", healthz(pool))
 	r.Get("/api/version", versionHandler)
 	r.Get("/api/docs/swagger.json", swaggerJSONHandler)
@@ -73,7 +72,6 @@ func main() {
 	r.Get("/api/auth/google/login", oauthHandler.HandleLogin)
 	r.Get("/api/auth/google/callback", oauthHandler.HandleCallback)
 
-	// All XHR API routes — CORS required
 	r.Group(func(r chi.Router) {
 		r.Use(cors.Handler(cors.Options{
 			AllowedOrigins:   cfg.AllowedOriginsList(),
@@ -81,17 +79,12 @@ func main() {
 			AllowedHeaders:   []string{"Content-Type", "Authorization", "sentry-trace", "baggage"},
 			AllowCredentials: true,
 		}))
-		// Explicit OPTIONS handler so chi routes preflights through the CORS middleware
-		// instead of returning 405 before middleware runs.
 		r.Options("/*", func(w http.ResponseWriter, r *http.Request) {})
 
-		// Native app sign-in: Google ID token in, Cumin JWT out (in the body, not a cookie).
 		r.Post("/api/auth/google/mobile", oauthHandler.HandleMobileLogin)
 
-		// Public XHR — no auth, but needs CORS for browser fetch
 		r.Get("/api/flags", flags.NewHandler(cfg).ServeHTTP)
 
-		// Protected routes — always require a valid JWT cookie
 		r.Group(func(r chi.Router) {
 			r.Use(auth.Middleware(cfg.JWTSecret))
 
@@ -109,25 +102,11 @@ func main() {
 	}
 }
 
-// versionHandler returns build version metadata.
-//
-// @Summary      Get API version
-// @Tags         meta
-// @Produce      json
-// @Success      200  {object}  version.Info
-// @Router       /api/version [get]
 func versionHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(version.Get().JSON())
 }
 
-// swaggerJSONHandler serves the OpenAPI 2.0 spec for the Cumin API.
-//
-// @Summary      Get OpenAPI spec
-// @Tags         meta
-// @Produce      json
-// @Success      200  {object}  object
-// @Router       /api/docs/swagger.json [get]
 func swaggerJSONHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(swaggerDocs.JSON)
@@ -141,26 +120,22 @@ func registerDomainRoutes(r chi.Router, pool *pgxpool.Pool, cfg config.Config) {
 	itemStore := &item.Store{DB: pool}
 	h := hub.New()
 
-	// Sub-group so board context + notify middleware are added before any routes,
-	// avoiding chi's "middleware must be defined before routes" panic.
 	r.Group(func(r chi.Router) {
-		r.Use(board.ContextMiddleware(boardStore))
+		r.Use(project.ContextMiddleware(projectStore))
 		r.Use(hub.NotifyMiddleware(h))
 
 		board.NewHandler(boardStore).Routes(r)
-		project.NewHandler(projectStore, boardStore).Routes(r)
-		epic.NewHandler(epicStore, boardStore).Routes(r)
-		sprint.NewHandler(sprintStore, boardStore).Routes(r)
-		item.NewHandler(itemStore, boardStore).Routes(r)
-		trash.NewHandler(projectStore, epicStore, boardStore).Routes(r)
-		queue.NewHandler(&queue.Store{DB: pool}, boardStore).Routes(r)
-		views.NewHandler(&views.Store{DB: pool}, boardStore).Routes(r)
+		project.NewHandler(projectStore).Routes(r)
+		epic.NewHandler(epicStore, projectStore).Routes(r)
+		sprint.NewHandler(sprintStore, boardStore, projectStore).Routes(r)
+		item.NewHandler(itemStore, boardStore, projectStore).Routes(r)
+		trash.NewHandler(projectStore, epicStore).Routes(r)
+		queue.NewHandler(&queue.Store{DB: pool}, projectStore).Routes(r)
+		views.NewHandler(&views.Store{DB: pool}, projectStore).Routes(r)
 		r.Get("/api/events", hub.NewHandler(h, cfg.IsFeatureEnabled("realtime")).Events)
 	})
 }
 
-// startPurgeWorker hard-deletes soft-deleted rows older than 30 days, running daily.
-// FK order: items first (references epics + projects), then epics, then projects.
 func startPurgeWorker(pool *pgxpool.Pool) {
 	ticker := time.NewTicker(24 * time.Hour)
 	go func() {
@@ -193,14 +168,6 @@ func newAuthHandler(cfg config.Config, pool *pgxpool.Pool) *auth.Handler {
 	}, repo, provisioner.ProvisionNewUser)
 }
 
-// healthz returns a health check handler that pings the database.
-//
-// @Summary      Health check
-// @Tags         meta
-// @Produce      json
-// @Success      200  {object}  object
-// @Failure      503  {object}  object
-// @Router       /healthz [get]
 func healthz(pool *pgxpool.Pool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := pool.Ping(r.Context()); err != nil {
@@ -216,7 +183,6 @@ func migrationsDir() string {
 	if p := os.Getenv("MIGRATIONS_PATH"); p != "" {
 		return p
 	}
-	// Dev: resolve relative to source file location
 	_, filename, _, _ := runtime.Caller(0)
 	return filepath.Join(filepath.Dir(filename), "..", "..", "migrations")
 }

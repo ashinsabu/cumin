@@ -196,7 +196,7 @@ func TestSprints_GetActive_NoneActive(t *testing.T) {
 	ctx := context.Background()
 	var activeID string
 	err := testEnv.DB.QueryRow(ctx,
-		`SELECT id FROM sprints WHERE board_id = $1 AND state = 'active'`, testEnv.BoardID,
+		`SELECT id FROM sprints WHERE project_id = $1 AND state = 'active'`, testEnv.ProjectID,
 	).Scan(&activeID)
 	if err == nil {
 		// There IS an active sprint — skip rather than break state.

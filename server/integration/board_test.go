@@ -175,24 +175,4 @@ func TestBoard_DeleteStatus_NotFound(t *testing.T) {
 	drainClose(resp)
 }
 
-// ─── Board settings ───────────────────────────────────────────────────────────
-
-func TestBoard_Get(t *testing.T) {
-	resp := mustDo(t, testEnv.Server, "GET", "/api/board", nil)
-	assertStatus(t, resp, http.StatusOK)
-	b := mustDecodeJSON[struct {
-		ID   string `json:"id"`
-		Name string `json:"name"`
-	}](t, resp)
-	if b.ID == "" {
-		t.Errorf("expected non-empty board ID")
-	}
-}
-
-func TestBoard_Update(t *testing.T) {
-	resp := mustDo(t, testEnv.Server, "PATCH", "/api/board", map[string]any{
-		"sprint_cadence_days": 7,
-	})
-	assertStatus(t, resp, http.StatusOK)
-	drainClose(resp)
-}
+// GET /api/board and PATCH /api/board are removed — board entity no longer exists.

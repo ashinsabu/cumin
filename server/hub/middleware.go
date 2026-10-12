@@ -3,7 +3,7 @@ package hub
 import (
 	"net/http"
 
-	"github.com/ashinsabu/cumin/server/board"
+	"github.com/ashinsabu/cumin/server/auth"
 )
 
 // statusRecorder captures the HTTP status code written by downstream handlers.
@@ -25,10 +25,9 @@ var mutatingMethods = map[string]bool{
 }
 
 // NotifyMiddleware intercepts successful mutating HTTP responses and calls
-// n.Notify(boardID). Board ID is read from context (stashed by
-// board.ContextMiddleware) — no extra DB query per request.
+// n.Notify(userID). User ID is read from context (stashed by auth.Middleware).
 //
-// Must run after both auth.Middleware and board.ContextMiddleware.
+// Must run after auth.Middleware.
 func NotifyMiddleware(n Notifier) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -39,8 +38,8 @@ func NotifyMiddleware(n Notifier) func(http.Handler) http.Handler {
 			rw := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 			next.ServeHTTP(rw, r)
 			if rw.status < 400 {
-				if boardID := board.IDFromContext(r.Context()); boardID != "" {
-					n.Notify(boardID)
+				if userID := auth.UserIDFromContext(r.Context()); userID != "" {
+					n.Notify(userID)
 				}
 			}
 		})

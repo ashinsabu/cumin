@@ -4,15 +4,9 @@ import (
 	"context"
 
 	"github.com/ashinsabu/cumin/server/api"
+	"github.com/ashinsabu/cumin/server/auth"
 	"github.com/go-chi/chi/v5"
 )
-
-type UpdateRequest struct {
-	Name                    string `json:"name"`
-	SprintCadenceDays       int    `json:"sprint_cadence_days"`
-	SprintStartDay          int    `json:"sprint_start_day"`
-	AvailableHoursPerSprint int    `json:"available_hours_per_sprint"`
-}
 
 type CreateStatusRequest struct {
 	Name      string  `json:"name"`
@@ -43,8 +37,6 @@ func NewHandler(store *Store) *Handler {
 }
 
 func (h *Handler) Routes(r chi.Router) {
-	r.Get("/api/board", api.HandleNoBody(h.Get))
-	r.Patch("/api/board", api.Handle(h.Update))
 	r.Get("/api/board/statuses", api.HandleNoBody(h.ListStatuses))
 	r.Post("/api/board/statuses", api.Handle(h.CreateStatus))
 	r.Patch("/api/board/statuses/{id}", api.Handle(h.UpdateStatusColor))
@@ -52,76 +44,9 @@ func (h *Handler) Routes(r chi.Router) {
 	r.Put("/api/board/statuses/reorder", api.Handle(h.ReorderStatuses))
 }
 
-// Get returns the authenticated user's board configuration.
-//
-// @Summary      Get board
-// @Tags         board
-// @Produce      json
-// @Success      200  {object}  board.Board
-// @Failure      404  {object}  api.ErrorResponse
-// @Security     CookieAuth
-// @Router       /api/board [get]
-func (h *Handler) Get(ctx context.Context) (*Board, error) {
-	b, err := GetOrFetch(ctx, h.store)
-	if err != nil {
-		return nil, api.NotFound("board not found")
-	}
-	return b, nil
-}
-
-// Update updates the board configuration.
-//
-// @Summary      Update board
-// @Tags         board
-// @Accept       json
-// @Produce      json
-// @Param        body  body  board.UpdateRequest  true  "Board settings to update"
-// @Success      200  {object}  board.Board
-// @Failure      404  {object}  api.ErrorResponse
-// @Security     CookieAuth
-// @Router       /api/board [patch]
-func (h *Handler) Update(ctx context.Context, req UpdateRequest) (*Board, error) {
-	b, err := GetOrFetch(ctx, h.store)
-	if err != nil {
-		return nil, api.NotFound("board not found")
-	}
-
-	if req.Name == "" {
-		req.Name = b.Name
-	}
-	if req.SprintCadenceDays == 0 {
-		req.SprintCadenceDays = b.SprintCadenceDays
-	}
-	if req.SprintStartDay == 0 {
-		req.SprintStartDay = b.SprintStartDay
-	}
-	if req.AvailableHoursPerSprint == 0 {
-		req.AvailableHoursPerSprint = b.AvailableHoursPerSprint
-	}
-
-	updated, err := h.store.Update(ctx, b.ID, req.Name, req.SprintCadenceDays, req.SprintStartDay, req.AvailableHoursPerSprint)
-	if err != nil {
-		return nil, api.Internal("update failed")
-	}
-	return updated, nil
-}
-
-// ListStatuses returns all statuses for the board.
-//
-// @Summary      List board statuses
-// @Tags         board
-// @Produce      json
-// @Success      200  {object}  board.StatusListResponse
-// @Failure      404  {object}  api.ErrorResponse
-// @Security     CookieAuth
-// @Router       /api/board/statuses [get]
 func (h *Handler) ListStatuses(ctx context.Context) (*StatusListResponse, error) {
-	b, err := GetOrFetch(ctx, h.store)
-	if err != nil {
-		return nil, api.NotFound("board not found")
-	}
-
-	statuses, err := h.store.ListStatuses(ctx, b.ID)
+	userID := auth.UserIDFromContext(ctx)
+	statuses, err := h.store.ListStatuses(ctx, userID)
 	if err != nil {
 		return nil, api.Internal("failed to list statuses")
 	}
@@ -131,80 +56,32 @@ func (h *Handler) ListStatuses(ctx context.Context) (*StatusListResponse, error)
 	return &StatusListResponse{Statuses: statuses}, nil
 }
 
-// CreateStatus adds a new status column to the board.
-//
-// @Summary      Create board status
-// @Tags         board
-// @Accept       json
-// @Produce      json
-// @Param        body  body  board.CreateStatusRequest  true  "Status to create"
-// @Success      200  {object}  board.Status
-// @Failure      400  {object}  api.ErrorResponse
-// @Failure      404  {object}  api.ErrorResponse
-// @Security     CookieAuth
-// @Router       /api/board/statuses [post]
 func (h *Handler) CreateStatus(ctx context.Context, req CreateStatusRequest) (*Status, error) {
-	b, err := GetOrFetch(ctx, h.store)
-	if err != nil {
-		return nil, api.NotFound("board not found")
-	}
-
+	userID := auth.UserIDFromContext(ctx)
 	if req.Name == "" {
 		return nil, api.BadRequest("name required")
 	}
-
-	st, err := h.store.CreateStatus(ctx, b.ID, b.UserID, req.Name, req.Position, req.IsInitial, req.IsDone, req.Color)
+	st, err := h.store.CreateStatus(ctx, userID, req.Name, req.Position, req.IsInitial, req.IsDone, req.Color)
 	if err != nil {
 		return nil, api.Internal("create status failed")
 	}
 	return st, nil
 }
 
-// UpdateStatusColor sets the display color for a status column.
-//
-// @Summary      Update status color
-// @Tags         board
-// @Accept       json
-// @Produce      json
-// @Param        id    path  string                         true  "Status ID"
-// @Param        body  body  board.UpdateStatusColorRequest true  "Color to set"
-// @Success      200  {object}  board.Status
-// @Failure      404  {object}  api.ErrorResponse
-// @Security     CookieAuth
-// @Router       /api/board/statuses/{id} [patch]
 func (h *Handler) UpdateStatusColor(ctx context.Context, req UpdateStatusColorRequest) (*Status, error) {
-	b, err := GetOrFetch(ctx, h.store)
-	if err != nil {
-		return nil, api.NotFound("board not found")
-	}
-
+	userID := auth.UserIDFromContext(ctx)
 	id := api.URLParam(ctx, "id")
-	st, err := h.store.UpdateStatusColor(ctx, b.ID, id, req.Color)
+	st, err := h.store.UpdateStatusColor(ctx, userID, id, req.Color)
 	if err != nil {
 		return nil, api.Internal("update status color failed")
 	}
 	return st, nil
 }
 
-// DeleteStatus removes a status column from the board (fails if items are in it).
-//
-// @Summary      Delete board status
-// @Tags         board
-// @Param        id  path  string  true  "Status ID"
-// @Success      204  "No Content"
-// @Failure      404  {object}  api.ErrorResponse
-// @Failure      409  {object}  api.ErrorResponse
-// @Security     CookieAuth
-// @Router       /api/board/statuses/{id} [delete]
 func (h *Handler) DeleteStatus(ctx context.Context) error {
-	b, err := GetOrFetch(ctx, h.store)
-	if err != nil {
-		return api.NotFound("board not found")
-	}
-
+	userID := auth.UserIDFromContext(ctx)
 	id := api.URLParam(ctx, "id")
-
-	if err := h.store.DeleteStatusSafe(ctx, id, b.ID); err != nil {
+	if err := h.store.DeleteStatusSafe(ctx, id, userID); err != nil {
 		switch err.(type) {
 		case *notFoundErr:
 			return api.NotFound(err.Error())
@@ -217,33 +94,15 @@ func (h *Handler) DeleteStatus(ctx context.Context) error {
 	return nil
 }
 
-// ReorderStatuses sets the display order of status columns.
-//
-// @Summary      Reorder board statuses
-// @Tags         board
-// @Accept       json
-// @Produce      json
-// @Param        body  body  board.ReorderStatusesRequest  true  "Ordered status IDs"
-// @Success      200  {object}  board.StatusListResponse
-// @Failure      400  {object}  api.ErrorResponse
-// @Failure      404  {object}  api.ErrorResponse
-// @Security     CookieAuth
-// @Router       /api/board/statuses/reorder [put]
 func (h *Handler) ReorderStatuses(ctx context.Context, req ReorderStatusesRequest) (*StatusListResponse, error) {
-	b, err := GetOrFetch(ctx, h.store)
-	if err != nil {
-		return nil, api.NotFound("board not found")
-	}
-
+	userID := auth.UserIDFromContext(ctx)
 	if len(req.IDs) == 0 {
 		return nil, api.BadRequest("ids required")
 	}
-
-	if err := h.store.ReorderStatuses(ctx, b.ID, req.IDs); err != nil {
+	if err := h.store.ReorderStatuses(ctx, userID, req.IDs); err != nil {
 		return nil, api.Internal("reorder failed")
 	}
-
-	statuses, _ := h.store.ListStatuses(ctx, b.ID)
+	statuses, _ := h.store.ListStatuses(ctx, userID)
 	if statuses == nil {
 		statuses = []Status{}
 	}
