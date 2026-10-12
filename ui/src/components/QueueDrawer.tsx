@@ -441,7 +441,7 @@ function StaleSection({ items }: { items: QueueItem[] }) {
   const [selectMode, setSelectMode] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
-  const { reviveItem, archiveItem, completeItem, promoteItem } = useQueue()
+  const { reviveItem, archiveItem, deleteItemSilent, completeItem, promoteItem } = useQueue()
   const { data: projects = [] } = useProjects()
   const { data: statuses = [] } = useBoardStatuses()
   const { data: epics = [] } = useEpics()
@@ -480,7 +480,7 @@ function StaleSection({ items }: { items: QueueItem[] }) {
   }
 
   const bulkRevive  = () => runBulk((id) => reviveItem(id))
-  const bulkDelete  = () => runBulk((id) => archiveItem(id))
+  const bulkDelete  = () => runBulk((id) => deleteItemSilent(id))
   const bulkDone    = () => runBulk((id) => completeItem(id))
 
   return (
@@ -597,7 +597,7 @@ function StaleSection({ items }: { items: QueueItem[] }) {
                           ↩ Revive
                         </button>
                         <button
-                          onClick={() => setConvertingId(item.id)}
+                          onClick={() => { setConvertingProjectId(''); setConvertingEpicId(''); setConvertingId(item.id) }}
                           className="text-[10px] px-2 py-0.5 rounded border border-line/50 text-ghost hover:text-accent hover:border-accent/40 transition-colors"
                         >
                           → Convert

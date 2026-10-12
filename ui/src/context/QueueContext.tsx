@@ -43,6 +43,7 @@ type QueueContextValue = {
   createItem: (p: CreatePayload) => Promise<QueueItem>
   updateItem: (id: string, p: UpdatePayload) => Promise<void>
   archiveItem: (id: string) => void
+  deleteItemSilent: (id: string) => Promise<void>
   completeItem: (id: string) => Promise<void>
   reviveItem: (id: string) => Promise<void>
   reorderItems: (ids: string[]) => Promise<void>
@@ -151,9 +152,19 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     })
   }, [pushToast])
 
+  const deleteItemSilent = useCallback(async (id: string): Promise<void> => {
+    setItems(prev => prev.filter(i => i.id !== id))
+    await fetch(`${API}/api/queue/${id}`, { method: 'DELETE', credentials: 'include' })
+  }, [])
+
   const completeItem = useCallback(async (id: string): Promise<void> => {
+    const snapshot = itemsRef.current.find(i => i.id === id)
     setItems((prev) => prev.filter((i) => i.id !== id))
-    await fetch(`${API}/api/queue/${id}/complete`, { method: 'POST', credentials: 'include' })
+    const res = await fetch(`${API}/api/queue/${id}/complete`, { method: 'POST', credentials: 'include' })
+    if (!res.ok) {
+      if (snapshot) setItems((prev) => [...prev, snapshot].sort((a, b) => b.urgency_score - a.urgency_score))
+      throw new Error('Failed to mark queue item done')
+    }
   }, [])
 
   const reviveItem = useCallback(async (id: string): Promise<void> => {
@@ -177,7 +188,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <QueueContext.Provider value={{ items, loading, createItem, updateItem, archiveItem, completeItem, reviveItem, reorderItems, promoteItem }}>
+    <QueueContext.Provider value={{ items, loading, createItem, updateItem, archiveItem, deleteItemSilent, completeItem, reviveItem, reorderItems, promoteItem }}>
       {children}
     </QueueContext.Provider>
   )
