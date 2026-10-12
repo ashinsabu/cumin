@@ -358,7 +358,7 @@ function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchiv
 
   return (
     <div
-      className={`relative transition-opacity ${dragging ? 'opacity-40' : 'opacity-100'}`}
+      className={`relative group/belt transition-opacity ${dragging ? 'opacity-40' : 'opacity-100'}`}
       draggable
       onDragStart={onDragStart}
       onDragOver={onDragOver}
@@ -406,29 +406,29 @@ function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchiv
             )}
           </AnimatePresence>
         </div>
-        {/* Action columns — only visible when expanded to avoid cluttering collapsed items */}
-        {expanded && (
-          <>
-            <button
-              onClick={handleDone}
-              title="Mark done"
-              className={`w-8 shrink-0 flex items-center justify-center border-l transition-colors text-sm font-bold ${
-                done
-                  ? 'border-green-500/30 bg-green-500/20 text-green-500'
-                  : 'border-line/20 bg-green-500/5 text-green-500/40 hover:bg-green-500/15 hover:text-green-500'
-              }`}
-            >
-              ✓
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); onArchive() }}
-              title="Dismiss"
-              className="w-8 shrink-0 flex items-center justify-center border-l border-line/20 text-ghost/30 hover:text-dim hover:bg-surface transition-colors text-base"
-            >
-              ×
-            </button>
-          </>
-        )}
+        {/* ✓ / × — always rendered; fade in on hover when collapsed, always visible when expanded */}
+        <button
+          onClick={handleDone}
+          title="Mark done"
+          className={`w-8 shrink-0 flex items-center justify-center border-l transition-all text-sm font-bold ${
+            done
+              ? 'border-green-500/30 bg-green-500/20 text-green-500 opacity-100'
+              : expanded
+                ? 'border-line/20 bg-green-500/5 text-green-500/40 hover:bg-green-500/15 hover:text-green-500 opacity-100'
+                : 'border-transparent text-green-500/0 hover:text-green-500 hover:border-line/20 hover:bg-green-500/10 opacity-0 group-hover/belt:opacity-100'
+          }`}
+        >
+          ✓
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); onArchive() }}
+          title="Dismiss"
+          className={`w-8 shrink-0 flex items-center justify-center border-l border-line/20 text-ghost/30 hover:text-dim hover:bg-surface transition-all text-base ${
+            expanded ? 'opacity-100' : 'opacity-0 group-hover/belt:opacity-100 border-transparent hover:border-line/20'
+          }`}
+        >
+          ×
+        </button>
       </div>
     </div>
   )
