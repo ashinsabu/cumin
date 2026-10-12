@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	pgx "github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -65,6 +66,9 @@ func (s *Store) UpdateStatusColor(ctx context.Context, userID, statusID string, 
 	`, userID, statusID, color).Scan(
 		&st.ID, &st.UserID, &st.Name, &st.Position, &st.IsInitial, &st.IsDone, &st.Color)
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, &notFoundErr{msg: "status not found"}
+		}
 		return nil, err
 	}
 	return &st, nil

@@ -73,6 +73,9 @@ func (h *Handler) UpdateStatusColor(ctx context.Context, req UpdateStatusColorRe
 	id := api.URLParam(ctx, "id")
 	st, err := h.store.UpdateStatusColor(ctx, userID, id, req.Color)
 	if err != nil {
+		if _, ok := err.(*notFoundErr); ok {
+			return nil, api.NotFound(err.Error())
+		}
 		return nil, api.Internal("update status color failed")
 	}
 	return st, nil

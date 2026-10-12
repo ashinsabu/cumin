@@ -210,4 +210,12 @@ func TestBoard_UpdateStatusColor(t *testing.T) {
 	}
 }
 
+func TestBoard_UpdateStatusColor_NotFound(t *testing.T) {
+	resp := mustDo(t, testEnv.Server, "PATCH", "/api/board/statuses/00000000-0000-0000-0000-000000000000", map[string]any{
+		"color": "#ff0000",
+	})
+	assertStatus(t, resp, http.StatusNotFound)
+	drainClose(resp)
+}
+
 // GET /api/board and PATCH /api/board are removed — board entity no longer exists.
