@@ -172,10 +172,9 @@ function parseDueIn(text: string): string {
 
 type ExpandedEditorProps = {
   item: QueueItem
-  onClose: () => void
 }
 
-function ExpandedEditor({ item, onClose }: ExpandedEditorProps) {
+function ExpandedEditor({ item }: ExpandedEditorProps) {
   const { updateItem } = useQueue()
   const [draft, setDraft] = useState<CardDraft>(itemToDraft(item))
   const [dueIn, setDueIn] = useState('')
@@ -390,7 +389,7 @@ const BeltItem = forwardRef<HTMLDivElement, BeltItemProps>(function BeltItem({ i
           <AnimatePresence initial={false}>
             {expanded && (
               <div onClick={(e) => e.stopPropagation()}>
-                <ExpandedEditor item={item} onClose={onCollapse} />
+                <ExpandedEditor item={item} />
               </div>
             )}
           </AnimatePresence>
