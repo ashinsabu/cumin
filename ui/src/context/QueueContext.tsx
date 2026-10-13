@@ -67,6 +67,8 @@ export function QueueProvider({ children }: { children: ReactNode }) {
         const data = await res.json()
         setItems(data.items ?? [])
       }
+    } catch {
+      // transient network failure — queue stays empty, user can retry
     } finally {
       setLoading(false)
     }
