@@ -203,8 +203,6 @@ function ExpandedEditor({ item, onClose }: ExpandedEditorProps) {
     } catch { /* silently ignore */ }
   }, [item.id, updateItem])
 
-  const handleClose = () => { save(); setConverting(false); onClose() }
-
   if (converted) {
     return (
       <div className="px-4 py-3 text-sm text-ghost italic">Converted as {converted}</div>
