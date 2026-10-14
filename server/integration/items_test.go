@@ -544,40 +544,57 @@ func TestItems_CrossBoard_Isolation(t *testing.T) {
 // TestItems_TimeInStatus_CumulativeAcrossReentries verifies that time-in-status
 // accumulates correctly when an item is moved out of a status and back again.
 // Previously only the most recent entry was counted; this test catches regressions.
+//
+// This test uses backdated status_transitions to assert a specific minimum total
+// (not just >= 0). Two TODO periods totalling 7 minutes are injected directly.
 func TestItems_TimeInStatus_CumulativeAcrossReentries(t *testing.T) {
 	it := createTestItem(t, "Time accumulation test")
 	t.Cleanup(func() { hardDeleteItems(it.ID) })
 
-	// Baseline: item starts in TODO, time should be >= 0.
+	ctx := context.Background()
+
+	// Clear auto-inserted transitions so we control the timeline precisely.
+	_, err := testEnv.DB.Exec(ctx,
+		`DELETE FROM status_transitions WHERE item_id = $1`, it.ID,
+	)
+	if err != nil {
+		t.Fatalf("clear transitions: %v", err)
+	}
+
+	// Inject two distinct TODO periods totalling 7 minutes:
+	//   Entry 1:  NULL → TODO  at -12m (start of first period)
+	//   Exit  1:  TODO → DONE  at -10m (2 min first period ends)
+	//   Entry 2:  DONE → TODO  at  -5m (start of second period)
+	//   (No exit: still in TODO now, ~5 min ongoing)
+	// The old query only counted the most recent entry (5 min). The fixed
+	// query sums both intervals, so the total must be >= 7.
+	type row struct {
+		from *string
+		to   string
+		ago  string
+	}
+	rows := []row{
+		{nil, testEnv.TodoStatusID, "12 minutes"},
+		{&testEnv.TodoStatusID, testEnv.DoneStatusID, "10 minutes"},
+		{&testEnv.DoneStatusID, testEnv.TodoStatusID, "5 minutes"},
+	}
+	for _, r := range rows {
+		_, err := testEnv.DB.Exec(ctx, `
+			INSERT INTO status_transitions (item_id, from_status_id, to_status_id, transitioned_at)
+			VALUES ($1, $2, $3, NOW() - $4::interval)
+		`, it.ID, r.from, r.to, r.ago)
+		if err != nil {
+			t.Fatalf("insert transition (%v→%s): %v", r.from, r.to, err)
+		}
+	}
+
 	resp := mustDo(t, testEnv.Server, "GET", "/api/items/"+it.ID, nil)
 	assertStatus(t, resp, http.StatusOK)
 	got := mustDecodeJSON[itemJSON](t, resp)
-	if got.TimeInStatusMinutes < 0 {
-		t.Fatalf("time_in_status_minutes should be >= 0, got %d", got.TimeInStatusMinutes)
+
+	// Two full periods: 2m + 5m = 7 minutes minimum.
+	// The ongoing second period may have grown by test execution time, so >= 7.
+	if got.TimeInStatusMinutes < 7 {
+		t.Errorf("expected cumulative time_in_status_minutes >= 7 (two periods), got %d", got.TimeInStatusMinutes)
 	}
-
-	// Move TODO → DONE → TODO.
-	// Each round-trip creates a new interval in TODO. The cumulative sum must be >= 0.
-	resp = mustDo(t, testEnv.Server, "POST", "/api/items/"+it.ID+"/move", map[string]any{
-		"status_id": testEnv.DoneStatusID,
-	})
-	assertStatus(t, resp, http.StatusOK)
-	drainClose(resp)
-
-	resp = mustDo(t, testEnv.Server, "POST", "/api/items/"+it.ID+"/move", map[string]any{
-		"status_id": testEnv.TodoStatusID,
-	})
-	assertStatus(t, resp, http.StatusOK)
-	drainClose(resp)
-
-	// After moving back to TODO, time_in_status_minutes must still be >= 0
-	// (it won't be negative and the query must not error out).
-	resp = mustDo(t, testEnv.Server, "GET", "/api/items/"+it.ID, nil)
-	assertStatus(t, resp, http.StatusOK)
-	got = mustDecodeJSON[itemJSON](t, resp)
-	if got.TimeInStatusMinutes < 0 {
-		t.Fatalf("cumulative time_in_status_minutes after re-entry should be >= 0, got %d", got.TimeInStatusMinutes)
-	}
-	// The item was briefly in TODO before moving to DONE, then moved back.
-	// We can't assert exact minutes in a fast test, but the field must be present and non-negative.
 }

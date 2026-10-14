@@ -239,7 +239,9 @@ describe('BoardView — project filter', () => {
 
     render(<BoardView />)
 
-    expect(screen.getByTestId('item-card-i1')).toBeTruthy()
+    // i1 must be present; getByTestId throws if absent (no need for toBeTruthy).
+    screen.getByTestId('item-card-i1')
+    // i2 must be absent — filtered out because proj-2 is not in filteredIds.
     expect(screen.queryByTestId('item-card-i2')).toBeNull()
   })
 
@@ -256,7 +258,8 @@ describe('BoardView — project filter', () => {
 
     render(<BoardView />)
 
-    expect(screen.getByTestId('item-card-i1')).toBeTruthy()
-    expect(screen.getByTestId('item-card-i2')).toBeTruthy()
+    // Both items must appear — no filter active when filteredIds is empty.
+    screen.getByTestId('item-card-i1')
+    screen.getByTestId('item-card-i2')
   })
 })
