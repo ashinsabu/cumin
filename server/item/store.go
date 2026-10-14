@@ -51,11 +51,27 @@ const itemAliasedCols = `i.id, i.project_id, i.epic_id, i.sprint_id, i.status_id
 // itemEnrichedCols uses LATERAL join (not correlated scalar subquery) to avoid N+1 index scans.
 const itemEnrichedCols = itemAliasedCols + `,
 	e.name, e.color,
-	COALESCE(EXTRACT(EPOCH FROM (NOW() - t.transitioned_at)) / 60, 0)::int`
+	t.total_minutes`
 
+// itemLateralJoin computes cumulative time in the current status by summing all intervals.
+// For each entry into i.status_id, it finds the earliest subsequent exit (from_status_id = i.status_id);
+// if no exit exists the interval extends to NOW() (item is still in that status).
 const itemLateralJoin = `LEFT JOIN LATERAL (
-	SELECT transitioned_at FROM status_transitions
-	WHERE item_id = i.id AND to_status_id = i.status_id ORDER BY transitioned_at DESC LIMIT 1
+	SELECT COALESCE(
+		SUM(
+			FLOOR(EXTRACT(EPOCH FROM (
+				COALESCE(
+					(SELECT MIN(x.transitioned_at) FROM status_transitions x
+					 WHERE x.item_id = st.item_id
+					   AND x.from_status_id = i.status_id
+					   AND x.transitioned_at > st.transitioned_at),
+					NOW()
+				) - st.transitioned_at
+			)) / 60)
+		), 0
+	)::int AS total_minutes
+	FROM status_transitions st
+	WHERE st.item_id = i.id AND st.to_status_id = i.status_id
 ) t ON true`
 
 func scanItemEnriched(row interface{ Scan(...any) error }) (*Item, error) {
