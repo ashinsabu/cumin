@@ -1,21 +1,77 @@
-import { useState, useMemo, useCallback } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useBoard } from '../context/BoardContext'
-import { useItems } from '../hooks/useItems'
+import { useItems, useMoveItem } from '../hooks/useItems'
 import { useEpics } from '../hooks/useEpics'
 import { useProjects } from '../hooks/useProjects'
 import { useBoardStatuses } from '../hooks/useBoardQueries'
 import { usePersistentState } from '../hooks/usePersistentState'
+import { useSelectedProject } from '../hooks/useSelectedProject'
 import { useCreateView, type ViewFilters } from '../hooks/useSavedViews'
+import { SortIcon, PageToolbar, statusDisplayColor, StatusBadge } from '../components/ui'
 import { PRIORITY } from '../constants'
 import { formatEstimate } from '../hooks/useFormat'
 import { StatusDurationBar } from '../components/StatusDurationBar'
 import { FilterSelect } from '../components/FilterSelect'
 import { SearchInput } from '../components/SearchInput'
 import { CreateItemModal } from '../components/CreateItemModal'
-import type { Item } from '../types'
+import type { Item, Status } from '../types'
 
-const MIDDLE_COLORS = ['#ef4444', '#3b82f6', '#f59e0b', '#8b5cf6']
+function InlineStatusPicker({ item, statuses, middleStatuses }: { item: Item; statuses: Status[]; middleStatuses: Status[] }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  const moveItem = useMoveItem()
+
+  useEffect(() => {
+    if (!open) return
+    function close(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', close)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', onKey) }
+  }, [open])
+
+  const current = statuses.find((s) => s.id === item.status_id)
+  const midIdx = current ? middleStatuses.indexOf(current) : 0
+
+  function handlePick(e: React.MouseEvent, statusId: string) {
+    e.stopPropagation()
+    setOpen(false)
+    if (statusId !== item.status_id) moveItem.mutate({ id: item.id, statusId })
+  }
+
+  return (
+    <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v) }}
+        className="flex items-center gap-1 hover:opacity-75 transition-opacity"
+        title="Change status"
+      >
+        {current && <StatusBadge status={current} middleIndex={midIdx} />}
+      </button>
+      {open && (
+        <div className="absolute z-50 top-full mt-1 left-0 min-w-[140px] bg-raised border border-line rounded-[var(--c-radius-card)] shadow-lg py-1">
+          {statuses.map((s) => {
+            const mIdx = middleStatuses.indexOf(s)
+            const color = statusDisplayColor(s, mIdx >= 0 ? mIdx : 0)
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={(e) => handlePick(e, s.id)}
+                className={`w-full text-left px-3 py-1.5 flex items-center gap-2 hover:bg-surface transition-colors ${s.id === item.status_id ? 'opacity-50 cursor-default' : ''}`}
+              >
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                <span className="text-xs text-ink">{s.name}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
 
 type ColumnConfig = {
   id: string
@@ -40,11 +96,6 @@ type SortKey = 'id' | 'title' | 'project' | 'epic' | 'estimate' | 'created' | 's
 type SortDir = 'asc' | 'desc'
 
 const SORTABLE_COLS = new Set<string>(['id', 'title', 'project', 'epic', 'estimate', 'created', 'status', 'priority', 'in_status'])
-
-function SortIcon({ col, sortKey, sortDir }: { col: string; sortKey: SortKey; sortDir: SortDir }) {
-  if (col !== sortKey) return <span className="ml-1 text-ghost/40">↕</span>
-  return <span className="ml-1 text-accent">{sortDir === 'asc' ? '↑' : '↓'}</span>
-}
 
 function SaveViewModal({ filters, onClose }: { filters: ViewFilters; onClose: () => void }) {
   const [name, setName] = useState('')
@@ -83,8 +134,26 @@ function SaveViewModal({ filters, onClose }: { filters: ViewFilters; onClose: ()
 }
 
 export function ItemsView() {
-  const { selectItem } = useBoard()
+  const { selectItem, selectEpic } = useBoard()
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+  const [selectedProject] = useSelectedProject()
+
+  // Sync URL project filter whenever the sidebar's selected project changes.
+  // Uses a ref to detect actual project switches vs re-renders — manual filter
+  // overrides in this view are respected because they don't change selectedProject.
+  const prevProjectIdRef = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    if (!selectedProject) return
+    if (prevProjectIdRef.current === selectedProject.id) return
+    prevProjectIdRef.current = selectedProject.id
+    setSearchParams((p) => {
+      if (p.get('view')) return p // saved view takes precedence
+      p.set('project_id', selectedProject.id)
+      return p
+    }, { replace: true })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProject?.id])
 
   // Filters live in URL params so links are shareable and sidebar can load them.
   const projectFilter = searchParams.get('project_id') ?? 'all'
@@ -129,7 +198,9 @@ export function ItemsView() {
     }, { replace: true })
   }, [setSearchParams])
 
-  const { data: items = [] } = useItems()
+  const { data: items = [] } = useItems({
+    projectId: projectFilter !== 'all' ? projectFilter : undefined,
+  })
   const { data: statuses = [] } = useBoardStatuses()
   const { data: epicList = [] } = useEpics()
   const { data: projectList = [] } = useProjects()
@@ -145,7 +216,7 @@ export function ItemsView() {
   const middleStatuses = useMemo(() => statuses.filter((s) => !s.is_initial && !s.is_done), [statuses])
 
   const projectOptions = useMemo(() => [
-    { value: 'all', label: 'Project' },
+    { value: 'all', label: 'All projects' },
     ...projectList.map((p) => ({ value: p.id, label: p.name, color: p.color })),
   ], [projectList])
 
@@ -157,8 +228,8 @@ export function ItemsView() {
   const statusOptions = useMemo(() => [
     { value: 'all', label: 'Status' },
     ...statuses.map((s) => {
-      const color = s.is_initial ? '#71717a' : s.is_done ? '#22c55e' : MIDDLE_COLORS[middleStatuses.indexOf(s) % MIDDLE_COLORS.length]
-      return { value: s.id, label: s.name, color }
+      const midIdx = middleStatuses.indexOf(s)
+      return { value: s.id, label: s.name, color: statusDisplayColor(s, midIdx >= 0 ? midIdx : 0) }
     }),
   ], [statuses, middleStatuses])
 
@@ -241,34 +312,38 @@ export function ItemsView() {
 
   function renderCell(col: ColumnConfig, item: Item) {
     const priority = PRIORITY[item.priority] ?? PRIORITY[4]
-    const status = statuses.find((s) => s.id === item.status_id)
     const project = projectList.find((p) => p.id === item.project_id)
+    const epic = item.epic_id ? epicList.find((e) => e.id === item.epic_id) : undefined
 
     switch (col.id) {
       case 'id':
         return <span className="text-sm font-mono font-medium text-accent">{item.display_id}</span>
       case 'title':
-        return <span className="text-sm font-medium text-ink">{item.title}</span>
+        return <span className="text-sm font-medium text-ink leading-snug">{item.title}</span>
       case 'project':
         return project
           ? <span className="text-xs font-semibold px-2 py-0.5 rounded" style={{ backgroundColor: (project.color ?? '#6b7280') + '18', color: project.color ?? '#6b7280', border: `1px solid ${(project.color ?? '#6b7280')}25` }}>{project.prefix}</span>
           : <span className="text-ghost text-xs">—</span>
       case 'epic':
-        return item.epic_name
-          ? <span className="text-xs font-semibold px-2 py-0.5 rounded" style={{ backgroundColor: (item.epic_color ?? '#6b7280') + '18', color: item.epic_color ?? '#6b7280', border: `1px solid ${(item.epic_color ?? '#6b7280')}25` }}>{item.epic_name}</span>
-          : <span className="text-ghost text-xs">—</span>
+        if (!item.epic_name) return <span className="text-ghost text-xs">—</span>
+        return (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); if (epic) { selectEpic(epic); navigate('/epics') } }}
+            className="flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded hover:opacity-75 transition-opacity cursor-pointer"
+            style={{ backgroundColor: (item.epic_color ?? '#6b7280') + '18', color: item.epic_color ?? '#6b7280', border: `1px solid ${(item.epic_color ?? '#6b7280')}25` }}
+            title={`Go to epic: ${item.epic_name}`}
+          >
+            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: item.epic_color ?? '#6b7280' }} />
+            {item.epic_name}
+          </button>
+        )
       case 'estimate':
         return <span className="text-sm font-semibold text-ink/80">{item.estimate_minutes ? formatEstimate(item.estimate_minutes) : '—'}</span>
       case 'created':
         return <span className="text-xs text-dim">{item.created_at ? new Date(item.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—'}</span>
       case 'status':
-        return (
-          <span className={`text-xs font-semibold px-2 py-1 rounded ${
-            status?.is_done ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-line text-ink/80'
-          }`}>
-            {status?.name}
-          </span>
-        )
+        return <InlineStatusPicker item={item} statuses={statuses} middleStatuses={middleStatuses} />
       case 'priority':
         return <span className="text-sm font-bold" style={{ color: priority.color }}>{priority.label}</span>
       case 'in_status':
@@ -294,7 +369,7 @@ export function ItemsView() {
       {showCreate && <CreateItemModal onClose={() => setShowCreate(false)} />}
       {showSaveModal && <SaveViewModal filters={currentFilters} onClose={() => setShowSaveModal(false)} />}
 
-      <div className="shrink-0 px-4 py-3 border-b flex flex-wrap items-center gap-2 border-line">
+      <PageToolbar className="flex-wrap gap-2">
         <SearchInput value={search} onChange={setSearch} placeholder="Search items…" className="min-w-[140px] flex-1 sm:flex-none sm:w-48" />
         <div className="flex items-center gap-2 flex-wrap">
           <FilterSelect value={projectFilter} onChange={(v) => setFilter('project_id', v)} options={projectOptions} />
@@ -341,7 +416,7 @@ export function ItemsView() {
             <span className="hidden sm:inline">New item</span>
           </button>
         </div>
-      </div>
+      </PageToolbar>
 
       {showColumnConfig && (
         <div className="absolute right-4 top-24 z-30 rounded-[var(--c-radius-card)] shadow-lg border p-3 bg-raised border-line">
@@ -372,7 +447,7 @@ export function ItemsView() {
                   style={{ width: col.width, minWidth: col.width }}
                 >
                   {col.label}
-                  {SORTABLE_COLS.has(col.id) && <SortIcon col={col.id} sortKey={sortKey} sortDir={sortDir} />}
+                  {SORTABLE_COLS.has(col.id) && <SortIcon active={sortKey === col.id} dir={sortDir} />}
                   <div
                     onMouseDown={(e) => { e.stopPropagation(); handleMouseDown(col.id, e) }}
                     className={`absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-accent/40 ${resizing?.id === col.id ? 'bg-accent/40' : ''}`}
@@ -382,23 +457,26 @@ export function ItemsView() {
             </tr>
           </thead>
           <tbody>
-            {sorted.map((item) => (
-              <tr
-                key={item.id}
-                onClick={() => selectItem(item)}
-                className="cursor-pointer transition-colors border-b hover:bg-surface border-line"
-              >
-                {visibleCols.map((col) => (
-                  <td
-                    key={col.id}
-                    className="px-4 py-2.5"
-                    style={{ width: col.width, minWidth: col.width, maxWidth: col.width }}
-                  >
-                    <div className="truncate">{renderCell(col, item)}</div>
-                  </td>
-                ))}
-              </tr>
-            ))}
+            {sorted.map((item) => {
+              const project = projectList.find((p) => p.id === item.project_id)
+              return (
+                <tr
+                  key={item.id}
+                  onClick={() => selectItem(item)}
+                  className="group cursor-pointer transition-colors border-b hover:bg-surface border-line/60"
+                >
+                  {visibleCols.map((col, ci) => (
+                    <td
+                      key={col.id}
+                      className={`px-4 py-2.5 transition-colors ${ci === 0 ? 'border-l-2 border-transparent group-hover:border-l-2' : ''}`}
+                      style={ci === 0 ? { width: col.width, minWidth: col.width, maxWidth: col.width, borderLeftColor: project?.color ?? 'transparent' } : { width: col.width, minWidth: col.width, maxWidth: col.width }}
+                    >
+                      <div className="truncate">{renderCell(col, item)}</div>
+                    </td>
+                  ))}
+                </tr>
+              )
+            })}
             {sorted.length === 0 && (
               <tr>
                 <td colSpan={visibleCols.length} className="px-4 py-8 text-center text-sm text-ghost">

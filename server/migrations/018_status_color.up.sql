@@ -1,0 +1,1 @@
+ALTER TABLE statuses ADD COLUMN color VARCHAR(7);

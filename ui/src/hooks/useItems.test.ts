@@ -130,7 +130,7 @@ describe('useDeleteItem', () => {
 
 describe('itemKeys', () => {
   it('list key includes sprintId when provided', () => {
-    expect(itemKeys.list('sprint-1')).toContain('sprint-1')
+    expect(itemKeys.list({ sprintId: 'sprint-1' })).toContain('sprint-1')
   })
 
   it('list key without sprintId shares prefix with all key', () => {

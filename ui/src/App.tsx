@@ -6,8 +6,6 @@ import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-
 import { pageTransition } from './lib/motionVariants'
 import { useAuth } from './context/AuthContext'
 import { useBoard } from './context/BoardContext'
-import { useItems } from './hooks/useItems'
-import { useActiveSprint } from './hooks/useSprints'
 import { Sidebar, MobileNav } from './components/Sidebar'
 import { ItemModal } from './components/ItemModal'
 import { LoginPage } from './components/LoginPage'
@@ -20,7 +18,6 @@ import { EpicsView } from './views/EpicsView'
 import { ProjectsView } from './views/ProjectsView'
 import { DashboardView } from './views/DashboardView'
 import { AccountView } from './views/AccountView'
-import { formatEstimate } from './hooks/useFormat'
 import { useRealtime } from './hooks/useRealtime'
 import type { NavEntry } from './types'
 
@@ -37,8 +34,6 @@ const NAV_VIEWS: NavEntry[] = [
 function AppShell() {
   const { user, loading } = useAuth()
   const { selectedItem, selectItem } = useBoard()
-  const { data: items = [] } = useItems()
-  const { data: activeSprint } = useActiveSprint()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [queueOpen, setQueueOpen] = useState(() => localStorage.getItem('queue_open') !== 'false')
   const [mobileQueueOpen, setMobileQueueOpen] = useState(false)
@@ -61,7 +56,6 @@ function AppShell() {
   }
 
   const activeId = location.pathname === '/account' ? 'account' : (NAV_VIEWS.find((v) => v.path === location.pathname)?.id ?? 'board')
-  const activeLabel = NAV_VIEWS.find((v) => v.path === location.pathname)?.label ?? (location.pathname === '/account' ? 'Account' : 'Board')
 
   const handleNavigate = (id: string) => {
     if (id === 'account') {
@@ -80,26 +74,13 @@ function AppShell() {
         <MobileNav views={NAV_VIEWS} activeId={activeId} onNavigate={(id) => { handleNavigate(id); setMobileNavOpen(false) }} onClose={() => setMobileNavOpen(false)} />
       )}
 
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="flex items-center justify-between px-4 py-2.5 border-b shrink-0 bg-surface border-line">
-          <div className="flex items-center gap-3">
-            <button onClick={() => setMobileNavOpen(true)} className="md:hidden p-1.5 rounded-[var(--c-radius-card)] text-dim hover:bg-line">☰</button>
-            <span className="text-sm font-semibold text-ink">{activeLabel}</span>
-            {(activeId === 'board' || activeId === 'items') && items.length > 0 && (
-              <span className="text-xs px-1.5 py-0.5 rounded-full bg-line text-ghost font-mono">{items.length}</span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {activeId !== 'account' && (
-              <div className="text-xs px-2.5 py-1.5 rounded-[var(--c-radius-card)] bg-line text-dim">
-                {activeSprint
-                  ? <>{activeSprint.name} · {activeSprint.start_date.slice(5)} – {activeSprint.end_date.slice(5)} · <span className="font-semibold text-ink/80">{items.length} items · {formatEstimate(items.reduce((s, i) => s + (i.estimate_minutes || 0), 0))} planned</span></>
-                  : <span className="font-semibold">No active sprint</span>}
-              </div>
-            )}
-            {queueEnabled && <QueueMobileTrigger onToggle={() => setMobileQueueOpen(true)} />}
-          </div>
-        </header>
+      {/* Mobile top bar — hidden on desktop */}
+      <div className="md:hidden fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-3 py-2 bg-surface border-b border-line">
+        <button onClick={() => setMobileNavOpen(true)} className="p-1.5 rounded-[var(--c-radius-card)] text-dim hover:bg-line">☰</button>
+        {queueEnabled && <QueueMobileTrigger onToggle={() => setMobileQueueOpen(true)} />}
+      </div>
+
+      <div className="flex-1 flex flex-col min-w-0 md:pt-0 pt-10">
 
         <ErrorBoundary fallback={
           <div className="flex-1 flex items-center justify-center flex-col gap-2 text-dim">

@@ -4,17 +4,19 @@ import (
 	"context"
 	"fmt"
 
+	pgx "github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Status is user-scoped. board_id column was dropped in migration 017.
 type Status struct {
-	ID        string `json:"id"`
-	UserID    string `json:"user_id"`
-	Name      string `json:"name"`
-	Position  int    `json:"position"`
-	IsInitial bool   `json:"is_initial"`
-	IsDone    bool   `json:"is_done"`
+	ID        string  `json:"id"`
+	UserID    string  `json:"user_id"`
+	Name      string  `json:"name"`
+	Position  int     `json:"position"`
+	IsInitial bool    `json:"is_initial"`
+	IsDone    bool    `json:"is_done"`
+	Color     *string `json:"color"`
 }
 
 type Store struct {
@@ -23,7 +25,7 @@ type Store struct {
 
 func (s *Store) ListStatuses(ctx context.Context, userID string) ([]Status, error) {
 	rows, err := s.DB.Query(ctx, `
-		SELECT id, user_id, name, position, is_initial, is_done
+		SELECT id, user_id, name, position, is_initial, is_done, color
 		FROM statuses WHERE user_id = $1 ORDER BY position
 	`, userID)
 	if err != nil {
@@ -34,7 +36,7 @@ func (s *Store) ListStatuses(ctx context.Context, userID string) ([]Status, erro
 	var out []Status
 	for rows.Next() {
 		var st Status
-		if err := rows.Scan(&st.ID, &st.UserID, &st.Name, &st.Position, &st.IsInitial, &st.IsDone); err != nil {
+		if err := rows.Scan(&st.ID, &st.UserID, &st.Name, &st.Position, &st.IsInitial, &st.IsDone, &st.Color); err != nil {
 			return nil, err
 		}
 		out = append(out, st)
@@ -42,15 +44,31 @@ func (s *Store) ListStatuses(ctx context.Context, userID string) ([]Status, erro
 	return out, nil
 }
 
-func (s *Store) CreateStatus(ctx context.Context, userID, name string, position int, isInitial, isDone bool) (*Status, error) {
+func (s *Store) CreateStatus(ctx context.Context, userID, name string, position int, isInitial, isDone bool, color *string) (*Status, error) {
 	var st Status
 	err := s.DB.QueryRow(ctx, `
-		INSERT INTO statuses (user_id, name, position, is_initial, is_done)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, user_id, name, position, is_initial, is_done
-	`, userID, name, position, isInitial, isDone).Scan(
-		&st.ID, &st.UserID, &st.Name, &st.Position, &st.IsInitial, &st.IsDone)
+		INSERT INTO statuses (user_id, name, position, is_initial, is_done, color)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id, user_id, name, position, is_initial, is_done, color
+	`, userID, name, position, isInitial, isDone, color).Scan(
+		&st.ID, &st.UserID, &st.Name, &st.Position, &st.IsInitial, &st.IsDone, &st.Color)
 	if err != nil {
+		return nil, err
+	}
+	return &st, nil
+}
+
+func (s *Store) UpdateStatusColor(ctx context.Context, userID, statusID string, color *string) (*Status, error) {
+	var st Status
+	err := s.DB.QueryRow(ctx, `
+		UPDATE statuses SET color = $3 WHERE id = $2 AND user_id = $1
+		RETURNING id, user_id, name, position, is_initial, is_done, color
+	`, userID, statusID, color).Scan(
+		&st.ID, &st.UserID, &st.Name, &st.Position, &st.IsInitial, &st.IsDone, &st.Color)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, &notFoundErr{msg: "status not found"}
+		}
 		return nil, err
 	}
 	return &st, nil

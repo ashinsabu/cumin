@@ -32,8 +32,8 @@ export const PRESETS: Record<Preset['id'], Preset> = {
     surfaces: { blur: true, blurAmount: '12px', panelGradient: 'linear-gradient(160deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%)' },
     colors: {
       dark: {
-        canvas: '#0d0d14', surface: 'rgba(255,255,255,0.05)', raised: 'rgba(255,255,255,0.08)', panel: 'rgba(255,255,255,0.03)',
-        line: 'rgba(255,255,255,0.08)', ink: '#f1f0ff', dim: '#8b8ba7', ghost: '#4a4a5a',
+        canvas: '#0d0d14', surface: 'rgba(22,22,38,0.78)', raised: 'rgba(18,18,34,0.93)', panel: 'rgba(12,12,24,0.92)',
+        line: 'rgba(255,255,255,0.10)', ink: '#f1f0ff', dim: '#8b8ba7', ghost: '#4a4a5a',
         accent: '#7c3aed', accentFg: '#ffffff',
       },
       light: {
