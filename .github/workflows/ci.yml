@@ -40,6 +40,9 @@ jobs:
       - name: Vet
         run: cd server && go vet ./...
 
+      - name: Unit tests
+        run: cd server && go test ./logger/... ./hub/... ./auth/...
+
       - name: Integration tests
         run: cd server && go test ./integration/... -count=1 -timeout 60s
         env:

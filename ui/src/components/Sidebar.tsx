@@ -97,12 +97,8 @@ function ProjectHeader({
       <div className="flex items-center gap-1.5">
         <span className="text-[9px] font-semibold uppercase tracking-widest text-ghost/50 shrink-0">Project</span>
         <button
-          onClick={projects.length > 1 ? () => setShowSwitcher((s) => !s) : undefined}
-          className={`flex-1 min-w-0 flex items-center gap-1.5 px-2 py-1 rounded-[var(--c-radius-card)] transition-colors ${
-            projects.length > 1
-              ? 'hover:bg-surface cursor-pointer'
-              : 'cursor-default'
-          }`}
+          onClick={() => setShowSwitcher((s) => !s)}
+          className="flex-1 min-w-0 flex items-center gap-1.5 px-2 py-1 rounded-[var(--c-radius-card)] transition-colors hover:bg-surface cursor-pointer"
         >
           {current && (
             <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: current.color || '#6b7280' }} />
@@ -110,14 +106,12 @@ function ProjectHeader({
           <span className="text-sm font-medium text-ink truncate flex-1 text-left">
             {current?.name ?? '…'}
           </span>
-          {projects.length > 1 && (
-            <svg width="9" height="5" viewBox="0 0 10 6" fill="none" className={`transition-transform shrink-0 text-ghost/50 ${showSwitcher ? 'rotate-180' : ''}`}>
-              <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          )}
+          <svg width="9" height="5" viewBox="0 0 10 6" fill="none" className={`transition-transform shrink-0 text-ghost/50 ${showSwitcher ? 'rotate-180' : ''}`}>
+            <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
         </button>
       </div>
-      {showSwitcher && projects.length > 1 && (
+      {showSwitcher && (
         <ProjectSwitcher
           projects={projects}
           currentId={current?.id ?? ''}
@@ -279,21 +273,19 @@ export function MobileNav({ views, activeId, onNavigate, onClose }: SidebarProps
           <div className="flex items-center gap-1.5">
             <span className="text-[9px] font-semibold uppercase tracking-widest text-ghost/50 shrink-0">Project</span>
             <button
-              onClick={projects.length > 1 ? () => setShowSwitcher((s) => !s) : undefined}
-              className={`flex-1 min-w-0 flex items-center gap-1.5 px-2 py-1 rounded-[var(--c-radius-card)] transition-colors ${projects.length > 1 ? 'hover:bg-surface cursor-pointer' : 'cursor-default'}`}
+              onClick={() => setShowSwitcher((s) => !s)}
+              className="flex-1 min-w-0 flex items-center gap-1.5 px-2 py-1 rounded-[var(--c-radius-card)] transition-colors hover:bg-surface cursor-pointer"
             >
               {current && (
                 <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: current.color || '#6b7280' }} />
               )}
               <span className="text-sm font-medium text-ink truncate flex-1 text-left">{current?.name ?? '…'}</span>
-              {projects.length > 1 && (
-                <svg width="9" height="5" viewBox="0 0 10 6" fill="none" className={`transition-transform shrink-0 text-ghost/50 ${showSwitcher ? 'rotate-180' : ''}`}>
-                  <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              )}
+              <svg width="9" height="5" viewBox="0 0 10 6" fill="none" className={`transition-transform shrink-0 text-ghost/50 ${showSwitcher ? 'rotate-180' : ''}`}>
+                <path d="M1 1l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </button>
           </div>
-          {showSwitcher && projects.length > 1 && (
+          {showSwitcher && (
             <div className="absolute left-2 right-2 top-full mt-1 z-50 bg-raised border border-line rounded-[var(--c-radius-card)] shadow-lg py-1">
               {projects.map((p) => (
                 <button

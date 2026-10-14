@@ -1,23 +1,133 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef, useEffect, forwardRef } from 'react'
 import { DragDropContext, Droppable, Draggable, type DropResult } from '@hello-pangea/dnd'
 import { useBoard } from '../context/BoardContext'
 import { useItems, useMoveItem } from '../hooks/useItems'
 import { useBoardStatuses } from '../hooks/useBoardQueries'
 import { useSelectedProject } from '../hooks/useSelectedProject'
+import { useProjects } from '../hooks/useProjects'
 import { useActiveSprint } from '../hooks/useSprints'
-import { usePersistentState } from '../hooks/usePersistentState'
 import { ItemCard } from '../components/ItemCard'
 import { statusDisplayColor } from '../components/ui'
+import type { Project } from '../types/index'
+
+type FilterDropdownProps = {
+  projects: Project[]
+  filteredIds: Set<string>
+  isAll: boolean
+  filterLabel: string
+  showFilter: boolean
+  onToggle: () => void
+  onToggleProject: (id: string) => void
+  onSelectAll: () => void
+}
+
+const ProjectFilterDropdown = forwardRef<HTMLDivElement, FilterDropdownProps>(function ProjectFilterDropdown(
+  { projects, filteredIds, isAll, filterLabel, showFilter, onToggle, onToggleProject, onSelectAll },
+  ref,
+) {
+  return (
+    <div ref={ref} className="relative ml-auto">
+      <button
+        onClick={onToggle}
+        className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-[var(--c-radius-card)] border transition-colors ${
+          !isAll ? 'border-accent/40 text-accent bg-accent/5 hover:bg-accent/10' : 'border-line text-dim hover:bg-surface hover:text-ink'
+        }`}
+      >
+        <span>{filterLabel}</span>
+        <svg width="8" height="5" viewBox="0 0 8 5" fill="none" className={`transition-transform ${showFilter ? 'rotate-180' : ''}`}>
+          <path d="M1 1l3 3 3-3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+      {showFilter && (
+        <div className="absolute right-0 top-full mt-1 z-50 bg-raised border border-line rounded-[var(--c-radius-card)] shadow-lg py-1 min-w-[160px]">
+          <button
+            onClick={onSelectAll}
+            className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-left hover:bg-surface transition-colors"
+          >
+            <span className={`w-3 h-3 rounded border flex items-center justify-center shrink-0 transition-colors ${isAll ? 'bg-accent border-accent' : 'border-line'}`}>
+              {isAll && <svg width="7" height="5" viewBox="0 0 7 5" fill="none"><path d="M1 2.5l1.5 1.5L6 1" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+            </span>
+            <span className="text-dim">All projects</span>
+          </button>
+          <div className="border-t border-line/30 my-0.5" />
+          {projects.map(p => {
+            const checked = filteredIds.has(p.id)
+            return (
+              <button
+                key={p.id}
+                onClick={() => onToggleProject(p.id)}
+                className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-left hover:bg-surface transition-colors"
+              >
+                <span className={`w-3 h-3 rounded border flex items-center justify-center shrink-0 transition-colors ${checked ? 'bg-accent border-accent' : 'border-line'}`}>
+                  {checked && <svg width="7" height="5" viewBox="0 0 7 5" fill="none"><path d="M1 2.5l1.5 1.5L6 1" stroke="white" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                </span>
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: p.color || '#6b7280' }} />
+                <span className="flex-1 truncate text-ink">{p.name}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+})
 
 export function BoardView() {
   const { selectItem } = useBoard()
   const [selectedProject] = useSelectedProject()
-  // 'project' = scoped to selected project, 'all' = all projects visible. Persisted.
-  const [boardScope, setBoardScope] = usePersistentState<'project' | 'all'>('cumin:board:scope', 'project')
-  const { data: items = [] } = useItems({ projectId: boardScope === 'project' ? selectedProject?.id : undefined })
+  const { data: projects = [] } = useProjects()
+  const { data: allItems = [] } = useItems({})
   const { data: statuses = [] } = useBoardStatuses()
   const { data: activeSprint } = useActiveSprint()
   const moveItem = useMoveItem()
+
+  // Project filter — defaults to current project scope, user can add/remove others
+  const [filteredIds, setFilteredIds] = useState<Set<string>>(() =>
+    selectedProject?.id ? new Set([selectedProject.id]) : new Set<string>()
+  )
+  const [showFilter, setShowFilter] = useState(false)
+  const filterRef = useRef<HTMLDivElement>(null)
+
+  // If selectedProject loads after mount (async), seed the filter once
+  useEffect(() => {
+    if (selectedProject?.id && filteredIds.size === 0) {
+      setFilteredIds(new Set([selectedProject.id]))
+    }
+  }, [selectedProject?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!showFilter) return
+    const handler = (e: MouseEvent) => {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) setShowFilter(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showFilter])
+
+  // isAll = no explicit filter (empty set = show everything)
+  const isAll = filteredIds.size === 0
+  const filterLabel = isAll
+    ? 'All projects'
+    : filteredIds.size === 1
+      ? (projects.find(p => filteredIds.has(p.id))?.name ?? '1 project')
+      : `${filteredIds.size} projects`
+
+  const toggleProject = (id: string) => {
+    setFilteredIds(prev => {
+      if (prev.size === 0) {
+        // In "All" mode — switch to specific mode with just this project
+        return new Set([id])
+      }
+      const next = new Set(prev)
+      if (next.has(id)) {
+        if (next.size === 1) return prev // keep at least one checked
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
 
   // pendingMoves is the source of truth for in-flight drags. It's pure React
   // state — synchronous, never touched by network responses — so it can never
@@ -25,6 +135,11 @@ export function BoardView() {
   // onMutate still updates the TanStack cache (for ItemModal etc.) but can now
   // properly await cancelQueries without racing against this visual state.
   const [pendingMoves, setPendingMoves] = useState<Record<string, string>>({})
+
+  const items = useMemo(
+    () => isAll ? allItems : allItems.filter(i => i.project_id && filteredIds.has(i.project_id)),
+    [allItems, filteredIds, isAll],
+  )
 
   const displayItems = useMemo(
     () => items.map((i) => (pendingMoves[i.id] ? { ...i, status_id: pendingMoves[i.id] } : i)),
@@ -46,7 +161,12 @@ export function BoardView() {
   const doneItems = statuses.length
     ? items.filter((i) => statuses.find((s) => s.id === i.status_id)?.is_done)
     : []
-  const progress = items.length ? Math.round((doneItems.length / items.length) * 100) : 0
+  const timeProgress = activeSprint
+    ? Math.min(100, Math.round(
+        (Date.now() - new Date(activeSprint.start_date).getTime()) /
+        (new Date(activeSprint.end_date).getTime() - new Date(activeSprint.start_date).getTime()) * 100
+      ))
+    : 0
   const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
   const daysLeft = activeSprint
     ? Math.ceil((new Date(activeSprint.end_date).getTime() - Date.now()) / 86400000)
@@ -56,66 +176,51 @@ export function BoardView() {
     <DragDropContext onDragEnd={handleDragEnd}>
       {activeSprint ? (
         <div className="shrink-0 border-b border-line bg-surface">
-          <div className="flex items-center gap-3 px-4 py-2 text-xs text-dim">
-            <span className="font-semibold text-ink text-sm">{activeSprint.name}</span>
-            <span className="text-ghost/40">·</span>
-            <span>{fmtDate(activeSprint.start_date)} – {fmtDate(activeSprint.end_date)}</span>
-            <span className="text-ghost/40">·</span>
-            <span>
-              <span className="font-semibold text-ink/80">{doneItems.length}/{items.length}</span>
-              {' '}done
+          <div className="flex items-center gap-4 px-4 py-2.5">
+            <span className="text-sm font-semibold text-ink">{activeSprint.name}</span>
+            <span className="text-xs text-dim">{fmtDate(activeSprint.start_date)} – {fmtDate(activeSprint.end_date)}</span>
+            {daysLeft !== null && (
+              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                daysLeft <= 1 ? 'bg-red-500/10 text-red-400' :
+                daysLeft <= 3 ? 'bg-amber-500/10 text-amber-400' :
+                'bg-line text-dim'
+              }`}>
+                {daysLeft <= 0 ? 'Overdue' : `${daysLeft}d left`}
+              </span>
+            )}
+            <span className="text-xs text-dim">
+              <span className="font-medium text-ink/70">{doneItems.length}/{items.length}</span> done
             </span>
-            <div className="ml-auto flex items-center gap-3">
-              {/* Scope toggle — persists across reloads */}
-              <button
-                onClick={() => setBoardScope((s) => s === 'project' ? 'all' : 'project')}
-                className="flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-[var(--c-radius-card)] bg-line/60 hover:bg-line transition-colors"
-                title={boardScope === 'project' ? 'Switch to all projects' : 'Switch to current project'}
-              >
-                {boardScope === 'all' ? (
-                  <span className="text-dim">All projects</span>
-                ) : (
-                  <>
-                    {selectedProject && (
-                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: selectedProject.color || '#6b7280' }} />
-                    )}
-                    <span className="text-dim">{selectedProject?.name ?? 'Project'}</span>
-                  </>
-                )}
-              </button>
-              {daysLeft !== null && (
-                <span className={`font-semibold ${
-                  daysLeft <= 1 ? 'text-red-400' : daysLeft <= 3 ? 'text-amber-400' : 'text-dim'
-                }`}>
-                  {daysLeft <= 0 ? 'Overdue' : `${daysLeft}d left`}
-                </span>
-              )}
-            </div>
+            <ProjectFilterDropdown
+              ref={filterRef}
+              projects={projects}
+              filteredIds={filteredIds}
+              isAll={isAll}
+              filterLabel={filterLabel}
+              showFilter={showFilter}
+              onToggle={() => setShowFilter(s => !s)}
+              onToggleProject={toggleProject}
+              onSelectAll={() => setFilteredIds(new Set())}
+            />
           </div>
-          {items.length > 0 && (
-            <div className="h-0.5 bg-line">
-              <div className="h-full bg-accent/60 transition-all duration-500" style={{ width: `${progress}%` }} />
-            </div>
-          )}
+          <div className="h-0.5 bg-line">
+            <div className="h-full bg-dim/40 transition-all duration-500" style={{ width: `${timeProgress}%` }} />
+          </div>
         </div>
       ) : (
-        <div className="shrink-0 flex items-center gap-3 px-4 py-2 border-b border-line bg-surface">
-          <span className="text-xs text-ghost">No active sprint</span>
-          <button
-            onClick={() => setBoardScope((s) => s === 'project' ? 'all' : 'project')}
-            className="flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-[var(--c-radius-card)] bg-line/60 hover:bg-line transition-colors ml-auto"
-          >
-            {boardScope === 'all' ? (
-              <span className="text-dim">All projects</span>
-            ) : (
-              <>
-                {selectedProject && (
-                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: selectedProject.color || '#6b7280' }} />
-                )}
-                <span className="text-dim">{selectedProject?.name ?? 'Project'}</span>
-              </>
-            )}
-          </button>
+        <div className="shrink-0 flex items-center gap-4 px-4 py-2.5 border-b border-line bg-surface">
+          <span className="text-xs text-ghost/60">No active sprint</span>
+          <ProjectFilterDropdown
+            ref={filterRef}
+            projects={projects}
+            filteredIds={filteredIds}
+            isAll={isAll}
+            filterLabel={filterLabel}
+            showFilter={showFilter}
+            onToggle={() => setShowFilter(s => !s)}
+            onToggleProject={toggleProject}
+            onSelectAll={() => setFilteredIds(new Set())}
+          />
         </div>
       )}
       <div className="flex-1 overflow-x-auto">
