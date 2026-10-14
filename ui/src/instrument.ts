@@ -19,6 +19,7 @@ if (import.meta.env.VITE_SENTRY_DSN) {
         createRoutesFromChildren,
         matchRoutes,
       }),
+      Sentry.captureConsoleIntegration({ levels: ['error'] }),
     ],
     tracesSampleRate: 1.0,
     // Don't propagate trace headers to the API — backend has no Sentry yet,
