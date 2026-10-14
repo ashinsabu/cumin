@@ -9,6 +9,7 @@ import { SearchInput } from '../components/SearchInput'
 import { EpicModal } from '../components/EpicModal'
 import { CreateEpicModal } from '../components/CreateEpicModal'
 import { usePersistentState } from '../hooks/usePersistentState'
+import { SortIcon, ViewModeToggle, PageToolbar } from '../components/ui'
 import type { Epic } from '../types'
 
 type SortKey = 'name' | 'type' | 'items' | 'estimate' | 'progress' | 'deadline'
@@ -19,11 +20,6 @@ const TYPE_STYLES: Record<string, string> = {
   recurring: 'bg-green-500/10 text-green-400 border border-green-500/20',
   goal:      'bg-purple-500/10 text-purple-400 border border-purple-500/20',
   catchall:  'bg-line text-dim border border-line',
-}
-
-function SortIcon({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey; sortDir: SortDir }) {
-  if (col !== sortKey) return <span className="ml-1 text-ghost/40">↕</span>
-  return <span className="ml-1 text-accent">{sortDir === 'asc' ? '↑' : '↓'}</span>
 }
 
 export function EpicsView() {
@@ -95,7 +91,7 @@ export function EpicsView() {
       {showCreate && <CreateEpicModal onClose={() => setShowCreate(false)} />}
       {selectedEpic && <EpicModal epic={selectedEpic} onClose={() => selectEpic(null)} />}
 
-      <div className="shrink-0 px-4 py-3 border-b flex items-center gap-3 border-line">
+      <PageToolbar>
         <SearchInput value={search} onChange={setSearch} placeholder="Search epics…" />
         <FilterSelect
           value={typeFilter}
@@ -109,18 +105,7 @@ export function EpicsView() {
         />
         <div className="ml-auto flex items-center gap-2">
           <span className="text-xs text-ghost">{filtered.length} epics</span>
-          <div className="flex rounded-[var(--c-radius-card)] border border-line overflow-hidden">
-            <button
-              onClick={() => setViewMode('list')}
-              className={`px-2 py-1.5 text-xs transition-colors ${viewMode === 'list' ? 'bg-accent/10 text-accent' : 'text-dim hover:bg-surface'}`}
-              title="List view"
-            >☰</button>
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`px-2 py-1.5 text-xs border-l border-line transition-colors ${viewMode === 'grid' ? 'bg-accent/10 text-accent' : 'text-dim hover:bg-surface'}`}
-              title="Grid view"
-            >⊞</button>
-          </div>
+          <ViewModeToggle value={viewMode} onChange={setViewMode} />
           <button
             onClick={() => setShowCreate(true)}
             className="text-xs font-semibold px-3 py-1.5 rounded-[var(--c-radius-card)] bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
@@ -128,7 +113,7 @@ export function EpicsView() {
             + New Epic
           </button>
         </div>
-      </div>
+      </PageToolbar>
 
       <div className="flex-1 overflow-auto">
         {viewMode === 'list' ? (
@@ -136,22 +121,19 @@ export function EpicsView() {
             <thead className="sticky top-0 z-10">
               <tr className="bg-panel">
                 <th className={thClass('name')} style={{ width: 260 }} onClick={() => handleSort('name')}>
-                  Epic<SortIcon col="name" sortKey={sortKey} sortDir={sortDir} />
+                  Epic<SortIcon active={sortKey === 'name'} dir={sortDir} />
                 </th>
                 <th className={thClass('type')} style={{ width: 100 }} onClick={() => handleSort('type')}>
-                  Type<SortIcon col="type" sortKey={sortKey} sortDir={sortDir} />
+                  Type<SortIcon active={sortKey === 'type'} dir={sortDir} />
                 </th>
                 <th className={thClass('items')} style={{ width: 100 }} onClick={() => handleSort('items')}>
-                  Items<SortIcon col="items" sortKey={sortKey} sortDir={sortDir} />
+                  Items<SortIcon active={sortKey === 'items'} dir={sortDir} />
                 </th>
                 <th className={thClass('estimate')} style={{ width: 100 }} onClick={() => handleSort('estimate')}>
-                  Estimate<SortIcon col="estimate" sortKey={sortKey} sortDir={sortDir} />
-                </th>
-                <th className={thClass('progress')} style={{ width: 160 }} onClick={() => handleSort('progress')}>
-                  Progress<SortIcon col="progress" sortKey={sortKey} sortDir={sortDir} />
+                  Estimate<SortIcon active={sortKey === 'estimate'} dir={sortDir} />
                 </th>
                 <th className={thClass('deadline')} style={{ width: 100 }} onClick={() => handleSort('deadline')}>
-                  Deadline<SortIcon col="deadline" sortKey={sortKey} sortDir={sortDir} />
+                  Deadline<SortIcon active={sortKey === 'deadline'} dir={sortDir} />
                 </th>
               </tr>
             </thead>
@@ -162,36 +144,30 @@ export function EpicsView() {
                   onClick={() => selectEpic(epic)}
                   className="cursor-pointer transition-colors border-b hover:bg-surface border-line"
                 >
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-4 border-l-4" style={{ borderLeftColor: epic.color }}>
                     <div className="flex items-center gap-2.5">
-                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: epic.color }} />
                       <span className="text-sm font-semibold text-ink">{epic.name}</span>
                     </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded uppercase ${TYPE_STYLES[epic.type] ?? TYPE_STYLES.catchall}`}>{epic.type}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="text-sm font-medium text-ink">{doneItems.length}<span className="text-ghost">/{epicItems.length}</span></span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="text-sm font-semibold text-ink/80">{totalEstimate ? formatEstimate(totalEstimate) : '—'}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 h-1.5 rounded-full overflow-hidden bg-line">
-                        <div className="h-full rounded-full transition-all" style={{ width: `${progress}%`, backgroundColor: epic.color }} />
-                      </div>
-                      <span className="text-xs font-semibold shrink-0 w-8 text-right text-dim">{progress}%</span>
+                    <div className="mt-1.5 h-1 rounded-full bg-line overflow-hidden w-28">
+                      <div className="h-full rounded-full transition-all" style={{ width: `${progress}%`, backgroundColor: epic.color }} />
                     </div>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-4">
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded uppercase ${TYPE_STYLES[epic.type] ?? TYPE_STYLES.catchall}`}>{epic.type}</span>
+                  </td>
+                  <td className="px-4 py-4">
+                    <span className="text-sm font-medium text-ink">{doneItems.length}<span className="text-ghost">/{epicItems.length}</span></span>
+                  </td>
+                  <td className="px-4 py-4">
+                    <span className="text-sm font-semibold text-ink/80">{totalEstimate ? formatEstimate(totalEstimate) : '—'}</span>
+                  </td>
+                  <td className="px-4 py-4">
                     <DeadlineChip daysLeft={daysLeft} />
                   </td>
                 </tr>
               ))}
               {sorted.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-ghost">No epics found.</td></tr>
+                <tr><td colSpan={5} className="px-4 py-8 text-center text-sm text-ghost">No epics found.</td></tr>
               )}
             </tbody>
           </table>

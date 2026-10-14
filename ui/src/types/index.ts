@@ -4,6 +4,7 @@ export type Status = {
   is_done: boolean
   is_initial: boolean
   position: number
+  color?: string
 }
 
 export type Epic = {
@@ -80,7 +81,7 @@ export type NavEntry = {
 
 export type QueueItem = {
   id: string
-  board_id: string
+  user_id: string
   created_by: string
   title: string
   notes: string

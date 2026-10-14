@@ -7,11 +7,12 @@ import (
 )
 
 type statusJSON struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Position  int    `json:"position"`
-	IsInitial bool   `json:"is_initial"`
-	IsDone    bool   `json:"is_done"`
+	ID        string  `json:"id"`
+	Name      string  `json:"name"`
+	Position  int     `json:"position"`
+	IsInitial bool    `json:"is_initial"`
+	IsDone    bool    `json:"is_done"`
+	Color     *string `json:"color"`
 }
 
 type statusListJSON struct {
@@ -171,6 +172,48 @@ func TestBoard_CreateStatus_NoName(t *testing.T) {
 
 func TestBoard_DeleteStatus_NotFound(t *testing.T) {
 	resp := mustDo(t, testEnv.Server, "DELETE", "/api/board/statuses/00000000-0000-0000-0000-000000000000", nil)
+	assertStatus(t, resp, http.StatusNotFound)
+	drainClose(resp)
+}
+
+// ─── Status color ─────────────────────────────────────────────────────────────
+
+func TestBoard_UpdateStatusColor(t *testing.T) {
+	// Create a new status to mutate (avoids touching the shared defaults).
+	st := createStatus(t, "COLOR_TEST", 99)
+	t.Cleanup(func() { hardDeleteStatus(st.ID) })
+
+	// Initially color is nil.
+	if st.Color != nil {
+		t.Fatalf("expected nil color on creation, got %q", *st.Color)
+	}
+
+	// Set a color.
+	color := "#ff0000"
+	resp := mustDo(t, testEnv.Server, "PATCH", "/api/board/statuses/"+st.ID, map[string]any{
+		"color": color,
+	})
+	assertStatus(t, resp, http.StatusOK)
+	updated := mustDecodeJSON[statusJSON](t, resp)
+	if updated.Color == nil || *updated.Color != color {
+		t.Fatalf("expected color %q, got %v", color, updated.Color)
+	}
+
+	// Clear the color by sending null.
+	resp = mustDo(t, testEnv.Server, "PATCH", "/api/board/statuses/"+st.ID, map[string]any{
+		"color": nil,
+	})
+	assertStatus(t, resp, http.StatusOK)
+	cleared := mustDecodeJSON[statusJSON](t, resp)
+	if cleared.Color != nil {
+		t.Fatalf("expected nil color after clearing, got %q", *cleared.Color)
+	}
+}
+
+func TestBoard_UpdateStatusColor_NotFound(t *testing.T) {
+	resp := mustDo(t, testEnv.Server, "PATCH", "/api/board/statuses/00000000-0000-0000-0000-000000000000", map[string]any{
+		"color": "#ff0000",
+	})
 	assertStatus(t, resp, http.StatusNotFound)
 	drainClose(resp)
 }

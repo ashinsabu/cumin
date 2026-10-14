@@ -9,10 +9,15 @@ import (
 )
 
 type CreateStatusRequest struct {
-	Name      string `json:"name"`
-	Position  int    `json:"position"`
-	IsInitial bool   `json:"is_initial"`
-	IsDone    bool   `json:"is_done"`
+	Name      string  `json:"name"`
+	Position  int     `json:"position"`
+	IsInitial bool    `json:"is_initial"`
+	IsDone    bool    `json:"is_done"`
+	Color     *string `json:"color"`
+}
+
+type UpdateStatusColorRequest struct {
+	Color *string `json:"color"`
 }
 
 type ReorderStatusesRequest struct {
@@ -34,6 +39,7 @@ func NewHandler(store *Store) *Handler {
 func (h *Handler) Routes(r chi.Router) {
 	r.Get("/api/board/statuses", api.HandleNoBody(h.ListStatuses))
 	r.Post("/api/board/statuses", api.Handle(h.CreateStatus))
+	r.Patch("/api/board/statuses/{id}", api.Handle(h.UpdateStatusColor))
 	r.Delete("/api/board/statuses/{id}", api.HandleDelete(h.DeleteStatus))
 	r.Put("/api/board/statuses/reorder", api.Handle(h.ReorderStatuses))
 }
@@ -55,9 +61,22 @@ func (h *Handler) CreateStatus(ctx context.Context, req CreateStatusRequest) (*S
 	if req.Name == "" {
 		return nil, api.BadRequest("name required")
 	}
-	st, err := h.store.CreateStatus(ctx, userID, req.Name, req.Position, req.IsInitial, req.IsDone)
+	st, err := h.store.CreateStatus(ctx, userID, req.Name, req.Position, req.IsInitial, req.IsDone, req.Color)
 	if err != nil {
 		return nil, api.Internal("create status failed")
+	}
+	return st, nil
+}
+
+func (h *Handler) UpdateStatusColor(ctx context.Context, req UpdateStatusColorRequest) (*Status, error) {
+	userID := auth.UserIDFromContext(ctx)
+	id := api.URLParam(ctx, "id")
+	st, err := h.store.UpdateStatusColor(ctx, userID, id, req.Color)
+	if err != nil {
+		if _, ok := err.(*notFoundErr); ok {
+			return nil, api.NotFound(err.Error())
+		}
+		return nil, api.Internal("update status color failed")
 	}
 	return st, nil
 }

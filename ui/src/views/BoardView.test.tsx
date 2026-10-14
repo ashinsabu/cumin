@@ -38,6 +38,14 @@ vi.mock('../context/BoardContext', () => ({
   useBoard: vi.fn(),
 }))
 
+vi.mock('../hooks/useSelectedProject', () => ({
+  useSelectedProject: vi.fn(() => [{ id: 'proj-1', name: 'Test Project', prefix: 'TP', color: '#000', description: '', sprint_cadence_days: 14, sprint_start_day: 1, available_hours_per_sprint: 0, item_seq: 0, sprint_seq: 0, created_at: '' }, vi.fn()]),
+}))
+
+vi.mock('../hooks/useSprints', () => ({
+  useActiveSprint: vi.fn(() => ({ data: null })),
+}))
+
 vi.mock('../components/ItemCard', () => ({
   ItemCard: ({ item }: { item: Item }) => (
     <div data-testid={`item-card-${item.id}`} data-status={item.status_id}>

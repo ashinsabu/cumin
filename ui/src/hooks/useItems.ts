@@ -2,18 +2,26 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../lib/api'
 import type { Item } from '../types'
 
-export const itemKeys = {
-  all: ['items'] as const,
-  list: (sprintId?: string) => ['items', sprintId] as const,
+export type ItemFilters = {
+  projectId?: string
+  sprintId?: string
 }
 
-export function useItems(sprintId?: string) {
+export const itemKeys = {
+  all: ['items'] as const,
+  list: (f?: ItemFilters) => ['items', f?.projectId, f?.sprintId] as const,
+}
+
+export function useItems(filters?: ItemFilters) {
   return useQuery({
-    queryKey: itemKeys.list(sprintId),
-    queryFn: () =>
-      apiFetch<{ items: Item[] }>(sprintId ? `/api/items?sprint_id=${sprintId}` : '/api/items').then(
-        (d) => d.items,
-      ),
+    queryKey: itemKeys.list(filters),
+    queryFn: () => {
+      const params = new URLSearchParams()
+      if (filters?.sprintId) params.set('sprint_id', filters.sprintId)
+      if (filters?.projectId) params.set('project_id', filters.projectId)
+      const qs = params.toString()
+      return apiFetch<{ items: Item[] }>(qs ? `/api/items?${qs}` : '/api/items').then((d) => d.items)
+    },
   })
 }
 

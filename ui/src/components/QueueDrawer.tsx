@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect, forwardRef } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 
 const beltSpring = { type: 'spring', damping: 28, stiffness: 380, mass: 0.8 } as const
@@ -8,6 +8,7 @@ import { useBoardStatuses } from '../hooks/useBoardQueries'
 import { useEpics } from '../hooks/useEpics'
 import { parseEstimate, formatEstimate } from '../hooks/useFormat'
 import { PRIORITY } from '../constants'
+import { Select } from './ui'
 import type { QueueItem } from '../types'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -119,15 +120,16 @@ function ConvertSheet({ item, onClose, onConverted }: ConvertSheetProps) {
   return (
     <div className="mt-3 pt-3 border-t border-line space-y-2">
       <p className="text-xs font-semibold text-dim uppercase tracking-wide">Convert to item</p>
-      <select value={projectId} onChange={(e) => setProjectId(e.target.value)}
-        className="w-full text-sm bg-surface border border-line rounded-[var(--c-radius-card)] px-2.5 py-2 text-ink">
-        {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-      </select>
-      <select value={epicId} onChange={(e) => setEpicId(e.target.value)}
-        className="w-full text-sm bg-surface border border-line rounded-[var(--c-radius-card)] px-2.5 py-2 text-dim">
-        <option value="">No epic</option>
-        {epics.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
-      </select>
+      <Select
+        value={projectId}
+        onChange={setProjectId}
+        options={projects.map((p) => ({ value: p.id, label: p.name }))}
+      />
+      <Select
+        value={epicId}
+        onChange={setEpicId}
+        options={[{ value: '', label: 'No epic' }, ...epics.map((e) => ({ value: e.id, label: e.name }))]}
+      />
       {initialStatus && <p className="text-xs text-ghost">Status: {initialStatus.name} · Priority &amp; estimate carried over</p>}
       <div className="flex gap-2">
         <button onClick={onClose} className="flex-1 text-sm py-2 rounded-[var(--c-radius-card)] border border-line text-dim hover:bg-surface">Cancel</button>
@@ -154,43 +156,51 @@ function itemToDraft(item: QueueItem): CardDraft {
   }
 }
 
-type ExpandedEditorProps = {
-  item: QueueItem
-  onClose: () => void
-  onArchive: () => void
+// Parse "2d", "1w", "3h", "1m" → ISO date string. m = months (not minutes, deadlines context).
+function parseDueIn(text: string): string {
+  const s = text.trim().toLowerCase()
+  const n = parseFloat(s)
+  if (!n || n <= 0) return ''
+  const d = new Date()
+  if (s.endsWith('h'))  d.setHours(d.getHours() + n)
+  else if (s.endsWith('d')) d.setDate(d.getDate() + n)
+  else if (s.endsWith('w')) d.setDate(d.getDate() + n * 7)
+  else if (s.endsWith('m')) d.setMonth(d.getMonth() + n)
+  else return ''
+  return d.toISOString().slice(0, 10)
 }
 
-function ExpandedEditor({ item, onClose, onArchive }: ExpandedEditorProps) {
+type ExpandedEditorProps = {
+  item: QueueItem
+}
+
+function ExpandedEditor({ item }: ExpandedEditorProps) {
   const { updateItem } = useQueue()
   const [draft, setDraft] = useState<CardDraft>(itemToDraft(item))
+  const [dueIn, setDueIn] = useState('')
   const [converting, setConverting] = useState(false)
   const [converted, setConverted] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
   const originalRef = useRef<CardDraft>(itemToDraft(item))
-
-  const isDirty = () => {
-    const o = originalRef.current
-    return draft.title !== o.title || draft.priority !== o.priority ||
-      draft.estimate !== o.estimate || draft.deadline !== o.deadline || draft.notes !== o.notes
-  }
+  const draftRef = useRef(draft)
+  useEffect(() => { draftRef.current = draft }, [draft])
 
   const save = useCallback(async () => {
-    if (!isDirty() || !draft.title.trim()) return
-    setSaving(true)
+    const d = draftRef.current
+    const o = originalRef.current
+    const dirty = d.title !== o.title || d.priority !== o.priority ||
+      d.estimate !== o.estimate || d.deadline !== o.deadline || d.notes !== o.notes
+    if (!dirty || !d.title.trim()) return
     try {
       await updateItem(item.id, {
-        title: draft.title.trim(),
-        notes: draft.notes,
-        deadline: draft.deadline ? `${draft.deadline}T00:00:00Z` : null,
-        priority: draft.priority,
-        estimate_minutes: draft.estimate ? parseEstimate(draft.estimate) : null,
+        title: d.title.trim(),
+        notes: d.notes,
+        deadline: d.deadline ? `${d.deadline}T00:00:00Z` : null,
+        priority: d.priority,
+        estimate_minutes: d.estimate ? parseEstimate(d.estimate) : null,
       })
-      originalRef.current = { ...draft, title: draft.title.trim() }
+      originalRef.current = { ...d, title: d.title.trim() }
     } catch { /* silently ignore */ }
-    setSaving(false)
-  }, [draft, item.id, updateItem])
-
-  const handleClose = () => { save(); setConverting(false); onClose() }
+  }, [item.id, updateItem])
 
   if (converted) {
     return (
@@ -211,6 +221,7 @@ function ExpandedEditor({ item, onClose, onArchive }: ExpandedEditorProps) {
           autoFocus
           value={draft.title}
           onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
+          onBlur={save}
           className="w-full text-sm bg-surface border border-line rounded-[var(--c-radius-card)] px-2.5 py-1.5 text-ink focus:outline-none focus:border-accent/50"
           placeholder="Title"
         />
@@ -228,49 +239,71 @@ function ExpandedEditor({ item, onClose, onArchive }: ExpandedEditorProps) {
             )
           })}
         </div>
-        {/* Estimate + Deadline row */}
-        <div className="flex gap-2">
-          <div className="flex-1 space-y-1">
-            <p className="text-[10px] font-medium text-ghost uppercase tracking-wide">Estimate</p>
-            <div className="flex gap-1 flex-wrap">
-              {['15m','30m','1h','2h'].map((t) => (
-                <button key={t} type="button" onClick={() => setDraft((d) => ({ ...d, estimate: d.estimate === t ? '' : t }))}
-                  className={`px-1.5 py-0.5 rounded text-xs font-medium transition-colors cursor-pointer border ${
-                    draft.estimate === t ? 'text-accent border-accent bg-accent/10' : 'text-ghost border-transparent'
-                  }`}>
-                  {t}
-                </button>
-              ))}
-              <input value={['15m','30m','1h','2h'].includes(draft.estimate) ? '' : draft.estimate}
-                onChange={(e) => setDraft((d) => ({ ...d, estimate: e.target.value }))}
-                placeholder="other"
-                className="w-10 text-xs bg-transparent border-b border-line text-ink focus:outline-none focus:border-accent/50 placeholder:text-ghost pb-0.5" />
-            </div>
+        {/* Estimate row */}
+        <div className="space-y-1">
+          <p className="text-[10px] font-medium text-ghost uppercase tracking-wide">Estimate</p>
+          <div className="flex items-center gap-1">
+            {['15m','30m','1h','2h'].map((t) => (
+              <button key={t} type="button" onClick={() => setDraft((d) => ({ ...d, estimate: d.estimate === t ? '' : t }))}
+                className={`px-2 py-0.5 rounded text-xs font-medium transition-colors cursor-pointer border ${
+                  draft.estimate === t ? 'text-accent border-accent bg-accent/10' : 'text-ghost border-transparent hover:border-line'
+                }`}>
+                {t}
+              </button>
+            ))}
+            <span className="text-ghost/30 mx-0.5 text-xs">|</span>
+            <input value={['15m','30m','1h','2h'].includes(draft.estimate) ? '' : draft.estimate}
+              onChange={(e) => setDraft((d) => ({ ...d, estimate: e.target.value }))}
+              placeholder="4h"
+              className="w-10 text-xs bg-transparent border-b border-line text-ink focus:outline-none focus:border-accent/50 placeholder:text-ghost" />
           </div>
-          <div className="w-[90px] space-y-1">
-            <p className="text-[10px] font-medium text-ghost uppercase tracking-wide">Deadline</p>
-            <input type="date" value={draft.deadline} onChange={(e) => setDraft((d) => ({ ...d, deadline: e.target.value }))}
-              className="w-full text-xs bg-surface border border-line rounded px-1.5 py-1 text-ink focus:outline-none focus:border-accent/50" />
+        </div>
+        {/* Due in row */}
+        <div className="space-y-1">
+          <p className="text-[10px] font-medium text-ghost uppercase tracking-wide">Due in</p>
+          <div className="flex items-center gap-2">
+            <input
+              value={dueIn}
+              onChange={(e) => setDueIn(e.target.value)}
+              onBlur={() => {
+                if (!dueIn.trim()) return
+                const d = parseDueIn(dueIn)
+                if (d) setDraft((prev) => ({ ...prev, deadline: d }))
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const d = parseDueIn(dueIn)
+                  if (d) setDraft((prev) => ({ ...prev, deadline: d }))
+                }
+              }}
+              placeholder="2d, 1w, 3h, 1m…"
+              className="flex-1 text-xs bg-surface border border-line rounded-[var(--c-radius-card)] px-2 py-1 text-ink focus:outline-none focus:border-accent/50 placeholder:text-ghost"
+            />
+            {draft.deadline && (
+              <>
+                <span className="text-[10px] text-ghost shrink-0">
+                  {new Date(draft.deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                </span>
+                <button type="button"
+                  onClick={() => { setDueIn(''); setDraft((d) => ({ ...d, deadline: '' })) }}
+                  className="text-ghost/40 hover:text-ghost transition-colors text-sm shrink-0">
+                  ×
+                </button>
+              </>
+            )}
           </div>
         </div>
         {/* Notes */}
         <textarea value={draft.notes} onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
+          onBlur={save}
           placeholder="Notes..."
           rows={2}
           className="w-full text-xs leading-relaxed bg-surface border border-line rounded-[var(--c-radius-card)] px-2.5 py-1.5 text-dim resize-none focus:outline-none focus:border-accent/50 placeholder:text-ghost" />
         {!converting ? (
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2 pt-0.5">
             <button onClick={() => setConverting(true)}
-              className="flex-1 text-xs py-1.5 rounded-[var(--c-radius-card)] bg-accent/10 text-accent hover:bg-accent/20 font-medium transition-colors whitespace-nowrap">
-              Convert ↗
-            </button>
-            <button onClick={onArchive}
-              className="text-xs px-2.5 py-1.5 rounded-[var(--c-radius-card)] border border-line text-dim hover:text-ink transition-colors">
-              Remove
-            </button>
-            <button onClick={handleClose}
-              className="text-xs px-2.5 py-1.5 rounded-[var(--c-radius-card)] border border-line text-ghost hover:text-dim transition-colors">
-              {saving ? '…' : 'Done'}
+              className="text-xs text-dim hover:text-ink transition-colors">
+              Add to board →
             </button>
           </div>
         ) : (
@@ -300,7 +333,7 @@ type BeltItemProps = {
   onDragEnd: () => void
 }
 
-function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchive, onComplete, isDragOver, dragging, onDragStart, onDragOver, onDrop, onDragEnd }: BeltItemProps) {
+const BeltItem = forwardRef<HTMLDivElement, BeltItemProps>(function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchive, onComplete, isDragOver, dragging, onDragStart, onDragOver, onDrop, onDragEnd }, ref) {
   const isFirst = index === 0
   const [done, setDone] = useState(false)
 
@@ -312,7 +345,8 @@ function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchiv
 
   return (
     <div
-      className={`relative transition-opacity ${dragging ? 'opacity-40' : 'opacity-100'}`}
+      ref={ref}
+      className={`relative group/belt transition-opacity ${dragging ? 'opacity-40' : 'opacity-100'}`}
       draggable
       onDragStart={onDragStart}
       onDragOver={onDragOver}
@@ -355,19 +389,19 @@ function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchiv
           <AnimatePresence initial={false}>
             {expanded && (
               <div onClick={(e) => e.stopPropagation()}>
-                <ExpandedEditor item={item} onClose={onCollapse} onArchive={() => { onArchive(); onCollapse() }} />
+                <ExpandedEditor item={item} />
               </div>
             )}
           </AnimatePresence>
         </div>
-        {/* Full-height action columns */}
+        {/* ✓ / × — always rendered; fade in on hover when collapsed, always visible when expanded */}
         <button
           onClick={handleDone}
           title="Mark done"
-          className={`w-8 shrink-0 flex items-center justify-center border-l transition-colors text-sm font-bold ${
+          className={`w-8 shrink-0 flex items-center justify-center border-l transition-all text-sm font-bold ${
             done
               ? 'border-green-500/30 bg-green-500/20 text-green-500'
-              : 'border-line/20 bg-green-500/5 text-green-500/40 hover:bg-green-500/15 hover:text-green-500'
+              : 'border-line/20 text-green-500/30 hover:text-green-500 hover:bg-green-500/15 hover:border-green-500/20'
           }`}
         >
           ✓
@@ -375,41 +409,91 @@ function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchiv
         <button
           onClick={(e) => { e.stopPropagation(); onArchive() }}
           title="Dismiss"
-          className="w-8 shrink-0 flex items-center justify-center border-l border-line/20 bg-accent/5 text-accent/30 hover:bg-accent/15 hover:text-accent transition-colors text-base font-bold"
+          className="w-8 shrink-0 flex items-center justify-center border-l border-line/20 text-ghost/25 hover:text-accent hover:bg-accent/10 hover:border-accent/20 transition-all text-base"
         >
           ×
         </button>
       </div>
     </div>
   )
-}
+})
 
 // ─── Stale (archived) section ─────────────────────────────────────────────────
 
 function StaleSection({ items }: { items: QueueItem[] }) {
   const [open, setOpen] = useState(false)
-  const { reviveItem, archiveItem, promoteItem } = useQueue()
+  const [selectMode, setSelectMode] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [busy, setBusy] = useState(false)
+  const { reviveItem, archiveItem, deleteItemSilent, completeItem, promoteItem } = useQueue()
   const { data: projects = [] } = useProjects()
   const { data: statuses = [] } = useBoardStatuses()
   const { data: epics = [] } = useEpics()
   const [convertingId, setConvertingId] = useState<string | null>(null)
   const [convertedIds, setConvertedIds] = useState<Set<string>>(new Set())
+  const [convertingProjectId, setConvertingProjectId] = useState('')
+  const [convertingEpicId, setConvertingEpicId] = useState('')
 
   if (items.length === 0) return null
 
+  const visibleItems = items.filter((i) => !convertedIds.has(i.id))
+  const allSelected = visibleItems.length > 0 && visibleItems.every((i) => selected.has(i.id))
   const initialStatus = statuses.find((s) => s.is_initial) ?? statuses[0]
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  const toggleAll = () => {
+    setSelected(allSelected ? new Set() : new Set(visibleItems.map((i) => i.id)))
+  }
+
+  const exitSelectMode = () => { setSelectMode(false); setSelected(new Set()) }
+
+  const runBulk = async (action: (id: string) => Promise<void> | void) => {
+    if (!selected.size || busy) return
+    setBusy(true)
+    await Promise.all([...selected].map((id) => action(id)))
+    setSelected(new Set())
+    setBusy(false)
+    if (visibleItems.filter((i) => !selected.has(i.id)).length === 0) exitSelectMode()
+  }
+
+  const bulkRevive  = () => runBulk((id) => reviveItem(id))
+  const bulkDelete  = () => runBulk((id) => deleteItemSilent(id))
+  const bulkDone    = () => runBulk((id) => completeItem(id))
 
   return (
     <div className="border-t border-line/30 mt-auto shrink-0">
-      <button
-        onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-2 px-3 py-2.5 text-xs text-ghost hover:text-dim transition-colors"
-      >
-        <span className="flex-1 text-left font-medium">
-          {open ? '↑' : '↓'} Yesterday · {items.length} item{items.length !== 1 ? 's' : ''}
-        </span>
-        <span className="text-ghost/40">auto-archived</span>
-      </button>
+      {/* Section header */}
+      <div className="flex items-center px-3 py-2 gap-1">
+        <button
+          onClick={() => setOpen((o) => !o)}
+          className="flex-1 flex items-center gap-1.5 text-xs text-ghost hover:text-dim transition-colors text-left"
+        >
+          <span className="font-medium">
+            {open ? '↑' : '↓'} Yesterday · {items.length} item{items.length !== 1 ? 's' : ''}
+          </span>
+          <span className="text-ghost/40">auto-archived</span>
+        </button>
+        {open && !selectMode && (
+          <button
+            onClick={() => setSelectMode(true)}
+            className="text-[10px] px-1.5 py-0.5 rounded border border-line/40 text-ghost/50 hover:text-dim hover:border-line transition-colors shrink-0"
+          >
+            Select
+          </button>
+        )}
+        {open && selectMode && (
+          <button onClick={exitSelectMode} className="text-[10px] text-ghost/50 hover:text-dim transition-colors shrink-0">
+            Cancel
+          </button>
+        )}
+      </div>
 
       <AnimatePresence initial={false}>
         {open && (
@@ -420,28 +504,56 @@ function StaleSection({ items }: { items: QueueItem[] }) {
             transition={{ ...beltSpring, damping: 35 }}
             className="overflow-hidden"
           >
-            {items.map((item) => {
-              if (convertedIds.has(item.id)) return null
+            {/* Select-all row */}
+            {selectMode && (
+              <div className="flex items-center gap-2 px-3 py-1.5 border-b border-line/10 bg-raised/20">
+                <input type="checkbox" checked={allSelected} onChange={toggleAll}
+                  className="accent-[color:var(--c-accent)] w-3.5 h-3.5 cursor-pointer" />
+                <span className="text-[10px] text-ghost">
+                  {selected.size > 0 ? `${selected.size} selected` : 'Select all'}
+                </span>
+              </div>
+            )}
+
+            {visibleItems.map((item) => {
               const isConverting = convertingId === item.id
+              const isSelected = selected.has(item.id)
 
               return (
-                <div key={item.id} className="flex items-stretch border-b border-line/10 last:border-0 opacity-50 hover:opacity-70 transition-opacity">
-                  <div className="w-1 shrink-0 bg-line/30" />
+                <div
+                  key={item.id}
+                  className={`flex items-stretch border-b border-line/10 last:border-0 transition-opacity ${
+                    selectMode && isSelected ? 'opacity-100 bg-accent/5' : 'opacity-50 hover:opacity-70'
+                  }`}
+                  onClick={selectMode ? () => toggleSelect(item.id) : undefined}
+                  style={selectMode ? { cursor: 'pointer' } : undefined}
+                >
+                  {selectMode && (
+                    <div className="flex items-center pl-3 pr-1 shrink-0">
+                      <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(item.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="accent-[color:var(--c-accent)] w-3.5 h-3.5 cursor-pointer" />
+                    </div>
+                  )}
+                  {!selectMode && <div className="w-1 shrink-0 bg-line/30" />}
                   <div className="flex-1 min-w-0 px-3 py-2.5">
                     <p className="text-xs text-dim leading-snug truncate">{item.title}</p>
                     <p className="text-[10px] text-ghost mt-0.5">{relativeTime(item.created_at)}</p>
 
-                    {isConverting ? (
+                    {!selectMode && isConverting ? (
                       <div className="mt-2 space-y-1.5">
-                        <select defaultValue={projects[0]?.id ?? ''} id={`proj-${item.id}`}
-                          className="w-full text-xs bg-surface border border-line rounded px-2 py-1.5 text-ink">
-                          {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                        </select>
-                        <select defaultValue="" id={`epic-${item.id}`}
-                          className="w-full text-xs bg-surface border border-line rounded px-2 py-1.5 text-dim">
-                          <option value="">No epic</option>
-                          {epics.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
-                        </select>
+                        <Select
+                          size="xs"
+                          value={convertingProjectId || projects[0]?.id || ''}
+                          onChange={setConvertingProjectId}
+                          options={projects.map((p) => ({ value: p.id, label: p.name }))}
+                        />
+                        <Select
+                          size="xs"
+                          value={convertingEpicId}
+                          onChange={setConvertingEpicId}
+                          options={[{ value: '', label: 'No epic' }, ...epics.map((e) => ({ value: e.id, label: e.name }))]}
+                        />
                         <div className="flex gap-1.5">
                           <button onClick={() => setConvertingId(null)}
                             className="flex-1 text-xs py-1.5 rounded border border-line text-ghost hover:text-dim">
@@ -449,10 +561,9 @@ function StaleSection({ items }: { items: QueueItem[] }) {
                           </button>
                           <button
                             onClick={async () => {
-                              const projEl = document.getElementById(`proj-${item.id}`) as HTMLSelectElement
-                              const epicEl = document.getElementById(`epic-${item.id}`) as HTMLSelectElement
-                              if (!projEl || !initialStatus) return
-                              await promoteItem(item.id, { project_id: projEl.value, status_id: initialStatus.id, epic_id: epicEl.value || null })
+                              const projectId = convertingProjectId || projects[0]?.id
+                              if (!projectId || !initialStatus) return
+                              await promoteItem(item.id, { project_id: projectId, status_id: initialStatus.id, epic_id: convertingEpicId || null })
                               setConvertedIds((s) => new Set([...s, item.id]))
                               setConvertingId(null)
                             }}
@@ -461,7 +572,7 @@ function StaleSection({ items }: { items: QueueItem[] }) {
                           </button>
                         </div>
                       </div>
-                    ) : (
+                    ) : !selectMode && (
                       <div className="flex items-center gap-1.5 mt-1.5">
                         <button
                           onClick={() => reviveItem(item.id)}
@@ -470,7 +581,7 @@ function StaleSection({ items }: { items: QueueItem[] }) {
                           ↩ Revive
                         </button>
                         <button
-                          onClick={() => setConvertingId(item.id)}
+                          onClick={() => { setConvertingProjectId(''); setConvertingEpicId(''); setConvertingId(item.id) }}
                           className="text-[10px] px-2 py-0.5 rounded border border-line/50 text-ghost hover:text-accent hover:border-accent/40 transition-colors"
                         >
                           → Convert
@@ -487,6 +598,42 @@ function StaleSection({ items }: { items: QueueItem[] }) {
                 </div>
               )
             })}
+
+            {/* Floating bulk action bar */}
+            <AnimatePresence>
+              {selectMode && selected.size > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 6 }}
+                  transition={{ duration: 0.15 }}
+                  className="flex items-center gap-1.5 px-3 py-2.5 border-t border-accent/20 bg-raised"
+                >
+                  <span className="text-[10px] text-ghost shrink-0 mr-0.5">{selected.size}</span>
+                  <button
+                    onClick={bulkRevive}
+                    disabled={busy}
+                    className="flex-1 text-[10px] py-1.5 rounded border border-line text-dim hover:text-ink hover:border-accent/40 transition-colors disabled:opacity-40 font-medium"
+                  >
+                    ↩ Revive
+                  </button>
+                  <button
+                    onClick={bulkDone}
+                    disabled={busy}
+                    className="flex-1 text-[10px] py-1.5 rounded border border-green-500/30 text-green-500/70 hover:bg-green-500/10 hover:text-green-500 transition-colors disabled:opacity-40 font-medium"
+                  >
+                    ✓ Done
+                  </button>
+                  <button
+                    onClick={bulkDelete}
+                    disabled={busy}
+                    className="flex-1 text-[10px] py-1.5 rounded border border-line text-ghost hover:text-accent hover:border-accent/30 transition-colors disabled:opacity-40"
+                  >
+                    × Delete
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </motion.div>
         )}
       </AnimatePresence>
@@ -616,6 +763,18 @@ function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: Qu
     createItem({ title, priority, estimate_minutes: estimateMinutes })
   }
 
+  const expandedItemRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!expandedId) return
+    const handler = (e: MouseEvent) => {
+      if (expandedItemRef.current && !expandedItemRef.current.contains(e.target as Node)) {
+        setExpandedId(null)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [expandedId])
+
   const handleDrop = useCallback((targetId: string) => {
     if (!draggingId || draggingId === targetId) return
     const currentOrder = sortedActive.map((i) => i.id)
@@ -642,17 +801,19 @@ function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: Qu
           <span className="text-xs px-1.5 py-0.5 rounded bg-accent/10 text-accent font-bold">{urgentCount} urgent</span>
         )}
         <div className="flex items-center gap-1.5 ml-auto">
-          <select
+          <Select
+            size="xs"
             value={sortAlgo}
-            onChange={(e) => onSortChange(e.target.value as SortAlgo)}
-            className="text-xs bg-surface border border-line rounded px-2 py-1 text-dim focus:outline-none"
-          >
-            <option value="auto">Auto</option>
-            <option value="priority">Priority</option>
-            <option value="deadline">Deadline</option>
-            <option value="shortest">Shortest</option>
-            <option value="custom">Custom</option>
-          </select>
+            onChange={(v) => onSortChange(v as SortAlgo)}
+            options={[
+              { value: 'auto',     label: 'Auto' },
+              { value: 'priority', label: 'Priority' },
+              { value: 'deadline', label: 'Deadline' },
+              { value: 'shortest', label: 'Shortest' },
+              { value: 'custom',   label: 'Custom' },
+            ]}
+            className="w-24"
+          />
           <button
             onClick={() => { setShowNew(true); setExpandedId(null) }}
             title="Add to queue"
@@ -687,6 +848,7 @@ function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: Qu
                 transition={beltSpring}
               >
                 <BeltItem
+                  ref={expandedId === item.id ? expandedItemRef : null}
                   item={item}
                   index={index}
                   total={sortedActive.length}
