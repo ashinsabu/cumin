@@ -61,11 +61,15 @@ vi.mock('../components/ItemCard', () => ({
 import { useItems, useMoveItem } from '../hooks/useItems'
 import { useBoardStatuses } from '../hooks/useBoardQueries'
 import { useBoard } from '../context/BoardContext'
+import { useProjects } from '../hooks/useProjects'
+import { useSelectedProject } from '../hooks/useSelectedProject'
 
 const mockUseItems = vi.mocked(useItems)
 const mockUseMoveItem = vi.mocked(useMoveItem)
 const mockUseBoardStatuses = vi.mocked(useBoardStatuses)
 const mockUseBoard = vi.mocked(useBoard)
+const mockUseProjects = vi.mocked(useProjects)
+const mockUseSelectedProject = vi.mocked(useSelectedProject)
 
 // ─── Test data ────────────────────────────────────────────────────────────────
 
@@ -206,5 +210,53 @@ describe('BoardView — pendingMoves (drag flicker regression)', () => {
 
     expect(mutateFn).not.toHaveBeenCalled()
     expect(screen.getByTestId('item-card-i1').dataset.status).toBe('todo')
+  })
+})
+
+// ─── Project filter ───────────────────────────────────────────────────────────
+
+const PROJ_1 = { id: 'proj-1', name: 'Alpha', prefix: 'AL', color: '#f00', description: '', sprint_cadence_days: 14, sprint_start_day: 1, available_hours_per_sprint: 0, item_seq: 0, sprint_seq: 0, created_at: '' }
+const PROJ_2 = { id: 'proj-2', name: 'Beta',  prefix: 'BE', color: '#0f0', description: '', sprint_cadence_days: 14, sprint_start_day: 1, available_hours_per_sprint: 0, item_seq: 0, sprint_seq: 0, created_at: '' }
+
+describe('BoardView — project filter', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    capturedOnDragEnd = null
+    mutateFn = vi.fn()
+    mockUseMoveItem.mockReturnValue({ mutate: mutateFn } as any)
+    mockUseBoardStatuses.mockReturnValue({ data: [TODO, BLOCKED, DONE] } as any)
+    mockUseBoard.mockReturnValue({ selectItem: vi.fn() } as any)
+  })
+
+  it('defaults to the selected project and hides items from other projects', () => {
+    // useSelectedProject returns proj-1; board should only show proj-1 items.
+    const items = [
+      makeItem({ id: 'i1', status_id: 'todo', project_id: 'proj-1' }),
+      makeItem({ id: 'i2', status_id: 'todo', project_id: 'proj-2' }),
+    ]
+    mockUseItems.mockReturnValue({ data: items } as any)
+    mockUseProjects.mockReturnValue({ data: [PROJ_1, PROJ_2] } as any)
+
+    render(<BoardView />)
+
+    expect(screen.getByTestId('item-card-i1')).toBeTruthy()
+    expect(screen.queryByTestId('item-card-i2')).toBeNull()
+  })
+
+  it('shows all items when no project is selected (isAll mode)', () => {
+    // When selectedProject is null on mount, filteredIds starts as empty set → show everything.
+    mockUseSelectedProject.mockReturnValueOnce([null as any, vi.fn()])
+
+    const items = [
+      makeItem({ id: 'i1', status_id: 'todo', project_id: 'proj-1' }),
+      makeItem({ id: 'i2', status_id: 'todo', project_id: 'proj-2' }),
+    ]
+    mockUseItems.mockReturnValue({ data: items } as any)
+    mockUseProjects.mockReturnValue({ data: [PROJ_1, PROJ_2] } as any)
+
+    render(<BoardView />)
+
+    expect(screen.getByTestId('item-card-i1')).toBeTruthy()
+    expect(screen.getByTestId('item-card-i2')).toBeTruthy()
   })
 })

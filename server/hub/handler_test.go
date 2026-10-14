@@ -21,17 +21,26 @@ func TestHandler_EventsDisabledFlagReturns404(t *testing.T) {
 	}
 }
 
+// noFlushWriter wraps ResponseRecorder without embedding, so it does NOT
+// promote the Flush() method and does NOT satisfy http.Flusher.
+// (Embedding would promote Flush through the anonymous field.)
+type noFlushWriter struct {
+	rec *httptest.ResponseRecorder
+}
+
+func (n *noFlushWriter) Header() http.Header                { return n.rec.Header() }
+func (n *noFlushWriter) WriteHeader(code int)               { n.rec.WriteHeader(code) }
+func (n *noFlushWriter) Write(b []byte) (int, error)        { return n.rec.Write(b) }
+
 func TestHandler_EventsNoFlusherReturns500(t *testing.T) {
-	// httptest.ResponseRecorder does not implement http.Flusher.
-	// When enabled=true but no flusher, handler must return 500.
 	h := hub.NewHandler(hub.New(), true)
 
 	r := httptest.NewRequest(http.MethodGet, "/api/events", nil)
-	w := httptest.NewRecorder()
-	h.Events(w, r)
+	rec := httptest.NewRecorder()
+	h.Events(&noFlushWriter{rec}, r)
 
-	if w.Code != http.StatusInternalServerError {
-		t.Errorf("expected 500 when flusher unavailable, got %d", w.Code)
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500 when flusher unavailable, got %d", rec.Code)
 	}
 }
 
