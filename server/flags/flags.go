@@ -8,7 +8,7 @@ import (
 )
 
 // allFeatures lists every named feature. Add new features here.
-var allFeatures = []string{"queue", "realtime"}
+var allFeatures = []string{"queue", "realtime", "password_auth"}
 
 type Handler struct {
 	cfg config.Config
