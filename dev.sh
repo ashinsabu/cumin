@@ -44,7 +44,7 @@ wait_for() {
 # ── Tear down any stale instances ────────────────────────────────────────────
 echo "▸ Cleaning up stale processes..."
 pkill -f "go run ./cmd/cumin" 2>/dev/null || true
-pkill -f "cmd/cumin/main.go" 2>/dev/null || true
+pkill -f "cmd/cumin" 2>/dev/null || true
 kill_port 8080
 kill_port 3000
 
@@ -63,7 +63,7 @@ echo "  DB ready"
 # ── Backend ─────────────────────────────────────────────────────────────────
 echo "▸ Starting Go server (port 8080)…"
 cd "$ROOT/server"
-go run ./cmd/cumin/main.go >> "$SERVER_LOG" 2>&1 &
+go run ./cmd/cumin >> "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 
 if ! wait_for "http://localhost:8080/healthz" "Server" 20; then

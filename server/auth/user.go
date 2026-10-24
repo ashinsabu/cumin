@@ -11,4 +11,8 @@ type User struct {
 	IDPrefix    string    `json:"id_prefix"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+
+	// Credential state, never serialized.
+	PasswordHash    string     `json:"-"`
+	EmailVerifiedAt *time.Time `json:"-"`
 }

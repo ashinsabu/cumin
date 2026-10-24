@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/alexedwards/scs/v2"
 	applogger "github.com/ashinsabu/cumin/server/logger"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -27,10 +28,11 @@ type OAuthConfig struct {
 }
 
 type GoogleUserInfo struct {
-	Sub     string `json:"sub"`
-	Email   string `json:"email"`
-	Name    string `json:"name"`
-	Picture string `json:"picture"`
+	Sub           string `json:"sub"`
+	Email         string `json:"email"`
+	EmailVerified bool   `json:"email_verified"`
+	Name          string `json:"name"`
+	Picture       string `json:"picture"`
 }
 
 type Handler struct {
@@ -38,9 +40,16 @@ type Handler struct {
 	repo      *Repo
 	cfg       OAuthConfig
 	provision func(ctx context.Context, userID, name string) error
+	sessions  *scs.SessionManager
+
+	// Email+password auth; nil mailer means the feature is off (see EnablePassword).
+	mailer Mailer
+	limits *passwordLimits
+	// async runs background work (mail sending); tests replace it with a synchronous call.
+	async func(func())
 }
 
-func NewHandler(cfg OAuthConfig, repo *Repo, provision func(ctx context.Context, userID, name string) error) *Handler {
+func NewHandler(cfg OAuthConfig, repo *Repo, sessions *scs.SessionManager, provision func(ctx context.Context, userID, name string) error) *Handler {
 	return &Handler{
 		oauth: &oauth2.Config{
 			ClientID:     cfg.ClientID,
@@ -52,6 +61,7 @@ func NewHandler(cfg OAuthConfig, repo *Repo, provision func(ctx context.Context,
 		repo:      repo,
 		cfg:       cfg,
 		provision: provision,
+		sessions:  sessions,
 	}
 }
 
@@ -122,8 +132,19 @@ func (h *Handler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, isNew, jwtToken, err := h.signIn(r.Context(), userInfo, WebTokenTTL)
+	if !userInfo.EmailVerified {
+		h.authError(w, r, "email_not_verified")
+		return
+	}
+
+	user, err := h.signInGoogle(r.Context(), userInfo)
 	if err != nil {
+		h.authError(w, r, "server_error")
+		return
+	}
+
+	if err := h.startSession(r.Context(), user); err != nil {
+		l.Error("auth: start session failed", slog.String("user_id", user.ID), slog.Any("err", err))
 		h.authError(w, r, "server_error")
 		return
 	}
@@ -131,57 +152,59 @@ func (h *Handler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	l.Info("auth: login success",
 		slog.String("email", userInfo.Email),
 		slog.String("user_id", user.ID),
-		slog.Bool("new_user", isNew),
 	)
-
-	secure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
-	sameSite := http.SameSiteLaxMode
-	if secure {
-		sameSite = http.SameSiteNoneMode
-	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     "token",
-		Value:    jwtToken,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   secure,
-		SameSite: sameSite,
-		MaxAge:   int(24 * time.Hour / time.Second),
-	})
-
 	http.Redirect(w, r, h.frontendURL(), http.StatusTemporaryRedirect)
 }
 
-// signIn upserts the Google user, provisions defaults on first login and issues a Cumin JWT.
-// Shared by the web callback and the native mobile login.
-func (h *Handler) signIn(ctx context.Context, info *GoogleUserInfo, ttl time.Duration) (*User, bool, string, error) {
+// signInGoogle resolves the Google identity to a user (linking an email-matched password account)
+// and provisions defaults on first login. Shared by the web callback and the native mobile login.
+func (h *Handler) signInGoogle(ctx context.Context, info *GoogleUserInfo) (*User, error) {
 	l := applogger.FromContext(ctx)
 
-	isNew, err := h.repo.IsNewUser(ctx, info.Sub)
+	user, err := h.repo.UpsertGoogleUser(ctx, info.Sub, info.Email, info.Name, info.Picture)
 	if err != nil {
-		l.Error("auth: IsNewUser failed", slog.String("email", info.Email), slog.Any("err", err))
-		return nil, false, "", err
+		l.Error("auth: UpsertGoogleUser failed", slog.String("email", info.Email), slog.Any("err", err))
+		return nil, err
 	}
+	if err := h.ensureProvisioned(ctx, user); err != nil {
+		return nil, err
+	}
+	return user, nil
+}
 
-	user, err := h.repo.UpsertUser(ctx, info.Sub, info.Email, info.Name, info.Picture)
+// ensureProvisioned creates the default project/statuses exactly once per user. The claim is an
+// atomic UPDATE, so concurrent first logins cannot both provision; a failed provision releases the
+// claim so the next login retries.
+func (h *Handler) ensureProvisioned(ctx context.Context, user *User) error {
+	l := applogger.FromContext(ctx)
+
+	claimed, err := h.repo.ClaimProvisioning(ctx, user.ID)
 	if err != nil {
-		l.Error("auth: UpsertUser failed", slog.String("email", info.Email), slog.Any("err", err))
-		return nil, false, "", err
+		l.Error("auth: claim provisioning failed", slog.String("user_id", user.ID), slog.Any("err", err))
+		return err
 	}
-
-	if isNew && h.provision != nil {
-		if err := h.provision(ctx, user.ID, info.Name); err != nil {
-			l.Error("auth: provision failed", slog.String("user_id", user.ID), slog.Any("err", err))
-			return nil, false, "", err
+	if !claimed || h.provision == nil {
+		return nil
+	}
+	if err := h.provision(ctx, user.ID, user.DisplayName); err != nil {
+		l.Error("auth: provision failed", slog.String("user_id", user.ID), slog.Any("err", err))
+		if relErr := h.repo.ReleaseProvisioning(ctx, user.ID); relErr != nil {
+			l.Error("auth: release provisioning failed", slog.String("user_id", user.ID), slog.Any("err", relErr))
 		}
+		return err
 	}
+	return nil
+}
 
-	jwtToken, err := IssueToken(h.cfg.JWTSecret, user.ID, user.Email, ttl)
-	if err != nil {
-		l.Error("auth: JWT issue failed", slog.String("user_id", user.ID), slog.Any("err", err))
-		return nil, false, "", err
+// startSession binds the web session to the user. RenewToken rotates the session ID so a token
+// planted before login (session fixation) is useless afterwards.
+func (h *Handler) startSession(ctx context.Context, user *User) error {
+	if err := h.sessions.RenewToken(ctx); err != nil {
+		return err
 	}
-	return user, isNew, jwtToken, nil
+	h.sessions.Put(ctx, sessionUserKey, user.ID)
+	h.sessions.Put(ctx, sessionTouchKey, time.Now().Unix())
+	return nil
 }
 
 func (h *Handler) HandleMe(w http.ResponseWriter, r *http.Request) {
@@ -202,21 +225,12 @@ func (h *Handler) HandleMe(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandleLogout(w http.ResponseWriter, r *http.Request) {
-	secure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
-	sameSite := http.SameSiteLaxMode
-	if secure {
-		sameSite = http.SameSiteNoneMode
+	if err := h.sessions.Destroy(r.Context()); err != nil {
+		applogger.FromContext(r.Context()).Error("auth: session destroy failed", slog.Any("err", err))
+		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
+		return
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     "token",
-		Value:    "",
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   secure,
-		SameSite: sameSite,
-		MaxAge:   -1,
-	})
-	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"status":"logged out"}`))
 }
 
