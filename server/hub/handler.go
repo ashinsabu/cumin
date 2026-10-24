@@ -27,11 +27,8 @@ func (h *Handler) Events(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		http.Error(w, `{"error":"streaming not supported"}`, http.StatusInternalServerError)
-		return
-	}
+	// ResponseController follows Unwrap through middleware writers (e.g. scs) that don't implement Flush.
+	rc := http.NewResponseController(w)
 
 	userID := auth.UserIDFromContext(r.Context())
 	if userID == "" {
@@ -45,7 +42,9 @@ func (h *Handler) Events(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Accel-Buffering", "no")
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, "retry: 5000\n\n")
-	flusher.Flush()
+	if err := rc.Flush(); err != nil {
+		return
+	}
 
 	ch, unsub := h.hub.Subscribe(userID)
 	defer unsub()
@@ -61,12 +60,16 @@ func (h *Handler) Events(w http.ResponseWriter, r *http.Request) {
 			if _, err := fmt.Fprintf(w, "data: ping\n\n"); err != nil {
 				return
 			}
-			flusher.Flush()
+			if err := rc.Flush(); err != nil {
+				return
+			}
 		case <-ticker.C:
 			if _, err := fmt.Fprintf(w, ": keepalive\n\n"); err != nil {
 				return
 			}
-			flusher.Flush()
+			if err := rc.Flush(); err != nil {
+				return
+			}
 		}
 	}
 }
