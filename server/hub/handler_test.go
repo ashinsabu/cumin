@@ -1,11 +1,14 @@
 package hub_test
 
 import (
+	"bufio"
 	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/ashinsabu/cumin/server/auth"
 	"github.com/ashinsabu/cumin/server/hub"
 )
 
@@ -21,26 +24,124 @@ func TestHandler_EventsDisabledFlagReturns404(t *testing.T) {
 	}
 }
 
-// noFlushWriter wraps ResponseRecorder without embedding, so it does NOT
-// promote the Flush() method and does NOT satisfy http.Flusher.
-// (Embedding would promote Flush through the anonymous field.)
-type noFlushWriter struct {
-	rec *httptest.ResponseRecorder
+// unwrapOnlyWriter mimics middleware writers (e.g. scs) that wrap the ResponseWriter and expose
+// it via Unwrap() but do not implement http.Flusher themselves.
+type unwrapOnlyWriter struct{ inner http.ResponseWriter }
+
+func (u *unwrapOnlyWriter) Header() http.Header         { return u.inner.Header() }
+func (u *unwrapOnlyWriter) WriteHeader(code int)        { u.inner.WriteHeader(code) }
+func (u *unwrapOnlyWriter) Write(b []byte) (int, error) { return u.inner.Write(b) }
+func (u *unwrapOnlyWriter) Unwrap() http.ResponseWriter { return u.inner }
+
+// Regression: the web session middleware wraps the writer without Flush. Events used to assert
+// http.Flusher directly, so behind that wrapper it answered 500 "streaming not supported".
+// Both the initial retry hint and later pings must reach the client through the wrapper.
+func TestHandler_EventsStreamsThroughWrappedWriter(t *testing.T) {
+	const userID = "user-1"
+	memHub := hub.New()
+	events := hub.NewHandler(memHub, true).Events
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth.DevBypass(userID)(http.HandlerFunc(events)).ServeHTTP(&unwrapOnlyWriter{w}, r)
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL, nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "text/event-stream" {
+		t.Errorf("content-type = %q, want text/event-stream", ct)
+	}
+
+	lines := make(chan string, 16)
+	go func() {
+		sc := bufio.NewScanner(resp.Body)
+		for sc.Scan() {
+			lines <- sc.Text()
+		}
+		close(lines)
+	}()
+	wantLine := func(want string) {
+		t.Helper()
+		for {
+			select {
+			case l, ok := <-lines:
+				if !ok {
+					t.Fatalf("stream closed before %q", want)
+				}
+				if l == want {
+					return
+				}
+			case <-ctx.Done():
+				t.Fatalf("timed out waiting for %q", want)
+			}
+		}
+	}
+
+	wantLine("retry: 5000") // only arrives if the initial flush went through the wrapper
+
+	// The handler subscribes after its first flush, so a single early Notify could be lost.
+	// Re-notify until the ping shows up (bounded by the context deadline). The interval must exceed
+	// the hub's 100ms debounce: each Notify inside that window resets the timer, so faster calls
+	// would postpone the fan-out forever.
+	ticker := time.NewTicker(250 * time.Millisecond)
+	defer ticker.Stop()
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				memHub.Notify(userID)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	wantLine("data: ping")
 }
 
-func (n *noFlushWriter) Header() http.Header                { return n.rec.Header() }
-func (n *noFlushWriter) WriteHeader(code int)               { n.rec.WriteHeader(code) }
-func (n *noFlushWriter) Write(b []byte) (int, error)        { return n.rec.Write(b) }
-
-func TestHandler_EventsNoFlusherReturns500(t *testing.T) {
+// A writer with no flush support at any layer must not hang or panic the handler: the first flush
+// fails, so Events returns instead of looping forever on a stream that can never deliver.
+func TestHandler_EventsReturnsWhenWriterCannotFlush(t *testing.T) {
 	h := hub.NewHandler(hub.New(), true)
-
-	r := httptest.NewRequest(http.MethodGet, "/api/events", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/events", nil)
 	rec := httptest.NewRecorder()
-	h.Events(&noFlushWriter{rec}, r)
 
-	if rec.Code != http.StatusInternalServerError {
-		t.Errorf("expected 500 when flusher unavailable, got %d", rec.Code)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		auth.DevBypass("user-1")(http.HandlerFunc(h.Events)).ServeHTTP(&noFlushWriter{rec}, req)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Events did not return for a writer that cannot flush")
+	}
+}
+
+// noFlushWriter deliberately does not embed ResponseRecorder, so Flush is not promoted and there
+// is no Unwrap: nothing in the chain can flush.
+type noFlushWriter struct{ rec *httptest.ResponseRecorder }
+
+func (n *noFlushWriter) Header() http.Header         { return n.rec.Header() }
+func (n *noFlushWriter) WriteHeader(code int)        { n.rec.WriteHeader(code) }
+func (n *noFlushWriter) Write(b []byte) (int, error) { return n.rec.Write(b) }
+
+func TestHandler_EventsWithoutUserReturns404(t *testing.T) {
+	h := hub.NewHandler(hub.New(), true)
+	rec := httptest.NewRecorder()
+	h.Events(rec, httptest.NewRequest(http.MethodGet, "/api/events", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404 without an authenticated user", rec.Code)
 	}
 }
 
