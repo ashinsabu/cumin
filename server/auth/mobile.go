@@ -48,15 +48,19 @@ func (h *Handler) mobileLogin(ctx context.Context, req mobileLoginRequest) (*mob
 		return nil, &api.Error{Status: http.StatusUnauthorized, Message: "invalid id token"}
 	}
 
-	user, isNew, jwtToken, err := h.signIn(ctx, info, MobileTokenTTL)
+	user, err := h.signInGoogle(ctx, info)
 	if err != nil {
+		return nil, api.Internal("internal error")
+	}
+	jwtToken, err := IssueToken(h.cfg.JWTSecret, user.ID, user.Email, MobileTokenTTL)
+	if err != nil {
+		l.Error("auth: JWT issue failed", slog.String("user_id", user.ID), slog.Any("err", err))
 		return nil, api.Internal("internal error")
 	}
 
 	l.Info("auth: mobile login success",
 		slog.String("email", info.Email),
 		slog.String("user_id", user.ID),
-		slog.Bool("new_user", isNew),
 	)
 	return &mobileLoginResponse{Token: jwtToken, User: user}, nil
 }
@@ -101,5 +105,5 @@ func verifyGoogleIDToken(ctx context.Context, rawToken string, audiences []strin
 	if claims.EmailVerified != "true" {
 		return nil, fmt.Errorf("email not verified")
 	}
-	return &GoogleUserInfo{Sub: claims.Sub, Email: claims.Email, Name: claims.Name, Picture: claims.Picture}, nil
+	return &GoogleUserInfo{Sub: claims.Sub, Email: claims.Email, EmailVerified: true, Name: claims.Name, Picture: claims.Picture}, nil
 }
