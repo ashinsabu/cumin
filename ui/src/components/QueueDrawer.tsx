@@ -22,20 +22,13 @@ function isStale(item: QueueItem): boolean {
   return Date.now() - new Date(item.created_at).getTime() > STALE_MS
 }
 
-type SortAlgo = 'auto' | 'priority' | 'deadline' | 'shortest' | 'custom'
+type SortAlgo = 'auto' | 'priority' | 'shortest' | 'custom'
 
 function sortItems(items: QueueItem[], algo: SortAlgo): QueueItem[] {
   const s = [...items]
   switch (algo) {
     case 'priority':
       return s.sort((a, b) => a.priority - b.priority || b.urgency_score - a.urgency_score)
-    case 'deadline':
-      return s.sort((a, b) => {
-        if (!a.deadline && !b.deadline) return 0
-        if (!a.deadline) return 1
-        if (!b.deadline) return -1
-        return new Date(a.deadline).getTime() - new Date(b.deadline).getTime()
-      })
     case 'shortest':
       return s.sort((a, b) => {
         if (!a.estimate_minutes && !b.estimate_minutes) return 0
@@ -61,15 +54,6 @@ function railClass(index: number, total: number): string {
 function PriorityBadge({ p }: { p: number }) {
   const cfg = PRIORITY[p] ?? PRIORITY[4]
   return <span className="text-xs font-bold" style={{ color: cfg.color }}>{cfg.label}</span>
-}
-
-function formatDeadline(iso: string): string {
-  const ms = new Date(iso).getTime() - Date.now()
-  if (ms < 0) return 'overdue'
-  const mins = Math.ceil(ms / 60000)
-  if (mins < 60) return `due in ${mins}m`
-  if (mins < 24 * 60) return `due in ${Math.ceil(mins / 60)}h`
-  return `due in ${Math.ceil(mins / 1440)}d`
 }
 
 function relativeTime(iso: string): string {
@@ -150,42 +134,15 @@ function ConvertSheet({ item, onClose, onConverted }: ConvertSheetProps) {
 
 // ─── Expanded field editor ────────────────────────────────────────────────────
 
-type CardDraft = { title: string; priority: number; estimate: string; deadline: string; notes: string }
+type CardDraft = { title: string; priority: number; estimate: string; notes: string }
 
 function itemToDraft(item: QueueItem): CardDraft {
   return {
     title: item.title,
     priority: item.priority,
     estimate: item.estimate_minutes ? formatEstimate(item.estimate_minutes) : '',
-    deadline: item.deadline ?? '',
     notes: item.notes,
   }
-}
-
-// Quick tasks are due today by definition, so "Due in" is hours only, capped at MAX_DUE_HOURS.
-// Anything longer (or in days/weeks) is clamped to the cap with a hint to send it to the board.
-export const MAX_DUE_HOURS = 12
-
-export function parseDueIn(text: string): { iso: string; clamped: boolean } {
-  const s = text.trim().toLowerCase()
-  const n = parseFloat(s)
-  if (!n || n <= 0) return { iso: '', clamped: false }
-  let hours: number
-  if (s.endsWith('h')) hours = n
-  else if (s.endsWith('d')) hours = n * 24
-  else if (s.endsWith('w')) hours = n * 24 * 7
-  else if (s.endsWith('m')) hours = n / 60 // minutes
-  else return { iso: '', clamped: false }
-  const clamped = hours > MAX_DUE_HOURS
-  return { iso: new Date(Date.now() + Math.min(hours, MAX_DUE_HOURS) * 3600000).toISOString(), clamped }
-}
-
-// Inverse of parseDueIn for prefilling the field from a saved deadline.
-export function deadlineToDueIn(iso: string): string {
-  if (!iso) return ''
-  const mins = Math.round((new Date(iso).getTime() - Date.now()) / 60000)
-  if (mins <= 0) return ''
-  return mins < 60 ? `${mins}m` : `${Math.round(mins / 60)}h`
 }
 
 type ExpandedEditorProps = {
@@ -195,8 +152,6 @@ type ExpandedEditorProps = {
 export function ExpandedEditor({ item }: ExpandedEditorProps) {
   const { updateItem } = useQueue()
   const [draft, setDraft] = useState<CardDraft>(itemToDraft(item))
-  const [dueIn, setDueIn] = useState(() => deadlineToDueIn(item.deadline ?? ''))
-  const appliedDueIn = useRef(dueIn) // re-parsing the prefilled text would shift a saved deadline
   const [converting, setConverting] = useState(false)
   const [converted, setConverted] = useState<string | null>(null)
   const originalRef = useRef<CardDraft>(itemToDraft(item))
@@ -207,13 +162,13 @@ export function ExpandedEditor({ item }: ExpandedEditorProps) {
     const d = draftRef.current
     const o = originalRef.current
     const dirty = d.title !== o.title || d.priority !== o.priority ||
-      d.estimate !== o.estimate || d.deadline !== o.deadline || d.notes !== o.notes
+      d.estimate !== o.estimate || d.notes !== o.notes
     if (!dirty || !d.title.trim()) return
     try {
       await updateItem(item.id, {
         title: d.title.trim(),
         notes: d.notes,
-        deadline: d.deadline || null,
+        deadline: null, // quick tasks are due today; legacy deadlines are cleared on first save
         priority: d.priority,
         estimate_minutes: d.estimate ? parseEstimate(d.estimate) : null,
       })
@@ -226,17 +181,7 @@ export function ExpandedEditor({ item }: ExpandedEditorProps) {
   useEffect(() => {
     const t = setTimeout(save, 500)
     return () => clearTimeout(t)
-  }, [draft.priority, draft.estimate, draft.deadline, save])
-
-  const [dueClamped, setDueClamped] = useState(false)
-  const applyDueIn = () => {
-    if (dueIn === appliedDueIn.current) return
-    const { iso, clamped } = parseDueIn(dueIn)
-    setDueClamped(clamped)
-    if (clamped) setDueIn(`${MAX_DUE_HOURS}h`)
-    appliedDueIn.current = clamped ? `${MAX_DUE_HOURS}h` : dueIn
-    setDraft((prev) => ({ ...prev, deadline: iso }))
-  }
+  }, [draft.priority, draft.estimate, save])
 
   if (converted) {
     return (
@@ -292,38 +237,6 @@ export function ExpandedEditor({ item }: ExpandedEditorProps) {
               placeholder="Custom"
               className="w-20 ml-1 text-xs bg-surface border border-line rounded-[var(--c-radius-card)] px-2 py-0.5 text-ink focus:outline-none focus:border-accent/50 placeholder:text-ghost" />
           </div>
-        </div>
-        {/* Due in row */}
-        <div className="space-y-1">
-          <p className="text-[10px] font-medium text-ghost uppercase tracking-wide">Due in</p>
-          <div className="flex items-center gap-2">
-            <input
-              value={dueIn}
-              onChange={(e) => setDueIn(e.target.value)}
-              onBlur={applyDueIn}
-              onKeyDown={(e) => { if (e.key === 'Enter') applyDueIn() }}
-              title="Hours until due. Quick tasks are due today by default (max 12h)." placeholder="2h, 90m"
-              className="flex-1 min-w-0 text-xs bg-surface border border-line rounded-[var(--c-radius-card)] px-2 py-1 text-ink focus:outline-none focus:border-accent/50 placeholder:text-ghost"
-            />
-            {draft.deadline && (
-              <>
-                <span className="text-[10px] text-ghost shrink-0">
-                  {new Date(draft.deadline).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
-                </span>
-                <button type="button"
-                  onClick={() => { setDueIn(''); appliedDueIn.current = ''; setDueClamped(false); setDraft((d) => ({ ...d, deadline: '' })) }}
-                  className="text-ghost/40 hover:text-ghost transition-colors text-sm shrink-0">
-                  ×
-                </button>
-              </>
-            )}
-          </div>
-          {dueClamped && (
-            <p className="text-[10px] text-accent">
-              Max {MAX_DUE_HOURS}h for a quick task.{' '}
-              <button type="button" onClick={() => setConverting(true)} className="underline">Send to board</button> for longer.
-            </p>
-          )}
         </div>
         {/* Notes */}
         <textarea value={draft.notes} onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
@@ -408,11 +321,6 @@ const BeltItem = forwardRef<HTMLDivElement, BeltItemProps>(function BeltItem({ i
               <PriorityBadge p={item.priority} />
               {item.estimate_minutes && (
                 <span className="text-xs font-medium text-dim">est {formatEstimate(item.estimate_minutes)}</span>
-              )}
-              {item.deadline && formatDeadline(item.deadline) && (
-                <span className={`text-xs font-medium ${new Date(item.deadline) < new Date() ? 'text-accent' : 'text-dim'}`}>
-                  {formatDeadline(item.deadline)}
-                </span>
               )}
             </div>
             <AgeBar createdAt={item.created_at} />
@@ -847,7 +755,6 @@ function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: Qu
             options={[
               { value: 'auto',     label: 'Auto' },
               { value: 'priority', label: 'Priority' },
-              { value: 'deadline', label: 'Deadline' },
               { value: 'shortest', label: 'Shortest' },
               { value: 'custom',   label: 'Custom' },
             ]}
