@@ -30,6 +30,8 @@ export class AuthRequestError extends Error {
 let accessToken: string | null = null
 let inflightRefresh: Promise<SessionUser | null> | null = null
 let sessionLostHandler: (() => void) | null = null
+// Bumped by logout() so a refresh that was already in flight cannot restore the token afterwards.
+let generation = 0
 
 export const hasAccessToken = () => accessToken !== null
 
@@ -51,6 +53,7 @@ export function resetAuthForTests() {
  */
 export function refreshSession(): Promise<SessionUser | null> {
   inflightRefresh ??= (async () => {
+    const startedAt = generation
     try {
       const res = await fetch(`${API}/api/auth/refresh`, {
         method: 'POST',
@@ -63,6 +66,8 @@ export function refreshSession(): Promise<SessionUser | null> {
       }
       if (!res.ok) throw new AuthRequestError(res.status, `refresh failed (${res.status})`)
       const body = (await res.json()) as AuthResponse
+      // A logout that started while this refresh was in flight wins; don't resurrect the session.
+      if (generation !== startedAt) return null
       accessToken = body.access_token
       return body.user
     } finally {
@@ -119,6 +124,7 @@ export async function loginWithPassword(email: string, password: string): Promis
 
 /** Ends the login server-side (best effort) and always forgets the local token. */
 export async function logout(): Promise<void> {
+  generation++
   accessToken = null
   try {
     await fetch(`${API}/api/auth/logout`, { method: 'POST', credentials: 'include', headers: CSRF_HEADERS })

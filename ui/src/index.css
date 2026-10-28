@@ -14,6 +14,7 @@
   --color-dim:     var(--c-dim);
   --color-ghost:   var(--c-ghost);
   --color-accent:  var(--c-accent);
+  --color-danger:  var(--c-danger);
   --radius-chrome: var(--c-radius-chrome);
   --radius-card:   var(--c-radius-card);
   --radius-badge:  var(--c-radius-badge);
@@ -33,6 +34,7 @@
   --c-dim:     #a1a1aa;
   --c-ghost:   #71717a;
   --c-accent:  #e11d48;
+  --c-danger:  #ef4444; /* error text; readable on every preset, so not overridden per theme */
   --c-accent-fg: #ffffff;
   --c-radius-chrome: 0px;
   --c-radius-card:   0px;

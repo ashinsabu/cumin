@@ -97,6 +97,11 @@ func Load() Config {
 		fatal("invalid refresh config", "err", err)
 	}
 
+	if !cfg.IsDev() && cfg.TrustedProxyHops == 0 {
+		// Behind a proxy (Railway: 1) every client would share the proxy's address, and so one rate-limit bucket.
+		slog.Warn("TRUSTED_PROXY_HOPS is 0: per-IP rate limits assume clients connect directly; set it to 1 on Railway")
+	}
+
 	return cfg
 }
 

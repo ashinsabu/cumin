@@ -1,13 +1,13 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link } from 'react-router-dom'
+import { useUrlToken } from '../lib/useUrlToken'
 import { resetPassword } from '../lib/auth'
 import { AuthCard, AuthField, AuthButton, AuthError } from './AuthCard'
 
 const MIN_PASSWORD_LEN = 10 // mirrors the server (minPasswordLen)
 
 export function ResetPasswordPage() {
-  const [params] = useSearchParams()
-  const token = params.get('token') ?? ''
+  const token = useUrlToken()
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
