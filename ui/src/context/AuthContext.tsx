@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { refreshSession, loginWithPassword, logout as endSession, onSessionLost, type SessionUser } from '../lib/auth'
 
 type AuthContextValue = {
@@ -14,6 +15,15 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null)
   const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
+
+  // Query keys are not user-scoped, so cached data must never survive a change of identity
+  // (logout, lost session, or a different account signing in on the same tab).
+  const userIdRef = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    if (userIdRef.current !== user?.id) queryClient.clear()
+    userIdRef.current = user?.id
+  }, [user?.id, queryClient])
 
   // Boot: the refresh cookie (if any) is exchanged for an access token and the user in one call.
   useEffect(() => {
