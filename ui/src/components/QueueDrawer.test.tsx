@@ -36,8 +36,8 @@ describe('due-in', () => {
   it('prefills the field from a saved deadline', () => {
     const in3d = new Date(Date.now() + 3 * 86400000).toISOString()
     expect(deadlineToDueIn(in3d)).toBe('3d')
-    expect(deadlineToDueIn(new Date(Date.now() + 3600000).toISOString())).toBe('')
+    expect(deadlineToDueIn(new Date(Date.now() + 3600000).toISOString())).toBe('today')
     render(<ExpandedEditor item={{ id: 'q2', title: 'T', notes: '', priority: 2, estimate_minutes: null, deadline: in3d } as never} />)
-    expect((screen.getByPlaceholderText('2d, 1w, 1m…') as HTMLInputElement).value).toBe('3d')
+    expect((screen.getByPlaceholderText('2d, 1w, 1m') as HTMLInputElement).value).toBe('3d')
   })
 })

@@ -181,7 +181,7 @@ export function parseDueIn(text: string): string {
 export function deadlineToDueIn(iso: string): string {
   if (!iso) return ''
   const days = Math.round((new Date(iso).getTime() - Date.now()) / 86400000)
-  return days >= 1 ? `${days}d` : ''
+  return days >= 1 ? `${days}d` : 'today'
 }
 
 type ExpandedEditorProps = {
@@ -270,7 +270,7 @@ export function ExpandedEditor({ item }: ExpandedEditorProps) {
         {/* Estimate row */}
         <div className="space-y-1">
           <p className="text-[10px] font-medium text-ghost uppercase tracking-wide">Estimate</p>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 flex-wrap">
             {['15m','30m','1h','2h'].map((t) => (
               <button key={t} type="button" onClick={() => setDraft((d) => ({ ...d, estimate: d.estimate === t ? '' : t }))}
                 className={`px-2 py-0.5 rounded text-xs font-medium transition-colors cursor-pointer border ${
@@ -281,20 +281,20 @@ export function ExpandedEditor({ item }: ExpandedEditorProps) {
             ))}
             <input value={['15m','30m','1h','2h'].includes(draft.estimate) ? '' : draft.estimate}
               onChange={(e) => setDraft((d) => ({ ...d, estimate: e.target.value }))}
-              placeholder="custom, e.g. 4h"
-              className="flex-1 min-w-0 ml-1 text-xs bg-surface border border-line rounded-[var(--c-radius-card)] px-2 py-0.5 text-ink focus:outline-none focus:border-accent/50 placeholder:text-ghost" />
+              placeholder="Custom"
+              className="w-20 ml-1 text-xs bg-surface border border-line rounded-[var(--c-radius-card)] px-2 py-0.5 text-ink focus:outline-none focus:border-accent/50 placeholder:text-ghost" />
           </div>
         </div>
         {/* Due in row */}
         <div className="space-y-1">
-          <p className="text-[10px] font-medium text-ghost uppercase tracking-wide">Due in <span className="normal-case text-ghost/70">(days / weeks — queue items are due today by default)</span></p>
+          <p className="text-[10px] font-medium text-ghost uppercase tracking-wide">Due in</p>
           <div className="flex items-center gap-2">
             <input
               value={dueIn}
               onChange={(e) => setDueIn(e.target.value)}
               onBlur={applyDueIn}
               onKeyDown={(e) => { if (e.key === 'Enter') applyDueIn() }}
-              placeholder="2d, 1w, 1m…"
+              title="Days, weeks or months (2d, 1w, 1m). Queue items are due today by default." placeholder="2d, 1w, 1m"
               className="flex-1 min-w-0 text-xs bg-surface border border-line rounded-[var(--c-radius-card)] px-2 py-1 text-ink focus:outline-none focus:border-accent/50 placeholder:text-ghost"
             />
             {draft.deadline && (
@@ -818,12 +818,12 @@ function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: Qu
     <>
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-line shrink-0">
-        <span className={`font-semibold text-ink ${headerSize === 'md' ? 'text-base' : 'text-sm'}`}>Quick Task Queue</span>
+        <span className={`font-semibold text-ink truncate min-w-0 ${headerSize === 'md' ? 'text-base' : 'text-sm'}`}>Quick Task Queue</span>
         {activeItems.length > 0 && (
-          <span className="text-xs px-1.5 py-0.5 rounded-full bg-line text-ghost font-mono">{activeItems.length}</span>
+          <span className="text-xs px-1.5 py-0.5 rounded-full bg-line text-ghost font-mono shrink-0">{activeItems.length}</span>
         )}
         {urgentCount > 0 && (
-          <span className="text-xs px-1.5 py-0.5 rounded bg-accent/10 text-accent font-bold">{urgentCount} urgent</span>
+          <span title={`${urgentCount} urgent`} className="text-xs px-1.5 py-0.5 rounded bg-accent/10 text-accent font-bold shrink-0 whitespace-nowrap">● {urgentCount}</span>
         )}
         <div className="flex items-center gap-1.5 ml-auto">
           <Select
