@@ -2,7 +2,9 @@ package queue
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
 	"time"
 
 	"github.com/ashinsabu/cumin/server/api"
@@ -35,7 +37,8 @@ type PromoteRequest struct {
 }
 
 type ListResponse struct {
-	Items []QueueItem `json:"items"`
+	Items   []QueueItem `json:"items"`
+	Summary Summary     `json:"summary"`
 }
 
 type Handler struct {
@@ -52,7 +55,7 @@ type ReorderRequest struct {
 }
 
 func (h *Handler) Routes(r chi.Router) {
-	r.Get("/api/queue", api.HandleNoBody(h.List))
+	r.Get("/api/queue", h.List)
 	r.Get("/api/queue/history", api.HandleNoBody(h.History))
 	r.Post("/api/queue", api.Handle(h.Create))
 	r.Patch("/api/queue/{id}", api.Handle(h.Update))
@@ -86,13 +89,22 @@ func (h *Handler) Complete(ctx context.Context) (*QueueItem, error) {
 	return q, nil
 }
 
-func (h *Handler) List(ctx context.Context) (*ListResponse, error) {
-	userID := auth.UserIDFromContext(ctx)
-	items, err := h.store.List(ctx, userID)
+// List returns the active queue with computed per-item attention and the day summary.
+// ?tz=<IANA zone> is the browser's timezone: the day ends at its next midnight (UTC if absent/invalid).
+func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
+	userID := auth.UserIDFromContext(r.Context())
+	items, err := h.store.List(r.Context(), userID)
 	if err != nil {
-		return nil, api.Internal("failed to list queue")
+		api.WriteError(w, api.Internal("failed to list queue"))
+		return
 	}
-	return &ListResponse{Items: items}, nil
+	loc, err := time.LoadLocation(r.URL.Query().Get("tz"))
+	if err != nil {
+		loc = time.UTC
+	}
+	summary := ComputeAttention(items, time.Now(), loc)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(ListResponse{Items: items, Summary: summary})
 }
 
 func (h *Handler) Create(ctx context.Context, req CreateRequest) (*QueueItem, error) {

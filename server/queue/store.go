@@ -25,6 +25,7 @@ type QueueItem struct {
 	PromotedItemID  *string    `json:"promoted_item_id"`
 	CompletedAt     *time.Time `json:"completed_at"`
 	CreatedAt       time.Time  `json:"created_at"`
+	Attention       Attention  `json:"attention"`
 }
 
 type Store struct {

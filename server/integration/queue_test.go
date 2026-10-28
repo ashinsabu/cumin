@@ -260,3 +260,38 @@ func TestQueue_Promote_RejectsUnknownSprint(t *testing.T) {
 		t.Errorf("queue item was promoted despite 400")
 	}
 }
+
+// The queue list carries computed attention and the day summary; ?tz picks the zone the day ends in.
+type queueAttentionListJSON struct {
+	Items []struct {
+		ID        string `json:"id"`
+		Attention struct {
+			Level string `json:"level"`
+		} `json:"attention"`
+	} `json:"items"`
+	Summary struct {
+		PlannedMinutes   int `json:"planned_minutes"`
+		BudgetMinutes    int `json:"budget_minutes"`
+		MinutesLeftToday int `json:"minutes_left_today"`
+	} `json:"summary"`
+}
+
+func TestQueue_List_ReturnsAttentionAndSummary(t *testing.T) {
+	skipUnlessQueue(t)
+	q := mustDo(t, testEnv.Server, "POST", "/api/queue", map[string]any{"title": "Estimated task", "priority": 2, "estimate_minutes": 90})
+	assertStatus(t, q, http.StatusOK)
+	created := mustDecodeJSON[queueItemJSON](t, q)
+	defer hardDeleteQueueItem(created.ID)
+
+	resp := mustDo(t, testEnv.Server, "GET", "/api/queue?tz=Asia/Kolkata", nil)
+	assertStatus(t, resp, http.StatusOK)
+	body := mustDecodeJSON[queueAttentionListJSON](t, resp)
+	if body.Summary.BudgetMinutes != 480 || body.Summary.PlannedMinutes < 90 || body.Summary.MinutesLeftToday <= 0 || body.Summary.MinutesLeftToday > 24*60 {
+		t.Fatalf("summary = %+v", body.Summary)
+	}
+	for _, it := range body.Items {
+		if it.Attention.Level == "" {
+			t.Fatalf("item %s has no attention level", it.ID)
+		}
+	}
+}
