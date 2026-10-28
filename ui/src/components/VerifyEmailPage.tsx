@@ -1,13 +1,13 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link } from 'react-router-dom'
+import { useUrlToken } from '../lib/useUrlToken'
 import { AuthRequestError, verifyEmail } from '../lib/auth'
 import { AuthCard, AuthField, AuthButton, AuthError } from './AuthCard'
 
 // The emailed link alone cannot verify an account: the password chosen at signup is required too,
 // so someone who registered another person's address cannot claim it by waiting for them to click.
 export function VerifyEmailPage() {
-  const [params] = useSearchParams()
-  const token = params.get('token') ?? ''
+  const token = useUrlToken()
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)

@@ -10,6 +10,18 @@ type AuthContextValue = {
   logout: () => void
 }
 
+/** A server blip at boot must not look like a logout: retry transient failures before giving up. */
+async function refreshSessionWithRetry(attempts = 3, delayMs = 800): Promise<SessionUser | null> {
+  for (let i = 1; ; i++) {
+    try {
+      return await refreshSession()
+    } catch (err) {
+      if (i >= attempts) throw err
+      await new Promise((r) => setTimeout(r, delayMs * i))
+    }
+  }
+}
+
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -27,7 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Boot: the refresh cookie (if any) is exchanged for an access token and the user in one call.
   useEffect(() => {
-    refreshSession()
+    refreshSessionWithRetry()
       .then(setUser)
       .catch(() => setUser(null))
       .finally(() => setLoading(false))

@@ -45,5 +45,5 @@ export function AuthLinkButton({ onClick, children }: { onClick: () => void; chi
 }
 
 export function AuthError({ children }: { children: ReactNode }) {
-  return <p role="alert" className="text-sm text-red-500 text-left">{children}</p>
+  return <p role="alert" className="text-sm text-danger text-left">{children}</p>
 }

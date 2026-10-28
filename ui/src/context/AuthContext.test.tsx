@@ -41,4 +41,17 @@ describe('AuthProvider', () => {
     await screen.findByText('signed-out')
     await waitFor(() => expect(queryClient.getQueryData(['items'])).toBeUndefined())
   })
+
+  // A 5xx/network blip at boot used to render the login page for a user with a valid cookie.
+  it('retries a transient boot failure instead of showing signed-out', async () => {
+    vi.mocked(refreshSession).mockReset()
+    vi.mocked(refreshSession).mockRejectedValueOnce(new Error('503')).mockResolvedValue(userA)
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <AuthProvider><Probe /></AuthProvider>
+      </QueryClientProvider>,
+    )
+    await screen.findByText('a', {}, { timeout: 3000 })
+    expect(refreshSession).toHaveBeenCalledTimes(2)
+  })
 })

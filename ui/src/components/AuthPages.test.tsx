@@ -146,3 +146,14 @@ describe('ResetPasswordPage', () => {
     expect(screen.getByText('Invalid link')).toBeInTheDocument()
   })
 })
+
+describe('emailed token in the URL', () => {
+  it('is used for the request but stripped from the address bar', async () => {
+    vi.mocked(auth.resetPassword).mockResolvedValue(undefined as never)
+    window.history.pushState({}, '', '/reset-password?token=abc123')
+    render(<MemoryRouter initialEntries={['/reset-password?token=abc123']}><ResetPasswordPage /></MemoryRouter>)
+    await userEvent.type(screen.getByLabelText(/new password/i), 'a-long-enough-password')
+    await userEvent.click(screen.getByRole('button'))
+    await waitFor(() => expect(auth.resetPassword).toHaveBeenCalledWith('abc123', 'a-long-enough-password'))
+  })
+})

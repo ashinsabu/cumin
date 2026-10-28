@@ -148,3 +148,15 @@ describe('loginWithPassword / logout', () => {
     expect(hasAccessToken()).toBe(false)
   })
 })
+
+describe('logout racing an in-flight refresh', () => {
+  it('does not restore the access token when the refresh resolves after logout', async () => {
+    let release!: (r: Response) => void
+    stubFetch((url) => (url.endsWith('/refresh') ? new Promise<Response>((r) => { release = r }) as unknown as Response : json(204)))
+    const pending = refreshSession()
+    await logout()
+    release(refreshOk())
+    expect(await pending).toBeNull()
+    expect(hasAccessToken()).toBe(false)
+  })
+})
