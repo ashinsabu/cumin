@@ -17,7 +17,7 @@ export default defineConfig({
   use: { baseURL: `http://localhost:${UI_PORT}`, trace: 'retain-on-failure' },
   webServer: [
     {
-      command: `cd ../server && go run ./cmd/cumin > ${E2E_LOG.replace('../', '../')} 2>&1`,
+      command: `mkdir -p ../tmp && cd ../server && go run ./cmd/cumin > ${E2E_LOG.replace('../', '../')} 2>&1`,
       url: `http://localhost:${API_PORT}/healthz`,
       reuseExistingServer: false,
       timeout: 90_000,
