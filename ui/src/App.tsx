@@ -39,7 +39,7 @@ function AppShell() {
   const [mobileQueueOpen, setMobileQueueOpen] = useState(false)
   const { isEnabled } = useFlags()
   const queueEnabled = isEnabled('queue')
-  useRealtime(isEnabled('realtime'))
+  useRealtime(isEnabled('realtime') && !!user)
   const location = useLocation()
   const navigate = useNavigate()
 
