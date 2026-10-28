@@ -32,6 +32,7 @@ const (
 	testJWTSecret    = "0123456789abcdef0123456789abcdef" // gitleaks:allow (dummy key for tests)
 	testFrontendURL  = "http://app.test"
 	goodPassword     = "correct-horse-battery"
+	testIOSClientID  = "ios-client"
 )
 
 var migrateOnce sync.Once
@@ -149,6 +150,7 @@ func newAuthEnv(t *testing.T) *authEnv {
 	e.h = NewHandler(OAuthConfig{
 		AllowedOrigins: []string{testFrontendURL},
 		JWTSecret:      testJWTSecret,
+		AppClientIDs:   []string{testIOSClientID},
 	}, e.repo, func(ctx context.Context, userID, name string) error {
 		e.provisioned.Add(1)
 		return nil
@@ -158,6 +160,7 @@ func newAuthEnv(t *testing.T) *authEnv {
 
 	r := chi.NewRouter()
 	e.h.PasswordRoutes(r)
+	r.Post("/api/auth/google/mobile", e.h.HandleMobileLogin)
 	e.h.SessionRoutes(r)
 	r.Group(func(r chi.Router) {
 		r.Use(Middleware(testJWTSecret))
