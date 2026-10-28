@@ -9,6 +9,8 @@ import { useEpics } from '../hooks/useEpics'
 import { parseEstimate, formatEstimate } from '../hooks/useFormat'
 import { PRIORITY } from '../constants'
 import { Select } from './ui'
+import { NO_SPRINT, sprintOptions, useSprintOptions } from './SprintSelect'
+import { useSprints } from '../hooks/useSprints'
 import type { QueueItem } from '../types'
 import { authFetch } from '../lib/auth'
 
@@ -103,15 +105,17 @@ function ConvertSheet({ item, onClose, onConverted }: ConvertSheetProps) {
   const { promoteItem } = useQueue()
   const [projectId, setProjectId] = useState(projects[0]?.id ?? '')
   const [epicId, setEpicId] = useState('')
+  const [sprintId, setSprintId] = useState(NO_SPRINT)
   const [submitting, setSubmitting] = useState(false)
 
+  const sprintOptions = useSprintOptions(projectId, sprintId)
   const initialStatus = statuses.find((s) => s.is_initial) ?? statuses[0]
 
   const submit = async () => {
     if (!projectId || !initialStatus) return
     setSubmitting(true)
     try {
-      const result = await promoteItem(item.id, { project_id: projectId, status_id: initialStatus.id, epic_id: epicId || null })
+      const result = await promoteItem(item.id, { project_id: projectId, status_id: initialStatus.id, epic_id: epicId || null, sprint_id: sprintId === NO_SPRINT ? null : sprintId })
       onConverted(result.item_display_id)
     } catch {
       setSubmitting(false)
@@ -123,7 +127,7 @@ function ConvertSheet({ item, onClose, onConverted }: ConvertSheetProps) {
       <p className="text-xs font-semibold text-dim uppercase tracking-wide">Convert to item</p>
       <Select
         value={projectId}
-        onChange={setProjectId}
+        onChange={(v) => { setProjectId(v); setSprintId(NO_SPRINT) }}
         options={projects.map((p) => ({ value: p.id, label: p.name }))}
       />
       <Select
@@ -131,6 +135,7 @@ function ConvertSheet({ item, onClose, onConverted }: ConvertSheetProps) {
         onChange={setEpicId}
         options={[{ value: '', label: 'No epic' }, ...epics.map((e) => ({ value: e.id, label: e.name }))]}
       />
+      {sprintOptions.length > 0 && <Select value={sprintId} onChange={setSprintId} options={sprintOptions} />}
       {initialStatus && <p className="text-xs text-ghost">Status: {initialStatus.name} · Priority &amp; estimate carried over</p>}
       <div className="flex gap-2">
         <button onClick={onClose} className="flex-1 text-sm py-2 rounded-[var(--c-radius-card)] border border-line text-dim hover:bg-surface">Cancel</button>
@@ -434,6 +439,8 @@ function StaleSection({ items }: { items: QueueItem[] }) {
   const [convertedIds, setConvertedIds] = useState<Set<string>>(new Set())
   const [convertingProjectId, setConvertingProjectId] = useState('')
   const [convertingEpicId, setConvertingEpicId] = useState('')
+  const [convertingSprintId, setConvertingSprintId] = useState(NO_SPRINT)
+  const { data: allSprints = [] } = useSprints()
 
   if (items.length === 0) return null
 
@@ -546,7 +553,7 @@ function StaleSection({ items }: { items: QueueItem[] }) {
                         <Select
                           size="xs"
                           value={convertingProjectId || projects[0]?.id || ''}
-                          onChange={setConvertingProjectId}
+                          onChange={(v) => { setConvertingProjectId(v); setConvertingSprintId(NO_SPRINT) }}
                           options={projects.map((p) => ({ value: p.id, label: p.name }))}
                         />
                         <Select
@@ -555,6 +562,10 @@ function StaleSection({ items }: { items: QueueItem[] }) {
                           onChange={setConvertingEpicId}
                           options={[{ value: '', label: 'No epic' }, ...epics.map((e) => ({ value: e.id, label: e.name }))]}
                         />
+                        {(() => {
+                          const options = sprintOptions(allSprints, convertingProjectId || projects[0]?.id, convertingSprintId)
+                          return options.length > 0 && <Select size="xs" value={convertingSprintId} onChange={setConvertingSprintId} options={options} />
+                        })()}
                         <div className="flex gap-1.5">
                           <button onClick={() => setConvertingId(null)}
                             className="flex-1 text-xs py-1.5 rounded border border-line text-ghost hover:text-dim">
@@ -564,7 +575,7 @@ function StaleSection({ items }: { items: QueueItem[] }) {
                             onClick={async () => {
                               const projectId = convertingProjectId || projects[0]?.id
                               if (!projectId || !initialStatus) return
-                              await promoteItem(item.id, { project_id: projectId, status_id: initialStatus.id, epic_id: convertingEpicId || null })
+                              await promoteItem(item.id, { project_id: projectId, status_id: initialStatus.id, epic_id: convertingEpicId || null, sprint_id: convertingSprintId === NO_SPRINT ? null : convertingSprintId })
                               setConvertedIds((s) => new Set([...s, item.id]))
                               setConvertingId(null)
                             }}
@@ -582,7 +593,7 @@ function StaleSection({ items }: { items: QueueItem[] }) {
                           ↩ Revive
                         </button>
                         <button
-                          onClick={() => { setConvertingProjectId(''); setConvertingEpicId(''); setConvertingId(item.id) }}
+                          onClick={() => { setConvertingProjectId(''); setConvertingEpicId(''); setConvertingSprintId(NO_SPRINT); setConvertingId(item.id) }}
                           className="text-[10px] px-2 py-0.5 rounded border border-line/50 text-ghost hover:text-accent hover:border-accent/40 transition-colors"
                         >
                           → Convert
