@@ -544,3 +544,19 @@ func TestPassword_DisabledWithoutMailer(t *testing.T) {
 		}
 	}
 }
+
+// Regression: a name whose third byte fell inside a multi-byte character produced an invalid
+// id_prefix, so the INSERT failed with a 500 for new addresses only (revealing which exist).
+func TestPassword_SignupWithMultiByteName(t *testing.T) {
+	e := newAuthEnv(t)
+	email := uniqueEmail(t, e.pool)
+	status, body := e.newClient(t).post("/api/auth/password/signup", map[string]string{"email": email, "password": goodPassword, "name": "Aaé"})
+	wantStatus(t, status, http.StatusAccepted, body)
+	user, err := e.repo.GetUserByEmail(context.Background(), email)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if user.IDPrefix != "AAÉ" {
+		t.Errorf("id_prefix = %q, want AAÉ", user.IDPrefix)
+	}
+}

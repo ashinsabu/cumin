@@ -3,6 +3,7 @@ package auth
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestValidateEmail(t *testing.T) {
@@ -87,5 +88,32 @@ func TestTokenHelpers(t *testing.T) {
 	}
 	if hashToken(a) == a {
 		t.Error("hashToken returned its input")
+	}
+}
+
+// Regression: slicing the name by bytes cut multi-byte characters into invalid UTF-8, which
+// Postgres rejects, so signup returned 500 for such names (and only for new addresses, which also
+// revealed whether an address was registered).
+func TestDefaultPrefix_MultiByte(t *testing.T) {
+	tests := []struct{ name, want string }{
+		{"Ashin Sabu", "ASH"},
+		{"  ashin", "ASH"},
+		{"Al", "AL"},
+		{"", "USR"},
+		{"   ", "USR"},
+		{"Aaé", "AAÉ"},    // third character is multi-byte
+		{"éééé", "ÉÉÉ"},   // every byte pair is one character
+		{"日本語の名前", "日本語"}, // no case; must not split runes
+		{"ßßß", "ßßß"},    // Go does not expand ß on upper-casing; stays 3 runes
+		{"😀😀😀😀", "😀😀😀"},   // 4-byte runes
+	}
+	for _, tt := range tests {
+		got := defaultPrefix(tt.name)
+		if got != tt.want {
+			t.Errorf("defaultPrefix(%q) = %q, want %q", tt.name, got, tt.want)
+		}
+		if !utf8.ValidString(got) || utf8.RuneCountInString(got) > 5 {
+			t.Errorf("defaultPrefix(%q) = %q is not valid or exceeds VARCHAR(5)", tt.name, got)
+		}
 	}
 }

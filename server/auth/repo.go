@@ -250,13 +250,12 @@ func hashToken(raw string) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// defaultPrefix derives the 3-letter item-ID prefix from a display name. It works on runes (a byte
+// slice can split a multi-byte character into invalid UTF-8, which Postgres rejects).
 func defaultPrefix(displayName string) string {
-	name := strings.TrimSpace(displayName)
-	if len(name) >= 3 {
-		return strings.ToUpper(name[:3])
+	prefix := []rune(strings.ToUpper(strings.TrimSpace(displayName)))
+	if len(prefix) == 0 {
+		return "USR"
 	}
-	if len(name) > 0 {
-		return strings.ToUpper(name)
-	}
-	return "USR"
+	return string(prefix[:min(len(prefix), 3)])
 }
