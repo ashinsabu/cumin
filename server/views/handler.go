@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 
 	"github.com/ashinsabu/cumin/server/api"
 	"github.com/ashinsabu/cumin/server/auth"
@@ -48,7 +49,8 @@ func (h *Handler) List(ctx context.Context) (*ListResponse, error) {
 }
 
 func (h *Handler) Create(ctx context.Context, req CreateRequest) (*SavedView, error) {
-	if req.Name == "" {
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
 		return nil, api.BadRequest("name is required")
 	}
 	userID := auth.UserIDFromContext(ctx)
@@ -57,8 +59,11 @@ func (h *Handler) Create(ctx context.Context, req CreateRequest) (*SavedView, er
 	if len(filters) == 0 {
 		filters = json.RawMessage("{}")
 	}
-	v, err := h.store.Create(ctx, userID, req.Name, filters)
+	v, err := h.store.Create(ctx, userID, name, filters)
 	if err != nil {
+		if errors.Is(err, errDuplicateName) {
+			return nil, api.Conflict("a view with that name already exists")
+		}
 		return nil, api.Internal("failed to create view")
 	}
 	return v, nil

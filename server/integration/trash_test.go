@@ -235,3 +235,96 @@ func TestTrash_Epic_CascadeDeleteRestoreDoesNotRestoreIndependentItems(t *testin
 	assertStatus(t, resp, http.StatusNotFound)
 	drainClose(resp)
 }
+
+// ─── Trash items ─────────────────────────────────────────────────────────────
+
+type trashItemJSON struct {
+	ID          string `json:"id"`
+	DisplayID   string `json:"display_id"`
+	Title       string `json:"title"`
+	ProjectName string `json:"project_name"`
+}
+
+type trashWithItemsJSON struct {
+	Items []trashItemJSON `json:"items"`
+	Epics []trashEpicJSON `json:"epics"`
+}
+
+func trashItemIDs(t *testing.T) (items map[string]trashItemJSON, epics map[string]bool) {
+	t.Helper()
+	resp := mustDo(t, testEnv.Server, "GET", "/api/trash", nil)
+	assertStatus(t, resp, http.StatusOK)
+	tr := mustDecodeJSON[trashWithItemsJSON](t, resp)
+	items, epics = map[string]trashItemJSON{}, map[string]bool{}
+	for _, it := range tr.Items {
+		items[it.ID] = it
+	}
+	for _, e := range tr.Epics {
+		epics[e.ID] = true
+	}
+	return items, epics
+}
+
+// Regression (user feedback 2026-10-28): a deleted item vanished — Trash listed only projects and
+// epics, so an item deleted by mistake could not be found or restored, and "Empty trash" would
+// hard-delete such items without ever having shown them.
+func TestTrash_List_ShowsIndependentlyDeletedItemAndRestoreWorks(t *testing.T) {
+	resp := mustDo(t, testEnv.Server, "POST", "/api/items", map[string]any{
+		"title": "Deleted by mistake", "project_id": testEnv.ProjectID,
+	})
+	assertStatus(t, resp, http.StatusOK)
+	it := mustDecodeJSON[itemJSON](t, resp)
+	t.Cleanup(func() { hardDeleteItems(it.ID) })
+
+	resp = mustDo(t, testEnv.Server, "DELETE", "/api/items/"+it.ID, nil)
+	assertStatus(t, resp, http.StatusNoContent)
+	drainClose(resp)
+
+	items, _ := trashItemIDs(t)
+	got, ok := items[it.ID]
+	if !ok {
+		t.Fatal("deleted item missing from /api/trash items")
+	}
+	if got.Title != "Deleted by mistake" || got.DisplayID == "" || got.ProjectName == "" {
+		t.Errorf("trash item missing display fields: %+v", got)
+	}
+
+	resp = mustDo(t, testEnv.Server, "POST", "/api/items/"+it.ID+"/restore", nil)
+	assertStatus(t, resp, http.StatusNoContent)
+	drainClose(resp)
+
+	items, _ = trashItemIDs(t)
+	if _, still := items[it.ID]; still {
+		t.Error("restored item still listed in trash")
+	}
+}
+
+// Items deleted as part of an epic cascade are represented by the epic row; listing them again would
+// double-count and invite restoring them out of their batch.
+func TestTrash_List_OmitsEpicCascadedItems(t *testing.T) {
+	resp := mustDo(t, testEnv.Server, "POST", "/api/epics", map[string]any{
+		"name": "Cascade list guard", "type": "catchall", "color": "#aabbcc",
+	})
+	assertStatus(t, resp, http.StatusOK)
+	ep := mustDecodeJSON[epicJSON](t, resp)
+	t.Cleanup(func() { hardDeleteEpic(ep.ID) })
+
+	resp = mustDo(t, testEnv.Server, "POST", "/api/items", map[string]any{
+		"title": "In epic", "project_id": testEnv.ProjectID, "epic_id": ep.ID,
+	})
+	assertStatus(t, resp, http.StatusOK)
+	it := mustDecodeJSON[itemJSON](t, resp)
+	t.Cleanup(func() { hardDeleteItems(it.ID) })
+
+	resp = mustDo(t, testEnv.Server, "DELETE", "/api/epics/"+ep.ID, nil)
+	assertStatus(t, resp, http.StatusNoContent)
+	drainClose(resp)
+
+	items, epics := trashItemIDs(t)
+	if !epics[ep.ID] {
+		t.Error("deleted epic missing from trash")
+	}
+	if _, listed := items[it.ID]; listed {
+		t.Error("epic-cascaded item should be represented by its epic, not listed separately")
+	}
+}

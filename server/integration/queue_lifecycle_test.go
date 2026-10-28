@@ -8,7 +8,7 @@ import (
 func skipUnlessQueue(t *testing.T) {
 	t.Helper()
 	if !queueEnabled() {
-		t.Skip("queue feature flag not set — set FEATURE_FLAGS=queue to run queue tests")
+		t.Skip("queue feature disabled (QUEUE_DISABLED=true)")
 	}
 }
 

@@ -33,6 +33,7 @@ type UpdateRequest struct {
 	ClearSprint     bool    `json:"clear_sprint"`
 	Priority        *int    `json:"priority"`
 	EstimateMinutes *int    `json:"estimate_minutes"`
+	ClearEstimate   bool    `json:"clear_estimate"`
 }
 
 type MoveRequest struct {
@@ -242,7 +243,9 @@ func (h *Handler) Update(ctx context.Context, req UpdateRequest) (*Item, error) 
 	if req.Priority != nil && *req.Priority >= 0 && *req.Priority <= 4 {
 		p.priority = *req.Priority
 	}
-	if req.EstimateMinutes != nil {
+	if req.ClearEstimate {
+		p.estimate = nil
+	} else if req.EstimateMinutes != nil {
 		p.estimate = req.EstimateMinutes
 	}
 

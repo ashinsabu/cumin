@@ -352,7 +352,7 @@ func (s *Store) Transitions(ctx context.Context, itemID string) ([]StatusTransit
 func (s *Store) Restore(ctx context.Context, id, userID string) error {
 	tag, err := s.DB.Exec(ctx, `
 		UPDATE items SET deleted_at = NULL
-		WHERE id = $1 AND project_id IN (SELECT id FROM projects WHERE user_id = $2)
+		WHERE id = $1 AND project_id IN (SELECT id FROM projects WHERE user_id = $2 AND deleted_at IS NULL)
 		AND deleted_at IS NOT NULL
 	`, id, userID)
 	if err != nil {
@@ -362,4 +362,40 @@ func (s *Store) Restore(ctx context.Context, id, userID string) error {
 		return pgx.ErrNoRows
 	}
 	return nil
+}
+
+// TrashItem is an independently soft-deleted item, shown in Trash so it can be found and restored.
+type TrashItem struct {
+	ID          string    `json:"id"`
+	DisplayID   string    `json:"display_id"`
+	Title       string    `json:"title"`
+	ProjectName string    `json:"project_name"`
+	DeletedAt   time.Time `json:"deleted_at"`
+}
+
+// ListTrash returns deleted items whose project is live and which were not deleted as part of an
+// epic cascade (those are represented by the epic's own trash row).
+func (s *Store) ListTrash(ctx context.Context, userID string) ([]TrashItem, error) {
+	rows, err := s.DB.Query(ctx, `
+		SELECT i.id, i.display_id, i.title, p.name, i.deleted_at
+		FROM items i
+		JOIN projects p ON p.id = i.project_id
+		WHERE p.user_id = $1 AND p.deleted_at IS NULL AND i.deleted_at IS NOT NULL
+		  AND NOT EXISTS (SELECT 1 FROM epics e WHERE e.id = i.epic_id AND e.deleted_at = i.deleted_at)
+		ORDER BY i.deleted_at DESC
+	`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := []TrashItem{}
+	for rows.Next() {
+		var t TrashItem
+		if err := rows.Scan(&t.ID, &t.DisplayID, &t.Title, &t.ProjectName, &t.DeletedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
 }

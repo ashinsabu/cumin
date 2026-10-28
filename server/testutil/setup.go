@@ -147,7 +147,7 @@ func Setup() (*TestEnv, error) {
 	epic.NewHandler(epicStore, projectStore).Routes(r)
 	sprint.NewHandler(sprintStore, boardStore, projectStore).Routes(r)
 	item.NewHandler(itemStore, boardStore, projectStore).Routes(r)
-	trash.NewHandler(projectStore, epicStore).Routes(r)
+	trash.NewHandler(projectStore, epicStore, itemStore).Routes(r)
 	queue.NewHandler(&queue.Store{DB: pool}, projectStore).Routes(r)
 	views.NewHandler(&views.Store{DB: pool}, projectStore).Routes(r)
 	r.Get("/api/events", hub.NewHandler(h, true).Events)

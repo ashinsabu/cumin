@@ -2,6 +2,7 @@ package queue
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -16,7 +17,6 @@ type QueueItem struct {
 	CreatedBy       string     `json:"created_by"`
 	Title           string     `json:"title"`
 	Notes           string     `json:"notes"`
-	Deadline        *time.Time `json:"deadline"`
 	Priority        int        `json:"priority"`
 	EstimateMinutes *int       `json:"estimate_minutes"`
 	Position        int        `json:"position"`
@@ -24,6 +24,7 @@ type QueueItem struct {
 	PromotedItemID  *string    `json:"promoted_item_id"`
 	CompletedAt     *time.Time `json:"completed_at"`
 	CreatedAt       time.Time  `json:"created_at"`
+	Attention       Attention  `json:"attention"`
 }
 
 type Store struct {
@@ -32,14 +33,8 @@ type Store struct {
 
 // UrgencyScore computes the sort weight for a queue item.
 // The frontend mirrors this in QueueContext.computeUrgencyScore — keep them in sync.
-func UrgencyScore(title string, createdAt time.Time, deadline *time.Time, priority int) float64 {
+func UrgencyScore(title string, createdAt time.Time, priority int) float64 {
 	ageScore := math.Min(time.Since(createdAt).Hours()/24.0, 10.0)
-
-	deadlineScore := 0.0
-	if deadline != nil {
-		daysUntil := time.Until(*deadline).Hours() / 24.0
-		deadlineScore = math.Max(0, 10.0-daysUntil*2.0)
-	}
 
 	kwScore := 0.0
 	lower := strings.ToLower(title)
@@ -52,17 +47,17 @@ func UrgencyScore(title string, createdAt time.Time, deadline *time.Time, priori
 	// P0=0 → adds 8; P4=4 → adds 0
 	priorityScore := float64(4-priority) * 2.0
 
-	return ageScore + deadlineScore + kwScore + priorityScore
+	return ageScore + kwScore + priorityScore
 }
 
-const listCols = `id, user_id, created_by, title, COALESCE(notes,''), deadline, priority, estimate_minutes, position, promoted_item_id, completed_at, created_at`
+const listCols = `id, user_id, created_by, title, COALESCE(notes,''), priority, estimate_minutes, position, promoted_item_id, completed_at, created_at`
 
 func scanQueueItem(row interface{ Scan(...any) error }) (*QueueItem, error) {
 	var q QueueItem
-	if err := row.Scan(&q.ID, &q.UserID, &q.CreatedBy, &q.Title, &q.Notes, &q.Deadline, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CompletedAt, &q.CreatedAt); err != nil {
+	if err := row.Scan(&q.ID, &q.UserID, &q.CreatedBy, &q.Title, &q.Notes, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CompletedAt, &q.CreatedAt); err != nil {
 		return nil, err
 	}
-	q.UrgencyScore = UrgencyScore(q.Title, q.CreatedAt, q.Deadline, q.Priority)
+	q.UrgencyScore = UrgencyScore(q.Title, q.CreatedAt, q.Priority)
 	return &q, nil
 }
 
@@ -71,7 +66,7 @@ func (s *Store) List(ctx context.Context, userID string) ([]QueueItem, error) {
 		SELECT `+listCols+`
 		FROM queue_items
 		WHERE user_id = $1 AND deleted_at IS NULL AND promoted_item_id IS NULL AND completed_at IS NULL
-		ORDER BY position ASC
+		ORDER BY position ASC, created_at ASC, id ASC
 	`, userID)
 	if err != nil {
 		return nil, err
@@ -93,34 +88,34 @@ func (s *Store) List(ctx context.Context, userID string) ([]QueueItem, error) {
 	return out, nil
 }
 
-func (s *Store) Create(ctx context.Context, userID, createdBy, title, notes string, deadline *time.Time, priority int, estimateMinutes *int) (*QueueItem, error) {
+func (s *Store) Create(ctx context.Context, userID, createdBy, title, notes string, priority int, estimateMinutes *int) (*QueueItem, error) {
 	var q QueueItem
 	err := s.DB.QueryRow(ctx, `
-		INSERT INTO queue_items (user_id, created_by, title, notes, deadline, priority, estimate_minutes, position)
-		VALUES ($1, $2, $3, $4, $5, $6, $7,
+		INSERT INTO queue_items (user_id, created_by, title, notes, priority, estimate_minutes, position)
+		VALUES ($1, $2, $3, $4, $5, $6,
 		    COALESCE((SELECT MAX(position)+1 FROM queue_items WHERE user_id=$1 AND deleted_at IS NULL), 0))
 		RETURNING `+listCols+`
-	`, userID, createdBy, title, notes, deadline, priority, estimateMinutes).Scan(
-		&q.ID, &q.UserID, &q.CreatedBy, &q.Title, &q.Notes, &q.Deadline, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CompletedAt, &q.CreatedAt)
+	`, userID, createdBy, title, notes, priority, estimateMinutes).Scan(
+		&q.ID, &q.UserID, &q.CreatedBy, &q.Title, &q.Notes, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CompletedAt, &q.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
-	q.UrgencyScore = UrgencyScore(q.Title, q.CreatedAt, q.Deadline, q.Priority)
+	q.UrgencyScore = UrgencyScore(q.Title, q.CreatedAt, q.Priority)
 	return &q, nil
 }
 
-func (s *Store) Update(ctx context.Context, id, userID, title, notes string, deadline *time.Time, priority int, estimateMinutes *int) (*QueueItem, error) {
+func (s *Store) Update(ctx context.Context, id, userID, title, notes string, priority int, estimateMinutes *int) (*QueueItem, error) {
 	var q QueueItem
 	err := s.DB.QueryRow(ctx, `
-		UPDATE queue_items SET title=$3, notes=$4, deadline=$5, priority=$6, estimate_minutes=$7
+		UPDATE queue_items SET title=$3, notes=$4, priority=$5, estimate_minutes=$6
 		WHERE id=$1 AND user_id=$2 AND deleted_at IS NULL AND promoted_item_id IS NULL
 		RETURNING `+listCols+`
-	`, id, userID, title, notes, deadline, priority, estimateMinutes).Scan(
-		&q.ID, &q.UserID, &q.CreatedBy, &q.Title, &q.Notes, &q.Deadline, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CompletedAt, &q.CreatedAt)
+	`, id, userID, title, notes, priority, estimateMinutes).Scan(
+		&q.ID, &q.UserID, &q.CreatedBy, &q.Title, &q.Notes, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CompletedAt, &q.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
-	q.UrgencyScore = UrgencyScore(q.Title, q.CreatedAt, q.Deadline, q.Priority)
+	q.UrgencyScore = UrgencyScore(q.Title, q.CreatedAt, q.Priority)
 	return &q, nil
 }
 
@@ -131,11 +126,11 @@ func (s *Store) Revive(ctx context.Context, id, userID string) (*QueueItem, erro
 		    COALESCE((SELECT MAX(position)+1 FROM queue_items WHERE user_id=$2 AND deleted_at IS NULL), 0)
 		WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
 		RETURNING `+listCols+`
-	`, id, userID).Scan(&q.ID, &q.UserID, &q.CreatedBy, &q.Title, &q.Notes, &q.Deadline, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CompletedAt, &q.CreatedAt)
+	`, id, userID).Scan(&q.ID, &q.UserID, &q.CreatedBy, &q.Title, &q.Notes, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CompletedAt, &q.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
-	q.UrgencyScore = UrgencyScore(q.Title, q.CreatedAt, q.Deadline, q.Priority)
+	q.UrgencyScore = UrgencyScore(q.Title, q.CreatedAt, q.Priority)
 	return &q, nil
 }
 
@@ -145,11 +140,11 @@ func (s *Store) Complete(ctx context.Context, id, userID string) (*QueueItem, er
 		UPDATE queue_items SET completed_at = NOW()
 		WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL AND completed_at IS NULL
 		RETURNING `+listCols+`
-	`, id, userID).Scan(&q.ID, &q.UserID, &q.CreatedBy, &q.Title, &q.Notes, &q.Deadline, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CompletedAt, &q.CreatedAt)
+	`, id, userID).Scan(&q.ID, &q.UserID, &q.CreatedBy, &q.Title, &q.Notes, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CompletedAt, &q.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
-	q.UrgencyScore = UrgencyScore(q.Title, q.CreatedAt, q.Deadline, q.Priority)
+	q.UrgencyScore = UrgencyScore(q.Title, q.CreatedAt, q.Priority)
 	return &q, nil
 }
 
@@ -187,6 +182,21 @@ func (s *Store) Archive(ctx context.Context, id, userID string) error {
 	return err
 }
 
+// Restore undoes Archive. Promoted entries also carry deleted_at, but they live on as board items, so they are excluded.
+func (s *Store) Restore(ctx context.Context, id, userID string) (*QueueItem, error) {
+	var q QueueItem
+	err := s.DB.QueryRow(ctx, `
+		UPDATE queue_items SET deleted_at = NULL
+		WHERE id = $1 AND user_id = $2 AND deleted_at IS NOT NULL AND promoted_item_id IS NULL
+		RETURNING `+listCols+`
+	`, id, userID).Scan(&q.ID, &q.UserID, &q.CreatedBy, &q.Title, &q.Notes, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CompletedAt, &q.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	q.UrgencyScore = UrgencyScore(q.Title, q.CreatedAt, q.Priority)
+	return &q, nil
+}
+
 func (s *Store) Reorder(ctx context.Context, userID string, ids []string) error {
 	tx, err := s.DB.Begin(ctx)
 	if err != nil {
@@ -209,12 +219,27 @@ type PromoteResult struct {
 	ItemDisplay string `json:"item_display_id"`
 }
 
-func (s *Store) Promote(ctx context.Context, queueID, userID, projectID, statusID string, epicID *string) (*PromoteResult, error) {
+// ErrInvalidSprint means the requested sprint does not exist in the target project.
+var ErrInvalidSprint = errors.New("sprint does not belong to project")
+
+func (s *Store) Promote(ctx context.Context, queueID, userID, projectID, statusID string, epicID, sprintID *string) (*PromoteResult, error) {
 	tx, err := s.DB.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
+
+	if sprintID != nil {
+		var ok bool
+		if err := tx.QueryRow(ctx,
+			`SELECT EXISTS(SELECT 1 FROM sprints WHERE id = $1 AND project_id = $2)`, *sprintID, projectID,
+		).Scan(&ok); err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, ErrInvalidSprint
+		}
+	}
 
 	var title string
 	var priority int
@@ -242,11 +267,11 @@ func (s *Store) Promote(ctx context.Context, queueID, userID, projectID, statusI
 
 	var itemID string
 	err = tx.QueryRow(ctx, `
-		INSERT INTO items (project_id, epic_id, status_id, display_id, title, description, priority, estimate_minutes, position)
-		VALUES ($1, $2, $3, $4, $5, '', $6, $7,
+		INSERT INTO items (project_id, epic_id, sprint_id, status_id, display_id, title, description, priority, estimate_minutes, position)
+		VALUES ($1, $2, $8, $3, $4, $5, '', $6, $7,
 		    COALESCE((SELECT MAX(position)+1 FROM items WHERE project_id=$1 AND status_id=$3), 0))
 		RETURNING id
-	`, projectID, epicID, statusID, displayID, title, priority, estimateMinutes).Scan(&itemID)
+	`, projectID, epicID, statusID, displayID, title, priority, estimateMinutes, sprintID).Scan(&itemID)
 	if err != nil {
 		return nil, err
 	}

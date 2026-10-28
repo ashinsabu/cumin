@@ -8,6 +8,7 @@ import {
   useSpilloverPreview,
 } from '../hooks/useSprints'
 import { formatEstimate } from '../hooks/useFormat'
+import { sprintCloseMessage } from '../lib/sprintCloseMessage'
 import type { Sprint } from '../types'
 
 function SprintStateBadge({ state }: { state: Sprint['state'] }) {
@@ -50,7 +51,7 @@ function CloseConfirmModal({
   onCancel: () => void
   loading: boolean
 }) {
-  const { data: spillCount, isLoading: previewLoading } = useSpilloverPreview(sprint.id)
+  const { data: preview, isLoading: previewLoading } = useSpilloverPreview(sprint.id)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onCancel}>
@@ -64,15 +65,10 @@ function CloseConfirmModal({
         </div>
 
         <div className="rounded-[var(--c-radius-card)] bg-surface border border-line px-4 py-3 text-sm text-ink">
-          {previewLoading ? (
+          {previewLoading || !preview ? (
             <span className="text-dim">Checking incomplete items…</span>
-          ) : spillCount === 0 ? (
-            <span className="text-emerald-400">All items are done — nothing will carry over.</span>
           ) : (
-            <>
-              <span className="font-semibold text-amber-400">{spillCount} item{spillCount !== 1 ? 's' : ''}</span>
-              <span className="text-dim"> will carry over to the next sprint.</span>
-            </>
+            <span className={preview.count > 0 ? 'text-amber-400' : 'text-ink'}>{sprintCloseMessage(preview)}</span>
           )}
         </div>
 
@@ -89,7 +85,7 @@ function CloseConfirmModal({
           </button>
           <button
             onClick={onConfirm}
-            disabled={loading || previewLoading}
+            disabled={loading || previewLoading || !preview}
             className="px-4 py-2 rounded-[var(--c-radius-card)] text-sm font-semibold bg-accent text-white hover:opacity-90 transition-opacity disabled:opacity-50"
           >
             {loading ? 'Closing…' : 'Close sprint'}
@@ -185,7 +181,14 @@ function PlanningSprintCard({
         </p>
       </div>
       <button
-        onClick={() => activateSprint.mutate(sprint.id)}
+        onClick={() => {
+          // Activating early is allowed, but never silently: the dates on the Board would not match today.
+          const startsInFuture = new Date(sprint.start_date).getTime() > Date.now()
+          if (startsInFuture && !window.confirm(
+            `${sprint.name} is scheduled for ${formatDate(sprint.start_date)} – ${formatDate(sprint.end_date)}. Start it now anyway?`,
+          )) return
+          activateSprint.mutate(sprint.id)
+        }}
         disabled={hasActiveSprint || activateSprint.isPending}
         title={hasActiveSprint ? 'Close the active sprint before activating another' : undefined}
         className="shrink-0 px-3 py-1.5 rounded-[var(--c-radius-card)] text-sm font-semibold bg-accent text-white hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"

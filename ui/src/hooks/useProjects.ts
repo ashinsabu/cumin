@@ -7,9 +7,10 @@ export const projectKeys = {
   all: ['projects'] as const,
 }
 
-export function useProjects() {
+export function useProjects({ enabled = true }: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: projectKeys.all,
+    enabled,
     queryFn: () => apiFetch<{ projects: Project[] }>('/api/projects').then((d) => d.projects),
   })
 }

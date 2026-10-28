@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	_ "time/tzdata" // the alpine runtime image has no zoneinfo; queue attention needs IANA zones
 
 	"github.com/ashinsabu/cumin/server/config"
 	applogger "github.com/ashinsabu/cumin/server/logger"

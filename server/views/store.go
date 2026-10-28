@@ -5,10 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 
+	"github.com/jackc/pgx/v5/pgconn"
+
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var errNotFound = errors.New("view not found")
+var (
+	errNotFound      = errors.New("view not found")
+	errDuplicateName = errors.New("view name already in use")
+)
 
 type Store struct {
 	DB *pgxpool.Pool
@@ -45,6 +50,10 @@ func (s *Store) Create(ctx context.Context, userID, name string, filters json.Ra
 		RETURNING id, user_id, name, filters, position, created_at
 	`, userID, name, filters).Scan(&v.ID, &v.UserID, &v.Name, &v.Filters, &v.Position, &v.CreatedAt)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" { // unique_violation
+			return nil, errDuplicateName
+		}
 		return nil, err
 	}
 	return &v, nil

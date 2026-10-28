@@ -11,6 +11,7 @@ import { PRIORITY } from '../constants'
 import { formatEstimate, parseEstimate } from '../hooks/useFormat'
 import { StatusDurationBar } from './StatusDurationBar'
 import { FilterSelect } from './FilterSelect'
+import { SprintSelect, NO_SPRINT } from './SprintSelect'
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -31,6 +32,7 @@ export function ItemModal({ item, onClose }: { item: Item; onClose: () => void }
 
   const [title, setTitle] = useState(item.title)
   const [epicId, setEpicId] = useState(item.epic_id ?? '__none__')
+  const [sprintId, setSprintId] = useState(item.sprint_id ?? NO_SPRINT)
   const [priority, setPriority] = useState(item.priority)
   const [estimateRaw, setEstimateRaw] = useState(item.estimate_minutes ? formatEstimate(item.estimate_minutes) : '')
   const [estimateError, setEstimateError] = useState('')
@@ -44,6 +46,7 @@ export function ItemModal({ item, onClose }: { item: Item; onClose: () => void }
   const isDirty =
     title !== item.title ||
     (epicId === '__none__' ? null : epicId) !== item.epic_id ||
+    (sprintId === NO_SPRINT ? null : sprintId) !== item.sprint_id ||
     priority !== item.priority ||
     (estimateRaw.trim() === '' ? null : parseEstimate(estimateRaw)) !== item.estimate_minutes
 
@@ -73,8 +76,9 @@ export function ItemModal({ item, onClose }: { item: Item; onClose: () => void }
         payload: {
           title: title.trim(),
           priority,
-          estimate_minutes: estimateRaw.trim() ? parseEstimate(estimateRaw) : null,
+          ...(estimateRaw.trim() ? { estimate_minutes: parseEstimate(estimateRaw) } : { clear_estimate: true }),
           ...(epicId === '__none__' ? { clear_epic: true } : { epic_id: epicId }),
+          ...(sprintId === NO_SPRINT ? { clear_sprint: true } : { sprint_id: sprintId }),
         },
       })
       onClose()
@@ -158,6 +162,10 @@ export function ItemModal({ item, onClose }: { item: Item; onClose: () => void }
                 options={[{ value: '__none__', label: 'None' }, ...epics.map((e) => ({ value: e.id, label: e.name }))]}
               />
             </div>
+          </Row>
+
+          <Row label="Sprint">
+            <div className="w-48"><SprintSelect projectId={item.project_id} value={sprintId} onChange={setSprintId} /></div>
           </Row>
 
           <Row label="Priority">

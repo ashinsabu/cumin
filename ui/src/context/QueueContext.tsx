@@ -1,29 +1,23 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
-import type { QueueItem } from '../types'
-import { useToast } from './ToastContext'
+import type { QueueItem, QueueSummary } from '../types'
+import { useUndoable, softDelete } from '../hooks/useUndoable'
 import { authFetch } from '../lib/auth'
 import { useAuth } from './AuthContext'
 
 
 // Mirrors server/queue/store.go urgencyScore — keeps optimistic items sorted correctly.
-function computeUrgencyScore(title: string, priority: number, deadline: string | null | undefined): number {
-  let deadlineScore = 0
-  if (deadline) {
-    const daysUntil = (new Date(deadline).getTime() - Date.now()) / 86_400_000
-    deadlineScore = Math.max(0, 10 - daysUntil * 2)
-  }
+function computeUrgencyScore(title: string, priority: number): number {
   let kwScore = 0
   const lower = title.toLowerCase()
   for (const kw of ['bug', 'prod', 'blocker', 'critical']) {
     if (lower.includes(kw)) kwScore += 2
   }
-  return deadlineScore + kwScore + (4 - priority) * 2
+  return kwScore + (4 - priority) * 2
 }
 
 type CreatePayload = {
   title: string
   notes?: string
-  deadline?: string | null
   priority?: number
   estimate_minutes?: number | null
 }
@@ -31,19 +25,20 @@ type CreatePayload = {
 type UpdatePayload = {
   title: string
   notes?: string
-  deadline?: string | null
   priority?: number
   estimate_minutes?: number | null
 }
 
-type PromotePayload = { project_id: string; status_id: string; epic_id?: string | null }
+export type PromotePayload = { project_id: string; status_id: string; epic_id?: string | null; sprint_id?: string | null }
 
 type QueueContextValue = {
   items: QueueItem[]
+  summary: QueueSummary | null
   loading: boolean
   createItem: (p: CreatePayload) => Promise<QueueItem>
   updateItem: (id: string, p: UpdatePayload) => Promise<void>
   archiveItem: (id: string) => void
+  archiveItems: (ids: string[]) => void
   deleteItemSilent: (id: string) => Promise<void>
   completeItem: (id: string) => Promise<void>
   reviveItem: (id: string) => Promise<void>
@@ -55,18 +50,34 @@ const QueueContext = createContext<QueueContextValue | null>(null)
 
 export function QueueProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<QueueItem[]>([])
+  const [summary, setSummary] = useState<QueueSummary | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const { push: pushToast } = useToast()
   const itemsRef = useRef<QueueItem[]>([])
   useEffect(() => { itemsRef.current = items }, [items])
 
+  // Refetches (timer, focus, after other mutations) must not undo optimistic state:
+  //  - fetchSeq: only the latest response is applied, so a slow older one cannot overwrite a newer one.
+  //  - removing: ids already removed locally whose server call is still pending (archive undo window, complete, promote).
+  //  - tempIds: optimistic creates whose POST has not returned; the server cannot list them yet.
+  //  - reordering: a drag's PUT is in flight, so a response from before it would snap the list back.
+  const fetchSeq = useRef(0)
+  const removing = useRef(new Set<string>())
+  const tempIds = useRef(new Set<string>())
+  const reordering = useRef(0)
+
   const fetchItems = useCallback(async () => {
     try {
-      const res = await authFetch(`/api/queue`)
+      // The server decides what "today" is for attention, so it needs the browser's timezone.
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+      const seq = ++fetchSeq.current
+      const res = await authFetch(`/api/queue?tz=${encodeURIComponent(tz)}`)
       if (res.ok) {
         const data = await res.json()
-        setItems(data.items ?? [])
+        if (seq !== fetchSeq.current || reordering.current > 0) return
+        const fromServer: QueueItem[] = (data.items ?? []).filter((i: QueueItem) => !removing.current.has(i.id))
+        setItems((prev) => [...fromServer, ...prev.filter((i) => tempIds.current.has(i.id))])
+        setSummary(data.summary ?? null)
       }
     } catch {
       // transient network failure — queue stays empty, user can retry
@@ -79,8 +90,18 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const userId = user?.id
   useEffect(() => {
-    if (!userId) { setItems([]); return }
+    if (!userId) { setItems([]); setSummary(null); return }
     fetchItems()
+    // Attention depends on the clock, so re-ask every minute and whenever the user comes back to the tab.
+    const timer = setInterval(() => { if (document.visibilityState === 'visible') fetchItems() }, 60_000)
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchItems() }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onVisible)
+    }
   }, [userId, fetchItems])
 
   const createItem = useCallback(async (payload: CreatePayload): Promise<QueueItem> => {
@@ -93,15 +114,15 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       created_by: '',
       title: payload.title,
       notes: payload.notes ?? '',
-      deadline: payload.deadline ?? null,
       priority,
       estimate_minutes: payload.estimate_minutes ?? null,
       position: 999,
-      urgency_score: computeUrgencyScore(payload.title, priority, payload.deadline),
+      urgency_score: computeUrgencyScore(payload.title, priority),
       promoted_item_id: null,
       completed_at: null,
       created_at: now,
     }
+    tempIds.current.add(tempId)
     setItems((prev) => [...prev, tempItem].sort((a, b) => b.urgency_score - a.urgency_score))
 
     try {
@@ -112,13 +133,16 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       })
       if (!res.ok) throw new Error('Failed to create queue item')
       const item: QueueItem = await res.json()
+      tempIds.current.delete(tempId)
       setItems((prev) => prev.map((i) => i.id === tempId ? item : i).sort((a, b) => b.urgency_score - a.urgency_score))
+      fetchItems() // pick up attention + summary, which the create response does not carry
       return item
     } catch (e) {
+      tempIds.current.delete(tempId)
       setItems((prev) => prev.filter((i) => i.id !== tempId))
       throw e
     }
-  }, [])
+  }, [fetchItems])
 
   const updateItem = useCallback(async (id: string, payload: UpdatePayload): Promise<void> => {
     const res = await authFetch(`/api/queue/${id}`, {
@@ -129,71 +153,111 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     if (!res.ok) throw new Error('Failed to update queue item')
     const updated: QueueItem = await res.json()
     setItems((prev) => prev.map((i) => i.id === id ? updated : i).sort((a, b) => b.urgency_score - a.urgency_score))
-  }, [])
+    fetchItems()
+  }, [fetchItems])
 
   const reorderItems = useCallback(async (ids: string[]): Promise<void> => {
     // Optimistic: reorder items in state by assigning new positions
+    reordering.current++
     setItems(prev => {
       const posMap = new Map(ids.map((id, i) => [id, i]))
       return [...prev]
         .map(item => ({ ...item, position: posMap.get(item.id) ?? item.position }))
         .sort((a, b) => a.position - b.position)
     })
-    await authFetch(`/api/queue/reorder`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ order: ids }),
-    })
+    try {
+      await authFetch(`/api/queue/reorder`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order: ids }),
+      })
+    } finally {
+      reordering.current--
+    }
   }, [])
 
-  const archiveItem = useCallback((id: string): void => {
-    const snapshot = itemsRef.current.find(i => i.id === id)
-    setItems(prev => prev.filter(i => i.id !== id))
-    pushToast({
-      message: 'Removed from queue',
-      undo: snapshot ? () => {
-        setItems(prev => [...prev, snapshot].sort((a, b) => b.urgency_score - a.urgency_score))
-      } : undefined,
-      onCommit: () => authFetch(`/api/queue/${id}`, { method: 'DELETE' }).then(() => {}),
-    })
-  }, [pushToast])
+  // Dismiss one or many entries behind a single undo toast. The DELETE goes out immediately; undo restores server-side.
+  const dismiss = softDelete<QueueItem[]>((entries) => entries.map((e) => `/api/queue/${e.id}`))
+  const archive = useUndoable<QueueItem[]>({
+    label: (entries) => entries.length === 1 ? 'Removed from queue' : `Removed ${entries.length} from queue`,
+    undo: dismiss.undo,
+    // removing hides the entries from refetches only while the DELETE is in flight; afterwards the server no longer lists them.
+    run: (entries) => dismiss.run(entries).finally(() => {
+      entries.forEach((e) => removing.current.delete(e.id))
+      fetchSeq.current++ // a list request that started before the DELETE committed may still list the entries; drop it
+    }),
+    apply: (entries) => {
+      const gone = new Set(entries.map((e) => e.id))
+      gone.forEach((id) => removing.current.add(id))
+      fetchSeq.current++
+      setItems((prev) => prev.filter((i) => !gone.has(i.id)))
+    },
+    revert: (entries) => {
+      entries.forEach((e) => removing.current.delete(e.id))
+      setItems((prev) => {
+        const present = new Set(prev.map((i) => i.id))
+        return [...prev, ...entries.filter((e) => !present.has(e.id))].sort((a, b) => b.urgency_score - a.urgency_score)
+      })
+      fetchItems()
+    },
+  })
+  const archiveItems = useCallback((ids: string[]): void => {
+    const snapshots = itemsRef.current.filter((i) => ids.includes(i.id))
+    if (snapshots.length > 0) void archive(snapshots)
+  }, [archive])
+  const archiveItem = useCallback((id: string): void => archiveItems([id]), [archiveItems])
 
   const deleteItemSilent = useCallback(async (id: string): Promise<void> => {
+    const snapshot = itemsRef.current.find(i => i.id === id)
+    removing.current.add(id)
     setItems(prev => prev.filter(i => i.id !== id))
-    await authFetch(`/api/queue/${id}`, { method: 'DELETE' })
+    try {
+      const res = await authFetch(`/api/queue/${id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Failed to delete queue item')
+    } catch (e) {
+      if (snapshot) setItems(prev => prev.some(i => i.id === id) ? prev : [...prev, snapshot].sort((a, b) => b.urgency_score - a.urgency_score))
+      throw e
+    } finally {
+      removing.current.delete(id)
+    }
   }, [])
 
   const completeItem = useCallback(async (id: string): Promise<void> => {
     const snapshot = itemsRef.current.find(i => i.id === id)
+    removing.current.add(id)
     setItems((prev) => prev.filter((i) => i.id !== id))
-    const res = await authFetch(`/api/queue/${id}/complete`, { method: 'POST' })
+    const res = await authFetch(`/api/queue/${id}/complete`, { method: 'POST' }).finally(() => { removing.current.delete(id) })
     if (!res.ok) {
       if (snapshot) setItems((prev) => [...prev, snapshot].sort((a, b) => b.urgency_score - a.urgency_score))
       throw new Error('Failed to mark queue item done')
     }
-  }, [])
+    fetchItems()
+  }, [fetchItems])
 
   const reviveItem = useCallback(async (id: string): Promise<void> => {
     const res = await authFetch(`/api/queue/${id}/revive`, { method: 'POST' })
     if (!res.ok) throw new Error('Failed to revive queue item')
     const revived: QueueItem = await res.json()
     setItems((prev) => prev.map((i) => i.id === id ? revived : i))
-  }, [])
+    fetchItems() // the revive response carries no attention
+  }, [fetchItems])
 
   const promoteItem = useCallback(async (id: string, payload: PromotePayload) => {
+    removing.current.add(id)
     const res = await authFetch(`/api/queue/${id}/promote`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-    })
+    }).finally(() => { removing.current.delete(id) })
     if (!res.ok) throw new Error('Failed to convert queue item')
     const result = await res.json()
     setItems((prev) => prev.filter((i) => i.id !== id))
+    fetchItems()
     return result
-  }, [])
+  }, [fetchItems])
 
   return (
-    <QueueContext.Provider value={{ items, loading, createItem, updateItem, archiveItem, deleteItemSilent, completeItem, reviveItem, reorderItems, promoteItem }}>
+    <QueueContext.Provider value={{ items, summary, loading, createItem, updateItem, archiveItem, archiveItems, deleteItemSilent, completeItem, reviveItem, reorderItems, promoteItem }}>
       {children}
     </QueueContext.Provider>
   )

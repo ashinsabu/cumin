@@ -203,7 +203,7 @@ func (s *Store) Close(ctx context.Context, sprintID, projectID string, cadenceDa
 
 	spillTag, err := tx.Exec(ctx, `
 		UPDATE items SET sprint_id = $1, updated_at = NOW()
-		WHERE sprint_id = $2 AND status_id != ALL($3)
+		WHERE sprint_id = $2 AND status_id != ALL($3) AND deleted_at IS NULL
 	`, next.ID, sprintID, doneStatusIDs)
 	if err != nil {
 		return nil, err
@@ -215,11 +215,21 @@ func (s *Store) Close(ctx context.Context, sprintID, projectID string, cadenceDa
 	return &CloseResult{SpilledCount: int(spillTag.RowsAffected()), NextSprint: &next}, nil
 }
 
-// SpilloverPreview returns how many items would spill if the sprint were closed now.
-func (s *Store) SpilloverPreview(ctx context.Context, sprintID string, doneStatusIDs []string) (int, error) {
-	var count int
+// SpilloverCounts describes a sprint's items: how many would carry over, how many are done, how many exist.
+type SpilloverCounts struct {
+	Spill int
+	Done  int
+	Total int
+}
+
+// SpilloverPreview returns the carry-over breakdown if the sprint were closed now.
+func (s *Store) SpilloverPreview(ctx context.Context, sprintID string, doneStatusIDs []string) (SpilloverCounts, error) {
+	var c SpilloverCounts
 	err := s.DB.QueryRow(ctx, `
-		SELECT COUNT(*) FROM items WHERE sprint_id = $1 AND status_id != ALL($2)
-	`, sprintID, doneStatusIDs).Scan(&count)
-	return count, err
+		SELECT COUNT(*) FILTER (WHERE status_id != ALL($2)),
+		       COUNT(*) FILTER (WHERE status_id = ANY($2)),
+		       COUNT(*)
+		FROM items WHERE sprint_id = $1 AND deleted_at IS NULL
+	`, sprintID, doneStatusIDs).Scan(&c.Spill, &c.Done, &c.Total)
+	return c, err
 }

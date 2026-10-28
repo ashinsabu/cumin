@@ -2,6 +2,9 @@ package queue
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
 	"time"
 
 	"github.com/ashinsabu/cumin/server/api"
@@ -11,29 +14,29 @@ import (
 )
 
 type CreateRequest struct {
-	Title           string     `json:"title"`
-	Notes           string     `json:"notes"`
-	Deadline        *time.Time `json:"deadline"`
-	Priority        int        `json:"priority"`
-	EstimateMinutes *int       `json:"estimate_minutes"`
+	Title           string `json:"title"`
+	Notes           string `json:"notes"`
+	Priority        int    `json:"priority"`
+	EstimateMinutes *int   `json:"estimate_minutes"`
 }
 
 type UpdateRequest struct {
-	Title           string     `json:"title"`
-	Notes           string     `json:"notes"`
-	Deadline        *time.Time `json:"deadline"`
-	Priority        int        `json:"priority"`
-	EstimateMinutes *int       `json:"estimate_minutes"`
+	Title           string `json:"title"`
+	Notes           string `json:"notes"`
+	Priority        int    `json:"priority"`
+	EstimateMinutes *int   `json:"estimate_minutes"`
 }
 
 type PromoteRequest struct {
 	ProjectID string  `json:"project_id"`
 	StatusID  string  `json:"status_id"`
 	EpicID    *string `json:"epic_id"`
+	SprintID  *string `json:"sprint_id"`
 }
 
 type ListResponse struct {
-	Items []QueueItem `json:"items"`
+	Items   []QueueItem `json:"items"`
+	Summary Summary     `json:"summary"`
 }
 
 type Handler struct {
@@ -50,13 +53,14 @@ type ReorderRequest struct {
 }
 
 func (h *Handler) Routes(r chi.Router) {
-	r.Get("/api/queue", api.HandleNoBody(h.List))
+	r.Get("/api/queue", h.List)
 	r.Get("/api/queue/history", api.HandleNoBody(h.History))
 	r.Post("/api/queue", api.Handle(h.Create))
 	r.Patch("/api/queue/{id}", api.Handle(h.Update))
 	r.Delete("/api/queue/{id}", api.HandleDelete(h.Archive))
 	r.Post("/api/queue/{id}/complete", api.HandleNoBody(h.Complete))
 	r.Post("/api/queue/{id}/promote", api.Handle(h.Promote))
+	r.Post("/api/queue/{id}/restore", api.HandleNoBody(h.Restore))
 	r.Post("/api/queue/{id}/revive", api.HandleNoBody(h.Revive))
 	r.Put("/api/queue/reorder", api.Handle(h.Reorder))
 }
@@ -84,22 +88,34 @@ func (h *Handler) Complete(ctx context.Context) (*QueueItem, error) {
 	return q, nil
 }
 
-func (h *Handler) List(ctx context.Context) (*ListResponse, error) {
-	userID := auth.UserIDFromContext(ctx)
-	items, err := h.store.List(ctx, userID)
+// List returns the active queue with computed per-item attention and the day summary.
+// ?tz=<IANA zone> is the browser's timezone: the day ends at its next midnight (UTC if absent/invalid).
+func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
+	userID := auth.UserIDFromContext(r.Context())
+	items, err := h.store.List(r.Context(), userID)
 	if err != nil {
-		return nil, api.Internal("failed to list queue")
+		api.WriteError(w, api.Internal("failed to list queue"))
+		return
 	}
-	return &ListResponse{Items: items}, nil
+	loc, err := time.LoadLocation(r.URL.Query().Get("tz"))
+	if err != nil {
+		loc = time.UTC
+	}
+	summary := ComputeAttention(items, time.Now(), loc)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(ListResponse{Items: items, Summary: summary})
 }
 
 func (h *Handler) Create(ctx context.Context, req CreateRequest) (*QueueItem, error) {
 	if req.Title == "" {
 		return nil, api.BadRequest("title required")
 	}
+	if req.EstimateMinutes != nil && *req.EstimateMinutes < 0 {
+		return nil, api.BadRequest("estimate_minutes must not be negative")
+	}
 	userID := auth.UserIDFromContext(ctx)
 
-	q, err := h.store.Create(ctx, userID, userID, req.Title, req.Notes, req.Deadline, req.Priority, req.EstimateMinutes)
+	q, err := h.store.Create(ctx, userID, userID, req.Title, req.Notes, req.Priority, req.EstimateMinutes)
 	if err != nil {
 		return nil, api.Internal("failed to create queue item")
 	}
@@ -112,7 +128,10 @@ func (h *Handler) Update(ctx context.Context, req UpdateRequest) (*QueueItem, er
 	if req.Title == "" {
 		return nil, api.BadRequest("title required")
 	}
-	q, err := h.store.Update(ctx, id, userID, req.Title, req.Notes, req.Deadline, req.Priority, req.EstimateMinutes)
+	if req.EstimateMinutes != nil && *req.EstimateMinutes < 0 {
+		return nil, api.BadRequest("estimate_minutes must not be negative")
+	}
+	q, err := h.store.Update(ctx, id, userID, req.Title, req.Notes, req.Priority, req.EstimateMinutes)
 	if err != nil {
 		return nil, api.NotFound("queue item not found")
 	}
@@ -126,6 +145,16 @@ func (h *Handler) Archive(ctx context.Context) error {
 		return api.Internal("failed to archive queue item")
 	}
 	return nil
+}
+
+func (h *Handler) Restore(ctx context.Context) (*QueueItem, error) {
+	id := api.URLParam(ctx, "id")
+	userID := auth.UserIDFromContext(ctx)
+	q, err := h.store.Restore(ctx, id, userID)
+	if err != nil {
+		return nil, api.NotFound("queue item not found")
+	}
+	return q, nil
 }
 
 func (h *Handler) Reorder(ctx context.Context, req ReorderRequest) (*struct{}, error) {
@@ -153,8 +182,11 @@ func (h *Handler) Promote(ctx context.Context, req PromoteRequest) (*PromoteResu
 	}
 	userID := auth.UserIDFromContext(ctx)
 
-	result, err := h.store.Promote(ctx, id, userID, req.ProjectID, req.StatusID, req.EpicID)
+	result, err := h.store.Promote(ctx, id, userID, req.ProjectID, req.StatusID, req.EpicID, req.SprintID)
 	if err != nil {
+		if errors.Is(err, ErrInvalidSprint) {
+			return nil, api.BadRequest("sprint_id is invalid")
+		}
 		return nil, api.Internal("failed to promote queue item")
 	}
 	return result, nil

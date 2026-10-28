@@ -6,6 +6,7 @@ import (
 	"github.com/ashinsabu/cumin/server/api"
 	"github.com/ashinsabu/cumin/server/auth"
 	"github.com/ashinsabu/cumin/server/epic"
+	"github.com/ashinsabu/cumin/server/item"
 	"github.com/ashinsabu/cumin/server/project"
 	"github.com/go-chi/chi/v5"
 )
@@ -13,15 +14,17 @@ import (
 type TrashResponse struct {
 	Projects []project.TrashProject `json:"projects"`
 	Epics    []epic.TrashEpic       `json:"epics"`
+	Items    []item.TrashItem       `json:"items"`
 }
 
 type Handler struct {
 	projectStore *project.Store
 	epicStore    *epic.Store
+	itemStore    *item.Store
 }
 
-func NewHandler(projectStore *project.Store, epicStore *epic.Store) *Handler {
-	return &Handler{projectStore: projectStore, epicStore: epicStore}
+func NewHandler(projectStore *project.Store, epicStore *epic.Store, itemStore *item.Store) *Handler {
+	return &Handler{projectStore: projectStore, epicStore: epicStore, itemStore: itemStore}
 }
 
 func (h *Handler) Routes(r chi.Router) {
@@ -48,7 +51,12 @@ func (h *Handler) List(ctx context.Context) (*TrashResponse, error) {
 		epics = []epic.TrashEpic{}
 	}
 
-	return &TrashResponse{Projects: projects, Epics: epics}, nil
+	items, err := h.itemStore.ListTrash(ctx, userID)
+	if err != nil {
+		return nil, api.Internal("failed to list trash")
+	}
+
+	return &TrashResponse{Projects: projects, Epics: epics, Items: items}, nil
 }
 
 func (h *Handler) Empty(ctx context.Context) error {

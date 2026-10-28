@@ -234,3 +234,18 @@ func TestProjects_CrossBoard_Isolation(t *testing.T) {
 	assertStatus(t, resp, http.StatusNotFound)
 	drainClose(resp)
 }
+
+// Regression: restoring an item whose project is deleted revived it inside an unreachable project.
+func TestItems_Restore_RejectedWhileProjectDeleted(t *testing.T) {
+	p := createProject(t, "Gone Proj", "GNP")
+	t.Cleanup(func() { hardDeleteProject(p.ID) })
+	resp := mustDo(t, testEnv.Server, "POST", "/api/items", map[string]any{"title": "orphan", "project_id": p.ID})
+	assertStatus(t, resp, http.StatusOK)
+	it := mustDecodeJSON[itemJSON](t, resp)
+	t.Cleanup(func() { hardDeleteItems(it.ID) })
+
+	drainClose(mustDo(t, testEnv.Server, "DELETE", "/api/items/"+it.ID, nil))
+	drainClose(mustDo(t, testEnv.Server, "DELETE", "/api/projects/"+p.ID, nil))
+
+	assertStatus(t, mustDo(t, testEnv.Server, "POST", "/api/items/"+it.ID+"/restore", nil), http.StatusNotFound)
+}
