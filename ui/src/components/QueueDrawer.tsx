@@ -64,12 +64,12 @@ function PriorityBadge({ p }: { p: number }) {
 }
 
 function formatDeadline(iso: string): string {
-  const d = new Date(iso)
-  const diff = Math.ceil((d.getTime() - Date.now()) / 86400000)
-  if (diff < 0) return 'overdue'
-  if (diff === 0) return ''
-  if (diff === 1) return 'due tomorrow'
-  return `due in ${diff}d`
+  const ms = new Date(iso).getTime() - Date.now()
+  if (ms < 0) return 'overdue'
+  const mins = Math.ceil(ms / 60000)
+  if (mins < 60) return `due in ${mins}m`
+  if (mins < 24 * 60) return `due in ${Math.ceil(mins / 60)}h`
+  return `due in ${Math.ceil(mins / 1440)}d`
 }
 
 function relativeTime(iso: string): string {
@@ -162,26 +162,30 @@ function itemToDraft(item: QueueItem): CardDraft {
   }
 }
 
-// Parse "2d", "1w", "1m" → ISO timestamp. m = months (not minutes, deadlines context).
-// Queue items are all "due today" by default (they auto-archive after 24h), so hours or anything
-// under a day is not a deadline: returns ''.
-export function parseDueIn(text: string): string {
+// Quick tasks are due today by definition, so "Due in" is hours only, capped at MAX_DUE_HOURS.
+// Anything longer (or in days/weeks) is clamped to the cap with a hint to send it to the board.
+export const MAX_DUE_HOURS = 12
+
+export function parseDueIn(text: string): { iso: string; clamped: boolean } {
   const s = text.trim().toLowerCase()
   const n = parseFloat(s)
-  if (!n || n <= 0) return ''
-  const d = new Date()
-  if (s.endsWith('d')) d.setDate(d.getDate() + n)
-  else if (s.endsWith('w')) d.setDate(d.getDate() + n * 7)
-  else if (s.endsWith('m')) d.setMonth(d.getMonth() + n)
-  else return ''
-  return d.toISOString()
+  if (!n || n <= 0) return { iso: '', clamped: false }
+  let hours: number
+  if (s.endsWith('h')) hours = n
+  else if (s.endsWith('d')) hours = n * 24
+  else if (s.endsWith('w')) hours = n * 24 * 7
+  else if (s.endsWith('m')) hours = n / 60 // minutes
+  else return { iso: '', clamped: false }
+  const clamped = hours > MAX_DUE_HOURS
+  return { iso: new Date(Date.now() + Math.min(hours, MAX_DUE_HOURS) * 3600000).toISOString(), clamped }
 }
 
 // Inverse of parseDueIn for prefilling the field from a saved deadline.
 export function deadlineToDueIn(iso: string): string {
   if (!iso) return ''
-  const days = Math.round((new Date(iso).getTime() - Date.now()) / 86400000)
-  return days >= 1 ? `${days}d` : 'today'
+  const mins = Math.round((new Date(iso).getTime() - Date.now()) / 60000)
+  if (mins <= 0) return ''
+  return mins < 60 ? `${mins}m` : `${Math.round(mins / 60)}h`
 }
 
 type ExpandedEditorProps = {
@@ -224,10 +228,14 @@ export function ExpandedEditor({ item }: ExpandedEditorProps) {
     return () => clearTimeout(t)
   }, [draft.priority, draft.estimate, draft.deadline, save])
 
+  const [dueClamped, setDueClamped] = useState(false)
   const applyDueIn = () => {
     if (dueIn === appliedDueIn.current) return
-    appliedDueIn.current = dueIn
-    setDraft((prev) => ({ ...prev, deadline: parseDueIn(dueIn) }))
+    const { iso, clamped } = parseDueIn(dueIn)
+    setDueClamped(clamped)
+    if (clamped) setDueIn(`${MAX_DUE_HOURS}h`)
+    appliedDueIn.current = clamped ? `${MAX_DUE_HOURS}h` : dueIn
+    setDraft((prev) => ({ ...prev, deadline: iso }))
   }
 
   if (converted) {
@@ -294,22 +302,28 @@ export function ExpandedEditor({ item }: ExpandedEditorProps) {
               onChange={(e) => setDueIn(e.target.value)}
               onBlur={applyDueIn}
               onKeyDown={(e) => { if (e.key === 'Enter') applyDueIn() }}
-              title="Days, weeks or months (2d, 1w, 1m). Queue items are due today by default." placeholder="2d, 1w, 1m"
+              title="Hours until due. Quick tasks are due today by default (max 12h)." placeholder="2h, 90m"
               className="flex-1 min-w-0 text-xs bg-surface border border-line rounded-[var(--c-radius-card)] px-2 py-1 text-ink focus:outline-none focus:border-accent/50 placeholder:text-ghost"
             />
             {draft.deadline && (
               <>
                 <span className="text-[10px] text-ghost shrink-0">
-                  {new Date(draft.deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                  {new Date(draft.deadline).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
                 </span>
                 <button type="button"
-                  onClick={() => { setDueIn(''); appliedDueIn.current = ''; setDraft((d) => ({ ...d, deadline: '' })) }}
+                  onClick={() => { setDueIn(''); appliedDueIn.current = ''; setDueClamped(false); setDraft((d) => ({ ...d, deadline: '' })) }}
                   className="text-ghost/40 hover:text-ghost transition-colors text-sm shrink-0">
                   ×
                 </button>
               </>
             )}
           </div>
+          {dueClamped && (
+            <p className="text-[10px] text-accent">
+              Max {MAX_DUE_HOURS}h for a quick task.{' '}
+              <button type="button" onClick={() => setConverting(true)} className="underline">Send to board</button> for longer.
+            </p>
+          )}
         </div>
         {/* Notes */}
         <textarea value={draft.notes} onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}

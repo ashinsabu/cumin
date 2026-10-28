@@ -9,7 +9,7 @@ vi.mock('../hooks/useEpics', () => ({ useEpics: () => ({ data: [] }) }))
 vi.mock('../hooks/useSprints', () => ({ useSprints: () => ({ data: [] }) }))
 vi.mock('../lib/auth', () => ({ authFetch: vi.fn() }))
 
-import { ExpandedEditor, parseDueIn, deadlineToDueIn } from './QueueDrawer'
+import { ExpandedEditor, parseDueIn, deadlineToDueIn, MAX_DUE_HOURS } from './QueueDrawer'
 
 const item = { id: 'q1', title: 'Feat', notes: '', priority: 2, estimate_minutes: null, deadline: null } as never
 
@@ -24,20 +24,33 @@ describe('queue ExpandedEditor', () => {
   })
 })
 
-// Queue items are due today by default (24h auto-archive): hour-based "due in" is not a deadline,
-// otherwise "2h" showed "due today" and inflated the urgent count.
+// Quick tasks are due today by definition: "Due in" is hours, capped at 12h; longer input is clamped
+// (with a hint to send it to the board) instead of becoming a multi-day deadline / inflating urgency.
 describe('due-in', () => {
-  it('ignores hours / sub-day input and accepts days, weeks, months', () => {
-    expect(parseDueIn('2h')).toBe('')
-    expect(parseDueIn('3d')).not.toBe('')
-    expect(parseDueIn('1w')).not.toBe('')
-    expect(parseDueIn('1m')).not.toBe('')
+  const hoursFromNow = (iso: string) => Math.round((new Date(iso).getTime() - Date.now()) / 3600000)
+  it('accepts hours and minutes as-is', () => {
+    expect(hoursFromNow(parseDueIn('2h').iso)).toBe(2)
+    expect(parseDueIn('2h').clamped).toBe(false)
+    expect(parseDueIn('90m').clamped).toBe(false)
+  })
+  it('clamps anything over 12h (including days/weeks) to 12h and flags it', () => {
+    for (const input of ['13h', '2d', '1w']) {
+      const r = parseDueIn(input)
+      expect(r.clamped).toBe(true)
+      expect(hoursFromNow(r.iso)).toBe(MAX_DUE_HOURS)
+    }
   })
   it('prefills the field from a saved deadline', () => {
-    const in3d = new Date(Date.now() + 3 * 86400000).toISOString()
-    expect(deadlineToDueIn(in3d)).toBe('3d')
-    expect(deadlineToDueIn(new Date(Date.now() + 3600000).toISOString())).toBe('today')
-    render(<ExpandedEditor item={{ id: 'q2', title: 'T', notes: '', priority: 2, estimate_minutes: null, deadline: in3d } as never} />)
-    expect((screen.getByPlaceholderText('2d, 1w, 1m') as HTMLInputElement).value).toBe('3d')
+    expect(deadlineToDueIn(new Date(Date.now() + 5 * 3600000).toISOString())).toBe('5h')
+    render(<ExpandedEditor item={{ id: 'q2', title: 'T', notes: '', priority: 2, estimate_minutes: null, deadline: new Date(Date.now() + 3 * 3600000).toISOString() } as never} />)
+    expect((screen.getByPlaceholderText('2h, 90m') as HTMLInputElement).value).toBe('3h')
+  })
+  it('typing more than 12h snaps the field to 12h and shows the send-to-board hint', () => {
+    render(<ExpandedEditor item={item} />)
+    const input = screen.getByPlaceholderText('2h, 90m') as HTMLInputElement
+    fireEvent.change(input, { target: { value: '2d' } })
+    fireEvent.blur(input)
+    expect(input.value).toBe('12h')
+    expect(screen.getByText('Send to board')).toBeTruthy()
   })
 })

@@ -9,8 +9,9 @@ import { useAuth } from './AuthContext'
 function computeUrgencyScore(title: string, priority: number, deadline: string | null | undefined): number {
   let deadlineScore = 0
   if (deadline) {
-    const daysUntil = (new Date(deadline).getTime() - Date.now()) / 86_400_000
-    deadlineScore = Math.max(0, 10 - daysUntil * 2)
+    // Quick tasks are all due today: a deadline only adds a little weight as it nears (max 3, over the last 12h).
+    const hoursLeft = (new Date(deadline).getTime() - Date.now()) / 3_600_000
+    deadlineScore = hoursLeft <= 0 ? 3 : Math.max(0, 3 * (1 - hoursLeft / 12))
   }
   let kwScore = 0
   const lower = title.toLowerCase()

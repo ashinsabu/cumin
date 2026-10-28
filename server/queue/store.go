@@ -38,8 +38,13 @@ func UrgencyScore(title string, createdAt time.Time, deadline *time.Time, priori
 
 	deadlineScore := 0.0
 	if deadline != nil {
-		daysUntil := time.Until(*deadline).Hours() / 24.0
-		deadlineScore = math.Max(0, 10.0-daysUntil*2.0)
+		// Quick tasks are all due today: a deadline adds a little weight as it nears (max 3, over the last 12h).
+		hoursLeft := time.Until(*deadline).Hours()
+		if hoursLeft <= 0 {
+			deadlineScore = 3.0
+		} else {
+			deadlineScore = math.Max(0, 3.0*(1-hoursLeft/12.0))
+		}
 	}
 
 	kwScore := 0.0
