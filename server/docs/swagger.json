@@ -13,7 +13,7 @@
             "get": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "produces": [
@@ -41,7 +41,7 @@
             "patch": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -85,7 +85,7 @@
             "get": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "produces": [
@@ -113,7 +113,7 @@
             "post": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -163,7 +163,7 @@
             "put": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -213,7 +213,7 @@
             "delete": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "tags": [
@@ -271,7 +271,7 @@
             "get": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "produces": [
@@ -299,7 +299,7 @@
             "post": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -349,7 +349,7 @@
             "delete": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "tags": [
@@ -380,7 +380,7 @@
             "patch": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -437,7 +437,7 @@
             "post": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "tags": [
@@ -492,7 +492,7 @@
             "get": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "produces": [
@@ -528,7 +528,7 @@
             "post": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -578,7 +578,7 @@
             "get": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "produces": [
@@ -608,7 +608,7 @@
             "put": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -658,7 +658,7 @@
             "get": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "produces": [
@@ -695,7 +695,7 @@
             "delete": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "tags": [
@@ -726,7 +726,7 @@
             "patch": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -783,7 +783,7 @@
             "post": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -840,7 +840,7 @@
             "post": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "tags": [
@@ -873,7 +873,7 @@
             "get": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "produces": [
@@ -912,7 +912,7 @@
             "get": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "produces": [
@@ -940,7 +940,7 @@
             "post": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -996,7 +996,7 @@
             "delete": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "tags": [
@@ -1027,7 +1027,7 @@
             "patch": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -1084,7 +1084,7 @@
             "post": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "tags": [
@@ -1123,7 +1123,7 @@
             "get": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "produces": [
@@ -1151,7 +1151,7 @@
             "post": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -1201,7 +1201,7 @@
             "put": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -1239,7 +1239,7 @@
             "delete": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "tags": [
@@ -1270,7 +1270,7 @@
             "patch": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -1327,7 +1327,7 @@
             "post": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -1384,7 +1384,7 @@
             "get": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "produces": [
@@ -1412,7 +1412,7 @@
             "post": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -1456,7 +1456,7 @@
             "get": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "produces": [
@@ -1486,7 +1486,7 @@
             "post": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "produces": [
@@ -1531,7 +1531,7 @@
             "post": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "produces": [
@@ -1576,7 +1576,7 @@
             "get": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "produces": [
@@ -1615,7 +1615,7 @@
             "get": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "produces": [
@@ -1643,7 +1643,7 @@
             "delete": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "tags": [
@@ -2442,10 +2442,10 @@
         }
     },
     "securityDefinitions": {
-        "CookieAuth": {
+        "BearerAuth": {
             "type": "apiKey",
-            "name": "token",
-            "in": "cookie"
+            "name": "Authorization",
+            "in": "header"
         }
     }
 }

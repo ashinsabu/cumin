@@ -19,7 +19,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "produces": [
@@ -47,7 +47,7 @@ const docTemplate = `{
             "patch": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -91,7 +91,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "produces": [
@@ -119,7 +119,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -169,7 +169,7 @@ const docTemplate = `{
             "put": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -219,7 +219,7 @@ const docTemplate = `{
             "delete": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "tags": [
@@ -277,7 +277,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "produces": [
@@ -305,7 +305,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -355,7 +355,7 @@ const docTemplate = `{
             "delete": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "tags": [
@@ -386,7 +386,7 @@ const docTemplate = `{
             "patch": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -443,7 +443,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "tags": [
@@ -498,7 +498,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "produces": [
@@ -534,7 +534,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -584,7 +584,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "produces": [
@@ -614,7 +614,7 @@ const docTemplate = `{
             "put": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -664,7 +664,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "produces": [
@@ -701,7 +701,7 @@ const docTemplate = `{
             "delete": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "tags": [
@@ -732,7 +732,7 @@ const docTemplate = `{
             "patch": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -789,7 +789,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -846,7 +846,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "tags": [
@@ -879,7 +879,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "produces": [
@@ -918,7 +918,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "produces": [
@@ -946,7 +946,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -1002,7 +1002,7 @@ const docTemplate = `{
             "delete": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "tags": [
@@ -1033,7 +1033,7 @@ const docTemplate = `{
             "patch": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -1090,7 +1090,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "tags": [
@@ -1129,7 +1129,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "produces": [
@@ -1157,7 +1157,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -1207,7 +1207,7 @@ const docTemplate = `{
             "put": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -1245,7 +1245,7 @@ const docTemplate = `{
             "delete": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "tags": [
@@ -1276,7 +1276,7 @@ const docTemplate = `{
             "patch": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -1333,7 +1333,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -1390,7 +1390,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "produces": [
@@ -1418,7 +1418,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "consumes": [
@@ -1462,7 +1462,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "produces": [
@@ -1492,7 +1492,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "produces": [
@@ -1537,7 +1537,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "produces": [
@@ -1582,7 +1582,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "produces": [
@@ -1621,7 +1621,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "produces": [
@@ -1649,7 +1649,7 @@ const docTemplate = `{
             "delete": {
                 "security": [
                     {
-                        "CookieAuth": []
+                        "BearerAuth": []
                     }
                 ],
                 "tags": [
@@ -2448,10 +2448,10 @@ const docTemplate = `{
         }
     },
     "securityDefinitions": {
-        "CookieAuth": {
+        "BearerAuth": {
             "type": "apiKey",
-            "name": "token",
-            "in": "cookie"
+            "name": "Authorization",
+            "in": "header"
         }
     }
 }`

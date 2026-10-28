@@ -28,9 +28,9 @@ Commands:
 // @description     OSS sprint board API
 // @host            api.cumin.ashinsabu.com
 // @BasePath        /
-// @securityDefinitions.apikey CookieAuth
-// @in              cookie
-// @name            token
+// @securityDefinitions.apikey BearerAuth
+// @in              header
+// @name            Authorization
 func main() {
 	os.Exit(execute(os.Args[1:], os.Stdout, os.Stderr))
 }
