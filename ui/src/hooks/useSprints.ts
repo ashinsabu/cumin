@@ -1,3 +1,4 @@
+import { type SpilloverPreview } from '../lib/sprintCloseMessage'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../lib/api'
 import { itemKeys } from './useItems'
@@ -35,9 +36,11 @@ export function useSpilloverPreview(id: string | null) {
   return useQuery({
     queryKey: sprintKeys.spillover(id ?? ''),
     queryFn: () =>
-      apiFetch<{ count: number }>(`/api/sprints/${id}/spillover-preview`).then((d) => d.count),
+      apiFetch<SpilloverPreview>(`/api/sprints/${id}/spillover-preview`),
     enabled: !!id,
-    staleTime: 10_000,
+    // The close dialog must reflect the board as it is right now, not a cached snapshot.
+    staleTime: 0,
+    gcTime: 0,
   })
 }
 
