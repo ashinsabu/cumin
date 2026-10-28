@@ -76,6 +76,13 @@ describe('queue mass selection', () => {
     await waitFor(() => expect(screen.queryByText('3 selected')).toBeNull())
   })
 
+  it('toggles from the checkbox itself, not only the title', () => {
+    render(<QueueDrawer open onToggle={() => {}} />)
+    fireEvent.click(screen.getByText('Select'))
+    fireEvent.click(screen.getAllByRole('checkbox')[1].parentElement!)
+    expect(screen.getByText('1 selected')).toBeTruthy()
+  })
+
   it('keeps failed entries selected so they can be retried', async () => {
     completeItem.mockImplementation(async (id: string) => { if (id === 'b') throw new Error('nope') })
     render(<QueueDrawer open onToggle={() => {}} />)

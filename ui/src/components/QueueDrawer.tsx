@@ -234,6 +234,7 @@ function BulkBar({ count, busy, actions, onSendToBoard }: {
   onSendToBoard: (payload: PromotePayload) => void
 }) {
   const [sending, setSending] = useState(false)
+  useEffect(() => { if (count === 0) setSending(false) }, [count])
   if (count === 0) return null
   if (sending) {
     return (
@@ -454,7 +455,7 @@ const BeltItem = forwardRef<HTMLDivElement, BeltItemProps>(function BeltItem({ i
       }`}>
         <div className={`w-1 shrink-0 ${railClass(index, total)}`} />
         {select ? (
-          <div className="flex items-start pt-3.5 px-2.5 shrink-0">
+          <div className="flex items-start pt-3.5 px-2.5 shrink-0 cursor-pointer" onClick={(e) => select.onToggle(e.shiftKey)}>
             <input type="checkbox" checked={select.checked} readOnly
               className="accent-[color:var(--c-accent)] w-3.5 h-3.5 pointer-events-none" />
           </div>
@@ -837,7 +838,7 @@ function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: Qu
             ]}
             className="w-24"
           />
-          {sortedActive.length > 1 && (
+          {(sortedActive.length > 1 || sel.selectMode) && (
             <button
               onClick={sel.selectMode ? sel.exit : () => { sel.enter(); setExpandedId(null); setShowNew(false) }}
               className="text-xs px-1.5 py-0.5 rounded border border-line/40 text-ghost hover:text-dim hover:border-line transition-colors shrink-0"

@@ -191,10 +191,15 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   }, [pushToast])
 
   const deleteItemSilent = useCallback(async (id: string): Promise<void> => {
+    const snapshot = itemsRef.current.find(i => i.id === id)
     removing.current.add(id)
     setItems(prev => prev.filter(i => i.id !== id))
     try {
-      await authFetch(`/api/queue/${id}`, { method: 'DELETE' })
+      const res = await authFetch(`/api/queue/${id}`, { method: 'DELETE' })
+      if (!res.ok) throw new Error('Failed to delete queue item')
+    } catch (e) {
+      if (snapshot) setItems(prev => prev.some(i => i.id === id) ? prev : [...prev, snapshot].sort((a, b) => b.urgency_score - a.urgency_score))
+      throw e
     } finally {
       removing.current.delete(id)
     }
