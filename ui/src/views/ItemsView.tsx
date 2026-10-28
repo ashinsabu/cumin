@@ -119,6 +119,7 @@ function SaveViewModal({ filters, onClose }: { filters: ViewFilters; onClose: ()
           placeholder="View name…"
           className="w-full px-3 py-2 text-sm bg-canvas border border-line rounded-[var(--c-radius-card)] text-ink placeholder:text-ghost focus:outline-none focus:border-accent/60 mb-3"
         />
+        {create.isError && <p className="text-xs text-red-500 mb-3">{create.error instanceof Error ? create.error.message : 'Could not save view'}</p>}
         <div className="flex justify-end gap-2">
           <button onClick={onClose} className="px-3 py-1.5 text-xs text-dim hover:text-ink">Cancel</button>
           <button
