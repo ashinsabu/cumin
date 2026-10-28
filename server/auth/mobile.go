@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -49,6 +50,9 @@ func (h *Handler) mobileLogin(ctx context.Context, req mobileLoginRequest) (*mob
 	}
 
 	user, err := h.signInGoogle(ctx, info)
+	if errors.Is(err, ErrGoogleConflict) {
+		return nil, api.Conflict("account conflict")
+	}
 	if err != nil {
 		return nil, api.Internal("internal error")
 	}

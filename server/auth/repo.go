@@ -19,6 +19,9 @@ import (
 var (
 	ErrEmailTaken   = errors.New("email already registered")
 	ErrInvalidToken = errors.New("invalid or expired token")
+	// ErrGoogleConflict means the email belongs to an account already linked to a different Google
+	// identity (e.g. a reassigned address). Linking would hand that account to a stranger.
+	ErrGoogleConflict = errors.New("email belongs to an account linked to a different google identity")
 )
 
 type tokenPurpose string
@@ -69,7 +72,10 @@ func (r *Repo) UpsertGoogleUser(ctx context.Context, googleID, email, displayNam
 	switch {
 	case err == nil:
 		u, err = scanUser(tx.QueryRow(ctx, `
-			UPDATE users SET email = $2, display_name = $3, avatar_url = $4, updated_at = NOW()
+			UPDATE users SET
+				-- Keep the old email if another account owns the new one (it would violate UNIQUE).
+				email = CASE WHEN EXISTS (SELECT 1 FROM users o WHERE lower(o.email) = $2 AND o.id <> $1) THEN email ELSE $2 END,
+				display_name = $3, avatar_url = $4, updated_at = NOW()
 			WHERE id = $1 RETURNING `+userColumns, u.ID, email, displayName, avatarURL))
 	case errors.Is(err, pgx.ErrNoRows):
 		u, err = r.linkOrCreateGoogleUser(ctx, tx, googleID, email, displayName, avatarURL)
@@ -87,6 +93,9 @@ func (r *Repo) linkOrCreateGoogleUser(ctx context.Context, tx pgx.Tx, googleID, 
 	existing, err := scanUser(tx.QueryRow(ctx,
 		`SELECT `+userColumns+` FROM users WHERE lower(email) = $1 FOR UPDATE`, email))
 	if err == nil {
+		if existing.GoogleID != "" {
+			return nil, ErrGoogleConflict // we only get here because existing.GoogleID != googleID
+		}
 		// CASE order matters: password_hash is evaluated against the pre-update email_verified_at.
 		return scanUser(tx.QueryRow(ctx, `
 			UPDATE users SET
