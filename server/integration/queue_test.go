@@ -314,3 +314,42 @@ func TestQueue_Create_LegacyDeadlineIgnored(t *testing.T) {
 		t.Errorf("queue item must not expose a deadline, got %v", body["deadline"])
 	}
 }
+
+// Undo for a dismissed entry: DELETE then POST /restore brings it back, and a second restore (not archived) is a 404.
+// Promoted entries also have deleted_at set but must not be restorable, or undo would duplicate the board item.
+func TestQueue_Restore(t *testing.T) {
+	if !queueEnabled() {
+		t.Skip("queue feature disabled (QUEUE_DISABLED=true)")
+	}
+	srv := testEnv.Server
+	q := createQueueItem(t, "restore me", 2)
+	t.Cleanup(func() { hardDeleteQueueItem(q.ID) })
+
+	drainClose(mustDo(t, srv, "DELETE", "/api/queue/"+q.ID, nil))
+
+	resp := mustDo(t, srv, "POST", "/api/queue/"+q.ID+"/restore", nil)
+	assertStatus(t, resp, http.StatusOK)
+	if got := mustDecodeJSON[queueItemJSON](t, resp); got.ID != q.ID {
+		t.Fatalf("restored id = %s, want %s", got.ID, q.ID)
+	}
+
+	list := mustDecodeJSON[queueListJSON](t, mustDo(t, srv, "GET", "/api/queue", nil))
+	found := false
+	for _, qi := range list.Items {
+		found = found || qi.ID == q.ID
+	}
+	if !found {
+		t.Errorf("restored entry missing from GET /api/queue")
+	}
+
+	assertStatus(t, mustDo(t, srv, "POST", "/api/queue/"+q.ID+"/restore", nil), http.StatusNotFound)
+
+	promotable := createQueueItem(t, "promoted entry", 2)
+	t.Cleanup(func() { hardDeleteQueueItem(promotable.ID) })
+	resp = mustDo(t, srv, "POST", "/api/queue/"+promotable.ID+"/promote", map[string]any{
+		"project_id": testEnv.ProjectID, "status_id": testEnv.TodoStatusID,
+	})
+	assertStatus(t, resp, http.StatusOK)
+	t.Cleanup(func() { hardDeleteItems(mustDecodeJSON[promoteResultJSON](t, resp).ItemID) })
+	assertStatus(t, mustDo(t, srv, "POST", "/api/queue/"+promotable.ID+"/restore", nil), http.StatusNotFound)
+}

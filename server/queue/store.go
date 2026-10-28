@@ -182,6 +182,21 @@ func (s *Store) Archive(ctx context.Context, id, userID string) error {
 	return err
 }
 
+// Restore undoes Archive. Promoted entries also carry deleted_at, but they live on as board items, so they are excluded.
+func (s *Store) Restore(ctx context.Context, id, userID string) (*QueueItem, error) {
+	var q QueueItem
+	err := s.DB.QueryRow(ctx, `
+		UPDATE queue_items SET deleted_at = NULL
+		WHERE id = $1 AND user_id = $2 AND deleted_at IS NOT NULL AND promoted_item_id IS NULL
+		RETURNING `+listCols+`
+	`, id, userID).Scan(&q.ID, &q.UserID, &q.CreatedBy, &q.Title, &q.Notes, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CompletedAt, &q.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	q.UrgencyScore = UrgencyScore(q.Title, q.CreatedAt, q.Priority)
+	return &q, nil
+}
+
 func (s *Store) Reorder(ctx context.Context, userID string, ids []string) error {
 	tx, err := s.DB.Begin(ctx)
 	if err != nil {

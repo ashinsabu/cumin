@@ -60,6 +60,7 @@ func (h *Handler) Routes(r chi.Router) {
 	r.Delete("/api/queue/{id}", api.HandleDelete(h.Archive))
 	r.Post("/api/queue/{id}/complete", api.HandleNoBody(h.Complete))
 	r.Post("/api/queue/{id}/promote", api.Handle(h.Promote))
+	r.Post("/api/queue/{id}/restore", api.HandleNoBody(h.Restore))
 	r.Post("/api/queue/{id}/revive", api.HandleNoBody(h.Revive))
 	r.Put("/api/queue/reorder", api.Handle(h.Reorder))
 }
@@ -138,6 +139,16 @@ func (h *Handler) Archive(ctx context.Context) error {
 		return api.Internal("failed to archive queue item")
 	}
 	return nil
+}
+
+func (h *Handler) Restore(ctx context.Context) (*QueueItem, error) {
+	id := api.URLParam(ctx, "id")
+	userID := auth.UserIDFromContext(ctx)
+	q, err := h.store.Restore(ctx, id, userID)
+	if err != nil {
+		return nil, api.NotFound("queue item not found")
+	}
+	return q, nil
 }
 
 func (h *Handler) Reorder(ctx context.Context, req ReorderRequest) (*struct{}, error) {
