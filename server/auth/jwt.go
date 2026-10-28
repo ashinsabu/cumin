@@ -13,11 +13,6 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-const (
-	WebTokenTTL    = 24 * time.Hour
-	MobileTokenTTL = 30 * 24 * time.Hour
-)
-
 func IssueToken(secret, userID, email string, ttl time.Duration) (string, error) {
 	claims := Claims{
 		UserID: userID,

@@ -136,22 +136,20 @@ type authEnv struct {
 	mail        *fakeMailer
 	provisioned atomic.Int32 // provision callback invocations
 
-	mu      sync.Mutex
-	clients []*client // browsers created by the test; their sessions are deleted on cleanup
 }
 
-// newAuthEnv wires the real auth layer (handlers, scs session manager on Postgres, middleware)
-// behind an httptest server, with a capturing mailer and synchronous mail sending.
+// newAuthEnv wires the real auth layer (handlers, refresh tokens on Postgres, middleware) behind an
+// httptest server, with a capturing mailer and synchronous mail sending. Refresh-token rows are
+// removed with their users (ON DELETE CASCADE) by uniqueEmail's cleanup.
 func newAuthEnv(t *testing.T) *authEnv {
 	t.Helper()
 	pool := testPool(t)
 	e := &authEnv{pool: pool, repo: NewRepo(pool), mail: &fakeMailer{}}
 
-	sm := NewSessionManager(pool, false, 24*time.Hour, 48*time.Hour)
 	e.h = NewHandler(OAuthConfig{
 		AllowedOrigins: []string{testFrontendURL},
 		JWTSecret:      testJWTSecret,
-	}, e.repo, sm, func(ctx context.Context, userID, name string) error {
+	}, e.repo, func(ctx context.Context, userID, name string) error {
 		e.provisioned.Add(1)
 		return nil
 	})
@@ -159,49 +157,29 @@ func newAuthEnv(t *testing.T) *authEnv {
 	e.h.async = func(f func()) { f() }
 
 	r := chi.NewRouter()
+	e.h.PasswordRoutes(r)
+	e.h.SessionRoutes(r)
 	r.Group(func(r chi.Router) {
-		r.Use(sm.LoadAndSave)
-		e.h.PasswordRoutes(r)
-		// Creates an anonymous session, to test that login rotates the session id.
-		r.Get("/test/anon", func(w http.ResponseWriter, r *http.Request) {
-			sm.Put(r.Context(), "anon", "1")
-		})
-	})
-	r.Group(func(r chi.Router) {
-		r.Use(sm.LoadAndSave)
-		r.Use(Middleware(testJWTSecret, sm))
+		r.Use(Middleware(testJWTSecret))
 		r.Get("/api/auth/me", e.h.HandleMe)
-		r.Post("/api/auth/logout", e.h.HandleLogout)
 	})
 	e.srv = httptest.NewServer(r)
 	t.Cleanup(e.srv.Close)
-	// Sessions are rows in the shared database; remove the ones this test created so repeated
-	// runs don't accumulate them.
-	t.Cleanup(func() {
-		e.mu.Lock()
-		defer e.mu.Unlock()
-		for _, c := range e.clients {
-			if tok := c.sessionToken(); tok != "" {
-				pool.Exec(context.Background(), `DELETE FROM sessions WHERE token = $1`, tok)
-			}
-		}
-	})
 	return e
 }
 
 // client is an HTTP client with its own cookie jar, i.e. one browser.
 type client struct {
-	t    *testing.T
-	base string
-	http *http.Client
+	t      *testing.T
+	base   string
+	http   *http.Client
+	access string // access token held "in memory", as the SPA does
+	noCSRF bool   // omit the X-Requested-With header
 }
 
 func (e *authEnv) newClient(t *testing.T) *client {
 	jar, _ := cookiejar.New(nil)
 	c := &client{t: t, base: e.srv.URL, http: &http.Client{Jar: jar, Timeout: 10 * time.Second}}
-	e.mu.Lock()
-	e.clients = append(e.clients, c)
-	e.mu.Unlock()
 	return c
 }
 
@@ -222,6 +200,12 @@ func (c *client) do(method, path string, body any, header map[string]string) (in
 		c.t.Fatal(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if !c.noCSRF {
+		req.Header.Set(csrfHeader, csrfHeaderValue)
+	}
+	if c.access != "" {
+		req.Header.Set("Authorization", "Bearer "+c.access)
+	}
 	for k, v := range header {
 		req.Header.Set(k, v)
 	}
@@ -246,24 +230,42 @@ func (c *client) get(path string) (int, map[string]any) {
 	return c.do(http.MethodGet, path, nil, nil)
 }
 
-// sessionToken returns the value of this browser's session cookie ("" if none).
-func (c *client) sessionToken() string {
-	u, _ := url.Parse(c.base)
+// refreshCookie returns the value of this browser's refresh cookie ("" if none). The cookie's Path
+// is /api/auth, so it is looked up for a URL under that path.
+func (c *client) refreshCookie() string {
+	u, _ := url.Parse(c.base + "/api/auth/refresh")
 	for _, ck := range c.http.Jar.Cookies(u) {
-		if ck.Name == "session" {
+		if ck.Name == refreshCookieName {
 			return ck.Value
 		}
 	}
 	return ""
 }
 
-func (e *authEnv) sessionRowExists(t *testing.T, token string) bool {
+// refresh renews the access token the way the SPA does on boot or after a 401.
+func (c *client) refresh() (int, map[string]any) {
+	c.t.Helper()
+	status, body := c.post("/api/auth/refresh", nil)
+	c.keepAccess(body)
+	return status, body
+}
+
+func (c *client) keepAccess(body map[string]any) {
+	if tok, ok := body["access_token"].(string); ok {
+		c.access = tok
+	}
+}
+
+// activeRefreshTokens counts the user's unrevoked refresh tokens.
+func (e *authEnv) activeRefreshTokens(t *testing.T, email string) int {
 	t.Helper()
 	var n int
-	if err := e.pool.QueryRow(context.Background(), `SELECT count(*) FROM sessions WHERE token = $1`, token).Scan(&n); err != nil {
+	if err := e.pool.QueryRow(context.Background(), `
+		SELECT count(*) FROM refresh_tokens r JOIN users u ON u.id = r.user_id
+		WHERE lower(u.email) = $1 AND r.revoked_at IS NULL`, email).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
-	return n == 1
+	return n
 }
 
 // signupAndVerify creates a verified password account and returns its email.
@@ -286,5 +288,7 @@ func (e *authEnv) signupAndVerify(t *testing.T, password string) string {
 
 func (c *client) login(email, password string) (int, map[string]any) {
 	c.t.Helper()
-	return c.post("/api/auth/password/login", map[string]string{"email": email, "password": password})
+	status, body := c.post("/api/auth/password/login", map[string]string{"email": email, "password": password})
+	c.keepAccess(body)
+	return status, body
 }

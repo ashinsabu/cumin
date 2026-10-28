@@ -209,13 +209,14 @@ func (h *Handler) HandlePasswordLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	if err := h.startSession(ctx, user); err != nil {
-		l.Error("auth: start session failed", slog.String("user_id", user.ID), slog.Any("err", err))
+	resp, err := h.startWebLogin(w, r, user)
+	if err != nil {
+		l.Error("auth: start login failed", slog.String("user_id", user.ID), slog.Any("err", err))
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	l.Info("auth: password login success", slog.String("user_id", user.ID))
-	writeJSON(w, http.StatusOK, user)
+	writeJSON(w, http.StatusOK, resp)
 }
 
 type tokenRequest struct {
@@ -347,16 +348,10 @@ func (h *Handler) HandleReset(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	userID, err := h.repo.ConsumeToken(ctx, req.Token, purposeResetPassword)
+	userID, err := h.repo.ResetPassword(ctx, req.Token, hash)
 	if errors.Is(err, ErrInvalidToken) {
 		writeError(w, http.StatusBadRequest, "invalid or expired link")
 		return
-	}
-	if err == nil {
-		err = h.repo.SetPasswordVerified(ctx, userID, hash)
-	}
-	if err == nil {
-		err = h.destroyUserSessions(ctx, userID)
 	}
 	if err != nil {
 		l.Error("auth: reset password failed", slog.Any("err", err))
@@ -365,17 +360,6 @@ func (h *Handler) HandleReset(w http.ResponseWriter, r *http.Request) {
 	}
 	l.Info("auth: password reset", slog.String("user_id", userID))
 	writeJSON(w, http.StatusOK, map[string]string{"status": "password_reset"})
-}
-
-// destroyUserSessions deletes every web session of the user. scs has no per-user index, so this
-// scans all sessions (O(sessions)); fine at current scale, revisit with a user_id column.
-func (h *Handler) destroyUserSessions(ctx context.Context, userID string) error {
-	return h.sessions.Iterate(ctx, func(ctx context.Context) error {
-		if h.sessions.GetString(ctx, sessionUserKey) == userID {
-			return h.sessions.Destroy(ctx)
-		}
-		return nil
-	})
 }
 
 func (h *Handler) sendVerification(ctx context.Context, user *User) {

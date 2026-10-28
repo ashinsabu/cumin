@@ -4,8 +4,6 @@ go 1.25.0
 
 require (
 	github.com/alexedwards/argon2id v1.0.0
-	github.com/alexedwards/scs/pgxstore v0.0.0-20251002162104-209de6e426de
-	github.com/alexedwards/scs/v2 v2.9.0
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/go-chi/cors v1.2.2
 	github.com/go-chi/httprate v0.16.1
@@ -34,6 +32,7 @@ require (
 	github.com/klauspost/cpuid/v2 v2.2.10 // indirect
 	github.com/lib/pq v1.10.9 // indirect
 	github.com/mailru/easyjson v0.7.6 // indirect
+	github.com/rogpeppe/go-internal v1.6.1 // indirect
 	github.com/zeebo/xxh3 v1.0.2 // indirect
 	golang.org/x/crypto v0.53.0 // indirect
 	golang.org/x/mod v0.37.0 // indirect

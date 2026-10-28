@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -38,8 +39,8 @@ func TestPassword_SignupVerifyLoginLogout(t *testing.T) {
 	// Correct password but unverified: 403, and no session is created.
 	status, body = c.login(email, goodPassword)
 	wantStatus(t, status, http.StatusForbidden, body)
-	if body["error"] != "email_not_verified" || c.sessionToken() != "" {
-		t.Errorf("unverified login: body=%v session=%q, want email_not_verified and no session", body, c.sessionToken())
+	if body["error"] != "email_not_verified" || c.refreshCookie() != "" || c.access != "" {
+		t.Errorf("unverified login: body=%v, want email_not_verified and no tokens issued", body)
 	}
 	if status, _ = c.get("/api/auth/me"); status != http.StatusUnauthorized {
 		t.Errorf("/me before login = %d, want 401", status)
@@ -48,20 +49,24 @@ func TestPassword_SignupVerifyLoginLogout(t *testing.T) {
 	status, body = c.post("/api/auth/email/verify", map[string]string{"token": tokenFrom(t, mails[0]), "password": goodPassword})
 	wantStatus(t, status, http.StatusOK, body)
 
-	// Login (email typed in different case) returns the user, never credential fields.
+	// Login (email typed in different case) returns an access token and the user, never credential
+	// fields; the refresh token travels only in the cookie.
 	status, body = c.login("  "+strings.ToUpper(email)+" ", goodPassword)
 	wantStatus(t, status, http.StatusOK, body)
-	if body["email"] != email || body["display_name"] != "Tester" {
-		t.Errorf("user = %v, want email %s and trimmed name", body, email)
+	user, _ := body["user"].(map[string]any)
+	if user["email"] != email || user["display_name"] != "Tester" {
+		t.Errorf("user = %v, want email %s and trimmed name", user, email)
 	}
 	for _, leaked := range []string{"password_hash", "PasswordHash", "google_id"} {
-		if _, ok := body[leaked]; ok {
+		if _, ok := user[leaked]; ok {
 			t.Errorf("response leaks %q", leaked)
 		}
 	}
-	token := c.sessionToken()
-	if token == "" || !e.sessionRowExists(t, token) {
-		t.Fatalf("expected a persisted session, cookie=%q", token)
+	if _, ok := body["refresh_token"]; ok {
+		t.Error("browser login must not expose the refresh token in the body")
+	}
+	if c.access == "" || c.refreshCookie() == "" || e.activeRefreshTokens(t, email) != 1 {
+		t.Fatalf("expected an access token, a refresh cookie and one stored login (access=%q)", c.access)
 	}
 	if got := e.provisioned.Load(); got != 1 {
 		t.Errorf("provisioned %d times after first login, want 1", got)
@@ -81,41 +86,20 @@ func TestPassword_SignupVerifyLoginLogout(t *testing.T) {
 		t.Errorf("provisioned %d times after second login, want still 1", got)
 	}
 
-	// Logout removes the server-side row, so the cookie is dead even if replayed.
+	// Logout revokes that login: its refresh token is dead even if replayed.
+	oldCookie := c.refreshCookie()
 	status, body = c.post("/api/auth/logout", nil)
 	wantStatus(t, status, http.StatusOK, body)
-	if e.sessionRowExists(t, token) {
-		t.Error("session row still present after logout")
+	if c.refreshCookie() != "" {
+		t.Error("refresh cookie not cleared on logout")
 	}
-	if status, _ = c.get("/api/auth/me"); status != http.StatusUnauthorized {
-		t.Errorf("/me after logout = %d, want 401", status)
+	replay := e.newClient(t)
+	replay.http.Jar.SetCookies(mustURL(c.base+"/api/auth/refresh"), []*http.Cookie{{Name: refreshCookieName, Value: oldCookie, Path: "/api/auth"}})
+	if status, _ = replay.refresh(); status != http.StatusUnauthorized {
+		t.Errorf("replayed refresh token after logout = %d, want 401", status)
 	}
-	if status, _ = other.get("/api/auth/me"); status != http.StatusOK {
-		t.Errorf("logging out one browser ended the other's session (%d)", status)
-	}
-}
-
-// Regression guard for session fixation: a session id planted before login must not survive it.
-func TestPassword_LoginRotatesSessionID(t *testing.T) {
-	e := newAuthEnv(t)
-	email := e.signupAndVerify(t, goodPassword)
-	c := e.newClient(t)
-
-	if status, _ := c.get("/test/anon"); status != http.StatusOK {
-		t.Fatalf("anon session setup = %d", status)
-	}
-	planted := c.sessionToken()
-	if planted == "" {
-		t.Fatal("expected an anonymous session cookie")
-	}
-
-	status, body := c.login(email, goodPassword)
-	wantStatus(t, status, http.StatusOK, body)
-	if after := c.sessionToken(); after == planted || after == "" {
-		t.Errorf("session id not rotated on login: before=%q after=%q", planted, after)
-	}
-	if e.sessionRowExists(t, planted) {
-		t.Error("pre-login session row still valid after login")
+	if status, _ = other.refresh(); status != http.StatusOK {
+		t.Errorf("logging out one browser ended the other's login (%d)", status)
 	}
 }
 
@@ -236,8 +220,8 @@ func TestPassword_SignupOverUnverifiedReplacesCredentials(t *testing.T) {
 	}
 	status, body = e.newClient(t).login(email, goodPassword)
 	wantStatus(t, status, http.StatusOK, body)
-	if body["display_name"] != "Owner" {
-		t.Errorf("display_name = %v, want Owner", body["display_name"])
+	if user, _ := body["user"].(map[string]any); user["display_name"] != "Owner" {
+		t.Errorf("display_name = %v, want Owner", user["display_name"])
 	}
 }
 
@@ -408,7 +392,6 @@ func TestPassword_ForgotAndReset(t *testing.T) {
 	bystanderEmail := e.signupAndVerify(t, goodPassword)
 	bystander := e.newClient(t)
 	bystander.login(bystanderEmail, goodPassword)
-	laptopToken := laptop.sessionToken()
 
 	t.Run("unknown address gets the same answer and no mail", func(t *testing.T) {
 		before := len(e.mail.all())
@@ -445,17 +428,15 @@ func TestPassword_ForgotAndReset(t *testing.T) {
 		t.Errorf("new password rejected (%d %v)", status, body)
 	}
 
-	// Every existing session of that user is gone; unrelated users are untouched.
+	// Every existing login of that user can no longer renew; unrelated users are untouched.
+	// (Access tokens already issued stay valid until they expire, at most AccessTokenTTL.)
 	for name, c := range map[string]*client{"laptop": laptop, "phone": phone} {
-		if status, _ := c.get("/api/auth/me"); status != http.StatusUnauthorized {
-			t.Errorf("%s session survived the reset (%d)", name, status)
+		if status, _ := c.refresh(); status != http.StatusUnauthorized {
+			t.Errorf("%s login survived the reset (%d)", name, status)
 		}
 	}
-	if e.sessionRowExists(t, laptopToken) {
-		t.Error("laptop session row not deleted")
-	}
-	if status, _ := bystander.get("/api/auth/me"); status != http.StatusOK {
-		t.Errorf("reset for one user ended another user's session (%d)", status)
+	if status, _ := bystander.refresh(); status != http.StatusOK {
+		t.Errorf("reset for one user ended another user's login (%d)", status)
 	}
 
 	if status, _ := e.newClient(t).post("/api/auth/password/reset", map[string]string{"token": token, "password": "another-password"}); status != http.StatusBadRequest {
@@ -586,4 +567,12 @@ func TestPassword_SignupWithMultiByteName(t *testing.T) {
 	if user.IDPrefix != "AAÉ" {
 		t.Errorf("id_prefix = %q, want AAÉ", user.IDPrefix)
 	}
+}
+
+func mustURL(raw string) *url.URL {
+	u, err := url.Parse(raw)
+	if err != nil {
+		panic(err)
+	}
+	return u
 }

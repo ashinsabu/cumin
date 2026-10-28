@@ -22,18 +22,14 @@ type mobileLoginRequest struct {
 	IDToken string `json:"id_token"`
 }
 
-type mobileLoginResponse struct {
-	Token string `json:"token"`
-	User  *User  `json:"user"`
-}
-
-// HandleMobileLogin exchanges a Google ID token from a native app (Google Sign-In SDK) for a Cumin JWT.
-// Unlike the web callback, the JWT is returned in the body; the app sends it back as `Authorization: Bearer`.
+// HandleMobileLogin exchanges a Google ID token from a native app (Google Sign-In SDK) for a short-lived Cumin access JWT (sent as
+// `Authorization: Bearer`) and a rotating refresh token, both returned in the body because native
+// apps have no cookie jar. The app renews through POST /api/auth/refresh with {refresh_token}.
 func (h *Handler) HandleMobileLogin(w http.ResponseWriter, r *http.Request) {
 	api.Handle(h.mobileLogin)(w, r)
 }
 
-func (h *Handler) mobileLogin(ctx context.Context, req mobileLoginRequest) (*mobileLoginResponse, error) {
+func (h *Handler) mobileLogin(ctx context.Context, req mobileLoginRequest) (*authResponse, error) {
 	l := applogger.FromContext(ctx)
 
 	if len(h.cfg.AppClientIDs) == 0 {
@@ -56,9 +52,9 @@ func (h *Handler) mobileLogin(ctx context.Context, req mobileLoginRequest) (*mob
 	if err != nil {
 		return nil, api.Internal("internal error")
 	}
-	jwtToken, err := IssueToken(h.cfg.JWTSecret, user.ID, user.Email, MobileTokenTTL)
+	resp, err := h.startNativeLogin(ctx, user)
 	if err != nil {
-		l.Error("auth: JWT issue failed", slog.String("user_id", user.ID), slog.Any("err", err))
+		l.Error("auth: start login failed", slog.String("user_id", user.ID), slog.Any("err", err))
 		return nil, api.Internal("internal error")
 	}
 
@@ -66,7 +62,7 @@ func (h *Handler) mobileLogin(ctx context.Context, req mobileLoginRequest) (*mob
 		slog.String("email", info.Email),
 		slog.String("user_id", user.ID),
 	)
-	return &mobileLoginResponse{Token: jwtToken, User: user}, nil
+	return resp, nil
 }
 
 // verifyGoogleIDToken validates the token with Google, then checks it was issued

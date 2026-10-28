@@ -290,18 +290,6 @@ func TestRepo_Tokens(t *testing.T) {
 	})
 }
 
-func TestRepo_SetPasswordVerified(t *testing.T) {
-	repo, email, ctx := newRepoEnv(t)
-	u, _ := repo.CreatePasswordUser(ctx, email, "old", "N")
-	if err := repo.SetPasswordVerified(ctx, u.ID, "new"); err != nil {
-		t.Fatal(err)
-	}
-	got, _ := repo.GetUserByID(ctx, u.ID)
-	if got.PasswordHash != "new" || got.EmailVerifiedAt == nil {
-		t.Errorf("user = %+v, want new password and verified email", got)
-	}
-}
-
 // Regression: when provisioning failed because the request was cancelled, the claim was released
 // with that same cancelled context, so the release failed too. The user stayed marked provisioned
 // with no default project/statuses and no later login retried.

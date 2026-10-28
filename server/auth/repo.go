@@ -175,13 +175,36 @@ func (r *Repo) MarkEmailVerified(ctx context.Context, userID, passwordHash strin
 	return tag.RowsAffected() == 1, nil
 }
 
-// SetPasswordVerified stores a new password after a successful reset. Possessing the reset link
-// proves control of the mailbox, so the email counts as verified.
-func (r *Repo) SetPasswordVerified(ctx context.Context, userID, passwordHash string) error {
-	_, err := r.db.Exec(ctx, `
+// ResetPassword consumes a reset token, stores the new password (possessing the link proves control
+// of the mailbox, so the email counts as verified) and revokes every refresh token of the user, all
+// in one transaction: a half-applied reset must never leave old logins alive next to the new password.
+func (r *Repo) ResetPassword(ctx context.Context, rawToken, passwordHash string) (string, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback(ctx)
+
+	var userID string
+	err = tx.QueryRow(ctx, `
+		UPDATE auth_tokens SET used_at = NOW()
+		WHERE token_hash = $1 AND purpose = $2 AND used_at IS NULL AND expires_at > NOW()
+		RETURNING user_id`, hashToken(rawToken), string(purposeResetPassword)).Scan(&userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrInvalidToken
+	}
+	if err != nil {
+		return "", err
+	}
+	if _, err = tx.Exec(ctx, `
 		UPDATE users SET password_hash = $2, email_verified_at = COALESCE(email_verified_at, NOW()), updated_at = NOW()
-		WHERE id = $1`, userID, passwordHash)
-	return err
+		WHERE id = $1`, userID, passwordHash); err != nil {
+		return "", err
+	}
+	if _, err = tx.Exec(ctx, `UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL`, userID); err != nil {
+		return "", err
+	}
+	return userID, tx.Commit(ctx)
 }
 
 // ClaimProvisioning marks the user as provisioned and reports whether this caller won the claim.
