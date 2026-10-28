@@ -92,4 +92,15 @@ export type QueueItem = {
   promoted_item_id: string | null
   completed_at: string | null
   created_at: string
+  // Computed by the server for "now" (never stored); absent on optimistic items until the next refetch.
+  attention?: QueueAttention
+}
+
+export type QueueAttention = { level: 'calm' | 'watch' | 'pulse'; reason?: string }
+
+export type QueueSummary = {
+  planned_minutes: number
+  budget_minutes: number
+  unestimated_count: number
+  minutes_left_today: number
 }

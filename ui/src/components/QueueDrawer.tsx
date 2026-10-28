@@ -24,6 +24,18 @@ function isStale(item: QueueItem): boolean {
 
 type SortAlgo = 'auto' | 'priority' | 'shortest' | 'custom'
 
+// Items the server says cannot fit in today (see server/queue/attention.go). Drives the collapsed-tab badge.
+function pulseCount(items: QueueItem[]): number {
+  return items.filter((i) => !isStale(i) && i.attention?.level === 'pulse').length
+}
+
+// Load meter colour: calm under 6h of planned work, accent up to the 8h budget, danger past it.
+function loadClass(plannedMinutes: number, budgetMinutes: number): string {
+  if (plannedMinutes > budgetMinutes) return 'bg-danger/10 text-danger'
+  if (plannedMinutes >= budgetMinutes * 0.75) return 'bg-accent/10 text-accent'
+  return 'bg-line text-dim'
+}
+
 function sortItems(items: QueueItem[], algo: SortAlgo): QueueItem[] {
   const s = [...items]
   switch (algo) {
@@ -203,7 +215,7 @@ export function ExpandedEditor({ item }: ExpandedEditorProps) {
 
   if (converted) {
     return (
-      <div className="px-4 py-3 text-sm text-ghost italic">Converted as {converted}</div>
+      <div className="px-4 py-3 text-sm text-ghost italic">Sent to board as {converted}</div>
     )
   }
 
@@ -266,7 +278,7 @@ export function ExpandedEditor({ item }: ExpandedEditorProps) {
           <div className="flex items-center gap-2 pt-0.5">
             <button onClick={() => setConverting(true)}
               className="text-xs text-dim hover:text-ink transition-colors">
-              Add to board →
+              Send to board →
             </button>
           </div>
         ) : (
@@ -319,7 +331,9 @@ const BeltItem = forwardRef<HTMLDivElement, BeltItemProps>(function BeltItem({ i
       {isDragOver && (
         <div className="absolute top-0 left-0 right-0 h-0.5 bg-accent z-10" />
       )}
-      <div className="flex items-stretch border-b border-line/20 last:border-0">
+      <div className={`flex items-stretch border-b border-line/20 last:border-0 ${
+        item.attention?.level === 'pulse' ? 'queue-pulse' : item.attention?.level === 'watch' ? 'bg-accent/5' : ''
+      }`}>
         <div className={`w-1 shrink-0 ${railClass(index, total)}`} />
         <div className="flex flex-col items-center justify-start pt-3.5 px-2 shrink-0 cursor-grab active:cursor-grabbing select-none">
           <span className="text-[9px] font-mono text-ghost/50 leading-none">{String(index + 1).padStart(2, '0')}</span>
@@ -339,6 +353,11 @@ const BeltItem = forwardRef<HTMLDivElement, BeltItemProps>(function BeltItem({ i
               <PriorityBadge p={item.priority} />
               {item.estimate_minutes && (
                 <span className="text-xs font-medium text-dim">est {formatEstimate(item.estimate_minutes)}</span>
+              )}
+              {item.attention && item.attention.level !== 'calm' && (
+                <span title={item.attention.reason} className="text-xs font-medium text-accent">
+                  {item.attention.level === 'pulse' ? '● Won’t fit today' : '● Tight'}
+                </span>
               )}
             </div>
             <AgeBar createdAt={item.created_at} />
@@ -548,7 +567,7 @@ function StaleSection({ items }: { items: QueueItem[] }) {
                           onClick={() => { setConvertingProjectId(''); setConvertingEpicId(''); setConvertingSprintId(NO_SPRINT); setConvertingId(item.id) }}
                           className="text-[10px] px-2 py-0.5 rounded border border-line/50 text-ghost hover:text-accent hover:border-accent/40 transition-colors"
                         >
-                          → Convert
+                          → Send to board
                         </button>
                         <button
                           onClick={() => archiveItem(item.id)}
@@ -687,7 +706,7 @@ function EmptyBelt({ onAdd }: { onAdd: () => void }) {
     <div className="flex flex-col items-center justify-center flex-1 px-4 py-10 text-center gap-3">
       <div className="text-3xl opacity-20">⬚</div>
       <div>
-        <p className="text-sm font-medium text-dim">Belt is clear</p>
+        <p className="text-sm font-medium text-dim">No quick tasks</p>
         <p className="text-[11px] text-ghost mt-1 leading-relaxed">
           Capture bugs, blockers, quick decisions.<br />
           Quick tasks stay in this queue — they don't appear on the board.<br />
@@ -711,7 +730,7 @@ type QueueContentProps = {
 }
 
 function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: QueueContentProps) {
-  const { items, loading, createItem, archiveItem, completeItem, reorderItems } = useQueue()
+  const { items, summary, loading, createItem, archiveItem, completeItem, reorderItems } = useQueue()
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [showNew, setShowNew] = useState(false)
   const [draggingId, setDraggingId] = useState<string | null>(null)
@@ -720,7 +739,6 @@ function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: Qu
   const activeItems = items.filter((i) => !isStale(i))
   const staleItems = items.filter((i) => isStale(i))
   const sortedActive = sortItems(activeItems, sortAlgo)
-  const urgentCount = activeItems.filter((i) => i.urgency_score > 9).length
 
   const handleAddNew = (title: string, priority: number, estimate: string) => {
     const estimateMinutes = estimate ? parseEstimate(estimate) : null
@@ -762,8 +780,13 @@ function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: Qu
         {activeItems.length > 0 && (
           <span className="text-xs px-1.5 py-0.5 rounded-full bg-line text-ghost font-mono shrink-0">{activeItems.length}</span>
         )}
-        {urgentCount > 0 && (
-          <span title={`${urgentCount} urgent`} className="text-xs px-1.5 py-0.5 rounded bg-accent/10 text-accent font-bold shrink-0 whitespace-nowrap">● {urgentCount}</span>
+        {summary && summary.planned_minutes > 0 && (
+          <span
+            title={`${formatEstimate(summary.planned_minutes)} planned of a ${formatEstimate(summary.budget_minutes)} day${summary.unestimated_count > 0 ? ` · ${summary.unestimated_count} without an estimate` : ''}`}
+            className={`text-xs px-1.5 py-0.5 rounded font-medium shrink-0 whitespace-nowrap ${loadClass(summary.planned_minutes, summary.budget_minutes)}`}
+          >
+            {formatEstimate(summary.planned_minutes)} / {formatEstimate(summary.budget_minutes)}{summary.unestimated_count > 0 ? ` +${summary.unestimated_count}?` : ''}
+          </span>
         )}
         <div className="flex items-center gap-1.5 ml-auto">
           <Select
@@ -892,7 +915,7 @@ function HistorySection() {
 
 export function QueueDrawer({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   const { items } = useQueue()
-  const urgentCount = items.filter((i) => !isStale(i) && i.urgency_score > 9).length
+  const pulsing = pulseCount(items)
   const [sortAlgo, setSortAlgo] = useState<SortAlgo>(() => (localStorage.getItem('queue_sort') as SortAlgo) ?? 'auto')
 
   const handleSortChange = (algo: SortAlgo) => {
@@ -908,10 +931,10 @@ export function QueueDrawer({ open, onToggle }: { open: boolean; onToggle: () =>
       {!open ? (
         <button onClick={onToggle} className="flex-1 flex items-center justify-center bg-panel hover:bg-raised transition-colors group" title="Open queue">
           <span
-            className={`text-xs font-bold transition-colors group-hover:text-dim ${urgentCount > 0 ? 'text-accent' : 'text-ghost'}`}
+            className={`text-xs font-bold transition-colors group-hover:text-dim ${pulsing > 0 ? 'text-accent' : 'text-ghost'}`}
             style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', letterSpacing: 3 }}
           >
-            {urgentCount > 0 ? `● ${urgentCount}` : 'QUEUE'}
+            {pulsing > 0 ? `● ${pulsing}` : 'QUEUE'}
           </span>
         </button>
       ) : (
@@ -925,11 +948,11 @@ export function QueueDrawer({ open, onToggle }: { open: boolean; onToggle: () =>
 
 export function QueueMobileTrigger({ onToggle }: { onToggle: () => void }) {
   const { items } = useQueue()
-  const urgentCount = items.filter((i) => !isStale(i) && i.urgency_score > 9).length
+  const pulsing = pulseCount(items)
   return (
     <button onClick={onToggle} className="md:hidden flex items-center gap-1.5 text-sm px-2.5 py-1.5 rounded-[var(--c-radius-card)] bg-surface border border-line text-dim hover:text-ink">
       Queue
-      {urgentCount > 0 && <span className="text-xs px-1.5 rounded bg-accent/10 text-accent font-semibold">{urgentCount}</span>}
+      {pulsing > 0 && <span className="text-xs px-1.5 rounded bg-accent/10 text-accent font-semibold">{pulsing}</span>}
     </button>
   )
 }

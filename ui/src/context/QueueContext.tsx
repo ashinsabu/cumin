@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
-import type { QueueItem } from '../types'
+import type { QueueItem, QueueSummary } from '../types'
 import { useToast } from './ToastContext'
 import { authFetch } from '../lib/auth'
 import { useAuth } from './AuthContext'
@@ -33,6 +33,7 @@ type PromotePayload = { project_id: string; status_id: string; epic_id?: string 
 
 type QueueContextValue = {
   items: QueueItem[]
+  summary: QueueSummary | null
   loading: boolean
   createItem: (p: CreatePayload) => Promise<QueueItem>
   updateItem: (id: string, p: UpdatePayload) => Promise<void>
@@ -48,6 +49,7 @@ const QueueContext = createContext<QueueContextValue | null>(null)
 
 export function QueueProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<QueueItem[]>([])
+  const [summary, setSummary] = useState<QueueSummary | null>(null)
   const [loading, setLoading] = useState(true)
 
   const { push: pushToast } = useToast()
@@ -56,10 +58,13 @@ export function QueueProvider({ children }: { children: ReactNode }) {
 
   const fetchItems = useCallback(async () => {
     try {
-      const res = await authFetch(`/api/queue`)
+      // The server decides what "today" is for attention, so it needs the browser's timezone.
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+      const res = await authFetch(`/api/queue?tz=${encodeURIComponent(tz)}`)
       if (res.ok) {
         const data = await res.json()
         setItems(data.items ?? [])
+        setSummary(data.summary ?? null)
       }
     } catch {
       // transient network failure — queue stays empty, user can retry
@@ -72,8 +77,18 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const userId = user?.id
   useEffect(() => {
-    if (!userId) { setItems([]); return }
+    if (!userId) { setItems([]); setSummary(null); return }
     fetchItems()
+    // Attention depends on the clock, so re-ask every minute and whenever the user comes back to the tab.
+    const timer = setInterval(fetchItems, 60_000)
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchItems() }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', fetchItems)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', fetchItems)
+    }
   }, [userId, fetchItems])
 
   const createItem = useCallback(async (payload: CreatePayload): Promise<QueueItem> => {
@@ -105,12 +120,13 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       if (!res.ok) throw new Error('Failed to create queue item')
       const item: QueueItem = await res.json()
       setItems((prev) => prev.map((i) => i.id === tempId ? item : i).sort((a, b) => b.urgency_score - a.urgency_score))
+      fetchItems() // pick up attention + summary, which the create response does not carry
       return item
     } catch (e) {
       setItems((prev) => prev.filter((i) => i.id !== tempId))
       throw e
     }
-  }, [])
+  }, [fetchItems])
 
   const updateItem = useCallback(async (id: string, payload: UpdatePayload): Promise<void> => {
     const res = await authFetch(`/api/queue/${id}`, {
@@ -121,7 +137,8 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     if (!res.ok) throw new Error('Failed to update queue item')
     const updated: QueueItem = await res.json()
     setItems((prev) => prev.map((i) => i.id === id ? updated : i).sort((a, b) => b.urgency_score - a.urgency_score))
-  }, [])
+    fetchItems()
+  }, [fetchItems])
 
   const reorderItems = useCallback(async (ids: string[]): Promise<void> => {
     // Optimistic: reorder items in state by assigning new positions
@@ -163,7 +180,8 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       if (snapshot) setItems((prev) => [...prev, snapshot].sort((a, b) => b.urgency_score - a.urgency_score))
       throw new Error('Failed to mark queue item done')
     }
-  }, [])
+    fetchItems()
+  }, [fetchItems])
 
   const reviveItem = useCallback(async (id: string): Promise<void> => {
     const res = await authFetch(`/api/queue/${id}/revive`, { method: 'POST' })
@@ -181,11 +199,12 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     if (!res.ok) throw new Error('Failed to convert queue item')
     const result = await res.json()
     setItems((prev) => prev.filter((i) => i.id !== id))
+    fetchItems()
     return result
-  }, [])
+  }, [fetchItems])
 
   return (
-    <QueueContext.Provider value={{ items, loading, createItem, updateItem, archiveItem, deleteItemSilent, completeItem, reviveItem, reorderItems, promoteItem }}>
+    <QueueContext.Provider value={{ items, summary, loading, createItem, updateItem, archiveItem, deleteItemSilent, completeItem, reviveItem, reorderItems, promoteItem }}>
       {children}
     </QueueContext.Provider>
   )
