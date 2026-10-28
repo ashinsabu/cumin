@@ -2,8 +2,11 @@ package auth
 
 import (
 	"context"
+	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -97,5 +100,48 @@ func TestMobileLoginRefusesAccountLinkedToAnotherIdentity(t *testing.T) {
 	}
 	if strings.Contains(rec.Body.String(), "token") && strings.Contains(rec.Body.String(), "eyJ") {
 		t.Errorf("response contains a JWT: %s", rec.Body)
+	}
+}
+
+// The native iOS app is the user's main client and depends on this exact response shape. Changing
+// it breaks installed builds, so this test pins it: update the app first, then this test.
+func TestMobileLogin_ResponseContract(t *testing.T) {
+	e := newAuthEnv(t)
+	email := uniqueEmail(t, e.pool)
+	fakeTokenInfo(t, http.StatusOK, fmt.Sprintf(
+		`{"iss":"https://accounts.google.com","aud":%q,"sub":"sub-%s","email":%q,"email_verified":"true","name":"Ios User","picture":"p"}`,
+		testIOSClientID, email, email))
+
+	app := e.newClient(t)
+	app.noCSRF = true // native apps send no browser headers
+	status, body := app.post("/api/auth/google/mobile", map[string]string{"id_token": "google-id-token"})
+	wantStatus(t, status, http.StatusOK, body)
+
+	gotKeys := slices.Sorted(maps.Keys(body))
+	if want := []string{"access_token", "expires_in", "refresh_token", "user"}; !slices.Equal(gotKeys, want) {
+		t.Errorf("response keys = %v, want %v", gotKeys, want)
+	}
+	if exp, _ := body["expires_in"].(float64); exp != AccessTokenTTL.Seconds() {
+		t.Errorf("expires_in = %v, want %v", body["expires_in"], AccessTokenTTL.Seconds())
+	}
+	user, _ := body["user"].(map[string]any)
+	for _, k := range []string{"id", "email", "display_name", "avatar_url", "id_prefix"} {
+		if _, ok := user[k]; !ok {
+			t.Errorf("user is missing %q: %v", k, user)
+		}
+	}
+	if app.refreshCookie() != "" {
+		t.Error("native login must not set a cookie")
+	}
+
+	// The tokens work the way the app uses them: Bearer on data endpoints, body-mode refresh.
+	app.keepAccess(body)
+	if status, _ := app.get("/api/auth/me"); status != http.StatusOK {
+		t.Errorf("/me with the access token = %d, want 200", status)
+	}
+	status, refreshed := app.post("/api/auth/refresh", map[string]string{"refresh_token": body["refresh_token"].(string)})
+	wantStatus(t, status, http.StatusOK, refreshed)
+	if refreshed["refresh_token"] == "" || refreshed["access_token"] == "" {
+		t.Errorf("refresh response = %v, want rotated tokens", refreshed)
 	}
 }
