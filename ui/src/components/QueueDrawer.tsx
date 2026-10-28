@@ -414,7 +414,7 @@ const BeltItem = forwardRef<HTMLDivElement, BeltItemProps>(function BeltItem({ i
           className={`w-8 shrink-0 flex items-center justify-center border-l transition-all text-sm font-bold ${
             done
               ? 'border-green-500/30 bg-green-500/20 text-green-500'
-              : 'border-line/20 text-green-500/30 hover:text-green-500 hover:bg-green-500/15 hover:border-green-500/20'
+              : 'border-line/20 bg-green-500/10 text-green-500/70 hover:text-green-500 hover:bg-green-500/25 hover:border-green-500/30'
           }`}
         >
           ✓
@@ -422,7 +422,7 @@ const BeltItem = forwardRef<HTMLDivElement, BeltItemProps>(function BeltItem({ i
         <button
           onClick={(e) => { e.stopPropagation(); onArchive() }}
           title="Dismiss"
-          className="w-8 shrink-0 flex items-center justify-center border-l border-line/20 text-ghost/25 hover:text-accent hover:bg-accent/10 hover:border-accent/20 transition-all text-base"
+          className="w-8 shrink-0 flex items-center justify-center border-l border-line/20 bg-raised/40 text-ghost/70 hover:text-accent hover:bg-accent/15 hover:border-accent/30 transition-all text-base"
         >
           ×
         </button>
@@ -745,11 +745,12 @@ function EmptyBelt({ onAdd }: { onAdd: () => void }) {
         <p className="text-sm font-medium text-dim">Belt is clear</p>
         <p className="text-[11px] text-ghost mt-1 leading-relaxed">
           Capture bugs, blockers, quick decisions.<br />
+          Quick tasks stay in this queue — they don't appear on the board.<br />
           Items older than 24h auto-archive below.
         </p>
       </div>
       <button onClick={onAdd} className="text-sm px-4 py-2 rounded-[var(--c-radius-card)] bg-accent/10 text-accent hover:bg-accent/20 font-medium transition-colors">
-        + Add first item
+        + Add quick task
       </button>
     </div>
   )
@@ -812,7 +813,7 @@ function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: Qu
     <>
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-line shrink-0">
-        <span className={`font-semibold text-ink ${headerSize === 'md' ? 'text-base' : 'text-sm'}`}>Queue</span>
+        <span className={`font-semibold text-ink ${headerSize === 'md' ? 'text-base' : 'text-sm'}`}>Quick Task Queue</span>
         {activeItems.length > 0 && (
           <span className="text-xs px-1.5 py-0.5 rounded-full bg-line text-ghost font-mono">{activeItems.length}</span>
         )}

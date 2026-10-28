@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"os"
-	"strings"
 	"testing"
 )
 
@@ -26,9 +25,9 @@ type promoteResultJSON struct {
 	ItemDisplay string `json:"item_display_id"`
 }
 
-// queueEnabled returns true when the FEATURE_FLAGS env var contains "queue".
+// queueEnabled is true unless the queue feature is killed via QUEUE_DISABLED (features ship on by default).
 func queueEnabled() bool {
-	return strings.Contains(os.Getenv("FEATURE_FLAGS"), "queue")
+	return os.Getenv("QUEUE_DISABLED") != "true"
 }
 
 // hardDeleteQueueItem removes a queue item from the DB.
@@ -51,7 +50,7 @@ func createQueueItem(t *testing.T, title string, priority int) queueItemJSON {
 
 func TestQueue_CoreFlow(t *testing.T) {
 	if !queueEnabled() {
-		t.Skip("queue feature flag not set — set FEATURE_FLAGS=queue to run queue tests")
+		t.Skip("queue feature disabled (QUEUE_DISABLED=true)")
 	}
 
 	srv := testEnv.Server
