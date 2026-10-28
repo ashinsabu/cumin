@@ -181,7 +181,14 @@ function PlanningSprintCard({
         </p>
       </div>
       <button
-        onClick={() => activateSprint.mutate(sprint.id)}
+        onClick={() => {
+          // Activating early is allowed, but never silently: the dates on the Board would not match today.
+          const startsInFuture = new Date(sprint.start_date).getTime() > Date.now()
+          if (startsInFuture && !window.confirm(
+            `${sprint.name} is scheduled for ${formatDate(sprint.start_date)} – ${formatDate(sprint.end_date)}. Start it now anyway?`,
+          )) return
+          activateSprint.mutate(sprint.id)
+        }}
         disabled={hasActiveSprint || activateSprint.isPending}
         title={hasActiveSprint ? 'Close the active sprint before activating another' : undefined}
         className="shrink-0 px-3 py-1.5 rounded-[var(--c-radius-card)] text-sm font-semibold bg-accent text-white hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"

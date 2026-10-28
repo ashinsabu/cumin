@@ -8,6 +8,7 @@ import { useProjects } from '../hooks/useProjects'
 import { useActiveSprint } from '../hooks/useSprints'
 import { ItemCard } from '../components/ItemCard'
 import { statusDisplayColor } from '../components/ui'
+import { scopeItems, type BoardScope } from '../lib/boardScope'
 import type { Project } from '../types/index'
 
 type FilterDropdownProps = {
@@ -26,7 +27,7 @@ const ProjectFilterDropdown = forwardRef<HTMLDivElement, FilterDropdownProps>(fu
   ref,
 ) {
   return (
-    <div ref={ref} className="relative ml-auto">
+    <div ref={ref} className="relative">
       <button
         onClick={onToggle}
         className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-[var(--c-radius-card)] border transition-colors ${
@@ -136,9 +137,14 @@ export function BoardView() {
   // properly await cancelQueries without racing against this visual state.
   const [pendingMoves, setPendingMoves] = useState<Record<string, string>>({})
 
-  const items = useMemo(
+  const [scope, setScope] = useState<BoardScope>('sprint')
+  const projectItems = useMemo(
     () => isAll ? allItems : allItems.filter(i => i.project_id && filteredIds.has(i.project_id)),
     [allItems, filteredIds, isAll],
+  )
+  const items = useMemo(
+    () => scopeItems(projectItems, activeSprint?.id, scope),
+    [projectItems, activeSprint?.id, scope],
   )
 
   const displayItems = useMemo(
@@ -168,9 +174,8 @@ export function BoardView() {
       ))
     : 0
   const fmtDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-  const daysLeft = activeSprint
-    ? Math.ceil((new Date(activeSprint.end_date).getTime() - Date.now()) / 86400000)
-    : null
+  // Server-computed so the Board and the Sprints page can never disagree.
+  const daysLeft = activeSprint ? activeSprint.days_remaining : null
 
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
@@ -191,6 +196,36 @@ export function BoardView() {
             <span className="text-xs text-dim">
               <span className="font-medium text-ink/70">{doneItems.length}/{items.length}</span> done
             </span>
+            <div className="ml-auto flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setScope((s) => (s === 'sprint' ? 'all' : 'sprint'))}
+                className="text-xs font-medium px-2 py-0.5 rounded-full border border-line text-dim hover:text-ink hover:border-ghost transition-colors"
+                title={scope === 'sprint' ? 'Showing this sprint only — click to include backlog items' : 'Showing all items — click to show this sprint only'}
+              >
+                {scope === 'sprint' ? 'This sprint' : 'All items'}
+              </button>
+              <ProjectFilterDropdown
+                ref={filterRef}
+                projects={projects}
+                filteredIds={filteredIds}
+                isAll={isAll}
+                filterLabel={filterLabel}
+                showFilter={showFilter}
+                onToggle={() => setShowFilter(s => !s)}
+                onToggleProject={toggleProject}
+                onSelectAll={() => setFilteredIds(new Set())}
+              />
+            </div>
+          </div>
+          <div className="h-0.5 bg-line">
+            <div className="h-full bg-dim/40 transition-all duration-500" style={{ width: `${timeProgress}%` }} />
+          </div>
+        </div>
+      ) : (
+        <div className="shrink-0 flex items-center gap-4 px-4 py-2.5 border-b border-line bg-surface">
+          <span className="text-xs text-ghost/60">No active sprint</span>
+          <div className="ml-auto">
             <ProjectFilterDropdown
               ref={filterRef}
               projects={projects}
@@ -203,24 +238,6 @@ export function BoardView() {
               onSelectAll={() => setFilteredIds(new Set())}
             />
           </div>
-          <div className="h-0.5 bg-line">
-            <div className="h-full bg-dim/40 transition-all duration-500" style={{ width: `${timeProgress}%` }} />
-          </div>
-        </div>
-      ) : (
-        <div className="shrink-0 flex items-center gap-4 px-4 py-2.5 border-b border-line bg-surface">
-          <span className="text-xs text-ghost/60">No active sprint</span>
-          <ProjectFilterDropdown
-            ref={filterRef}
-            projects={projects}
-            filteredIds={filteredIds}
-            isAll={isAll}
-            filterLabel={filterLabel}
-            showFilter={showFilter}
-            onToggle={() => setShowFilter(s => !s)}
-            onToggleProject={toggleProject}
-            onSelectAll={() => setFilteredIds(new Set())}
-          />
         </div>
       )}
       <div className="flex-1 overflow-x-auto">

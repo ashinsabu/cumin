@@ -40,7 +40,7 @@ export type Item = {
 
 export type Sprint = {
   id: string
-  board_id: string
+  project_id: string
   name: string
   sprint_number: number
   start_date: string

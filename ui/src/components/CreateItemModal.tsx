@@ -3,6 +3,7 @@ import { useCreateItem } from '../hooks/useItems'
 import { useEpics } from '../hooks/useEpics'
 import { useProjects } from '../hooks/useProjects'
 import { FilterSelect } from './FilterSelect'
+import { SprintSelect, NO_SPRINT } from './SprintSelect'
 import { parseEstimate } from '../hooks/useFormat'
 
 type Props = {
@@ -17,6 +18,7 @@ export function CreateItemModal({ onClose, onCreated }: Props) {
   const [title, setTitle] = useState('')
   const [projectId, setProjectId] = useState(projects[0]?.id ?? '')
   const [epicId, setEpicId] = useState('')
+  const [sprintId, setSprintId] = useState(NO_SPRINT)
   const [priority, setPriority] = useState(3)
   const [estimateRaw, setEstimateRaw] = useState('')
   const [estimateError, setEstimateError] = useState('')
@@ -56,6 +58,7 @@ export function CreateItemModal({ onClose, onCreated }: Props) {
         title: title.trim(),
         project_id: projectId,
         epic_id: epicId || null,
+        sprint_id: sprintId === NO_SPRINT ? null : sprintId,
         priority,
         estimate_minutes: estimateMinutes,
       })
@@ -102,7 +105,7 @@ export function CreateItemModal({ onClose, onCreated }: Props) {
             <FilterSelect
               fullWidth
               value={projectId}
-              onChange={setProjectId}
+              onChange={(v) => { setProjectId(v); setSprintId(NO_SPRINT) }}
               options={projects.map((p) => ({ value: p.id, label: `${p.name} (${p.prefix})` }))}
             />
           </div>
@@ -121,6 +124,11 @@ export function CreateItemModal({ onClose, onCreated }: Props) {
               />
             </div>
           )}
+
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-dim">Sprint <span className="text-ghost font-normal">(optional)</span></label>
+            <SprintSelect projectId={projectId} value={sprintId} onChange={setSprintId} />
+          </div>
 
           <div className="flex flex-col gap-1">
             <label className="text-xs font-semibold text-dim">Priority</label>
