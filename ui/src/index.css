@@ -15,6 +15,7 @@
   --color-ghost:   var(--c-ghost);
   --color-accent:  var(--c-accent);
   --color-danger:  var(--c-danger);
+  --color-warn:    var(--c-warn);
   --radius-chrome: var(--c-radius-chrome);
   --radius-card:   var(--c-radius-card);
   --radius-badge:  var(--c-radius-badge);
@@ -35,6 +36,7 @@
   --c-ghost:   #71717a;
   --c-accent:  #e11d48;
   --c-danger:  #ef4444; /* error text; readable on every preset, so not overridden per theme */
+  --c-warn:    #f59e0b; /* "getting tight" text (queue time left); same rule as danger */
   --c-accent-fg: #ffffff;
   --c-radius-chrome: 0px;
   --c-radius-card:   0px;

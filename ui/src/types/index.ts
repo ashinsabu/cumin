@@ -96,7 +96,7 @@ export type QueueItem = {
   attention?: QueueAttention
 }
 
-export type QueueAttention = { level: 'calm' | 'watch' | 'pulse'; reason?: string }
+export type QueueAttention = { level: 'calm' | 'watch' | 'pulse'; reason?: string; room_minutes?: number }
 
 export type QueueSummary = {
   planned_minutes: number

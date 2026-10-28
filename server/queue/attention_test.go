@@ -87,3 +87,16 @@ func TestAttention_EndOfDayUsesTheBrowserTimezone(t *testing.T) {
 		t.Fatalf("EndOfDay = %v, want %v", got, want)
 	}
 }
+
+// RoomMinutes is what the UI shows as "(2h left today)": time left once the work ahead is done, floored at 0.
+func TestAttention_RoomIsTimeLeftAfterWorkAhead(t *testing.T) {
+	now := time.Date(2026, 10, 28, 20, 0, 0, 0, time.UTC) // 4h to midnight
+	items := []QueueItem{mk("a", 9, mins(120), time.Hour, now), mk("b", 5, mins(180), time.Hour, now), mk("c", 1, mins(30), time.Hour, now)}
+	ComputeAttention(items, now, time.UTC)
+	want := map[string]int{"a": 240, "b": 120, "c": 0} // b ends past midnight, so c has no room
+	for _, it := range items {
+		if it.Attention.RoomMinutes != want[it.ID] {
+			t.Errorf("%s room = %d, want %d", it.ID, it.Attention.RoomMinutes, want[it.ID])
+		}
+	}
+}

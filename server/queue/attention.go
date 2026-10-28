@@ -21,6 +21,8 @@ const (
 type Attention struct {
 	Level  string `json:"level"`
 	Reason string `json:"reason,omitempty"`
+	// RoomMinutes is the time left for this item once the work ahead of it is done (until end of day or its expiry).
+	RoomMinutes int `json:"room_minutes"`
 }
 
 // Summary describes the day's load for the whole queue.
@@ -77,13 +79,15 @@ func ComputeAttention(items []QueueItem, now time.Time, loc *time.Location) Summ
 			limit, byExpiry = expires, true
 		}
 		slack := limit.Sub(finish)
+		room := max(int(limit.Sub(cursor).Minutes()), 0)
 		switch {
 		case slack < 0:
 			it.Attention = Attention{Level: AttentionPulse, Reason: reasonCannotFit(est, aheadMins, limit.Sub(now), byExpiry)}
 			pulseCandidates = append(pulseCandidates, idx)
 		case slack < watchSlackMins*time.Minute:
-			it.Attention = Attention{Level: AttentionWatch, Reason: fmt.Sprintf("Tight: %s to spare", fmtMins(int(slack.Minutes())))}
+			it.Attention = Attention{Level: AttentionWatch, Reason: fmt.Sprintf("Only %s to spare", fmtMins(int(slack.Minutes())))}
 		}
+		it.Attention.RoomMinutes = room
 		cursor = finish
 		aheadMins += est
 	}

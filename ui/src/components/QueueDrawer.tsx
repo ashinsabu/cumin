@@ -482,8 +482,8 @@ const BeltItem = forwardRef<HTMLDivElement, BeltItemProps>(function BeltItem({ i
                 <span className="text-xs font-medium text-dim">est {formatEstimate(item.estimate_minutes)}</span>
               )}
               {(item.attention?.level === 'watch' || item.attention?.level === 'pulse') && (
-                <span title={item.attention.reason} className="text-xs font-medium text-accent">
-                  {item.attention.level === 'pulse' ? '● Won’t fit today' : '● Tight'}
+                <span title={item.attention.reason} className={`text-xs font-medium ${item.attention.level === 'pulse' ? 'text-danger' : 'text-warn'}`}>
+                  ({formatEstimate(item.attention.room_minutes ?? 0)} left today)
                 </span>
               )}
             </div>
@@ -663,10 +663,23 @@ function StaleSection({ items }: { items: QueueItem[] }) {
 
 // ─── New item form ─────────────────────────────────────────────────────────────
 
+// What the server shows on rows, previewed while creating: a new entry goes last, so its room is the day's
+// remaining time minus everything already queued (unestimated entries count 30m, like the server).
+function useRoomHint(estimate: string) {
+  const { summary } = useQueue()
+  const minutes = estimate ? parseEstimate(estimate) : null
+  if (!summary || !minutes) return null
+  const room = Math.max(summary.minutes_left_today - summary.planned_minutes - summary.unestimated_count * 30, 0)
+  const slack = room - minutes
+  if (slack >= 60) return null
+  return { text: `(${formatEstimate(room)} left today)`, className: slack < 0 ? 'text-danger' : 'text-warn' }
+}
+
 function NewItemForm({ onCreate, onDiscard }: { onCreate: (t: string, p: number, e: string) => void; onDiscard: () => void }) {
   const [title, setTitle] = useState('')
   const [priority, setPriority] = useState(2)
   const [estimate, setEstimate] = useState('')
+  const roomHint = useRoomHint(estimate)
 
   const submit = () => {
     if (!title.trim()) return
@@ -720,6 +733,7 @@ function NewItemForm({ onCreate, onDiscard }: { onCreate: (t: string, p: number,
               placeholder="other"
               className="w-12 text-xs bg-surface border border-line rounded px-2 py-0.5 text-ink focus:outline-none focus:border-accent/50 placeholder:text-ghost"
             />
+            {roomHint && <span className={`text-xs font-medium ml-1 ${roomHint.className}`}>{roomHint.text}</span>}
           </div>
           <div className="flex gap-2">
             <button onClick={onDiscard} className="text-sm px-3 py-1.5 rounded-[var(--c-radius-card)] border border-line text-dim hover:bg-surface">

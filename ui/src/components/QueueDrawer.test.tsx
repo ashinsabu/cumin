@@ -52,6 +52,41 @@ describe('queue attention', () => {
   })
 })
 
+// The word badges are gone: rows and the create form show the room left today in brackets, warn vs danger by level.
+describe('queue room-left hint', () => {
+  const fresh = new Date().toISOString()
+  const mk = (id: string, level: string, room: number) => ({ id, title: id, notes: '', priority: 2, estimate_minutes: 180, position: 0, urgency_score: 0, created_at: fresh, attention: { level, reason: 'r', room_minutes: room } })
+
+  beforeEach(() => {
+    queueState.items = []
+    queueState.summary = null
+    vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => {} })
+  })
+
+  it('shows (X left today) next to the estimate: warn for watch, danger for pulse, nothing for calm', () => {
+    queueState.items = [mk('w', 'watch', 210), mk('p', 'pulse', 120), mk('c', 'calm', 400)]
+    render(<QueueDrawer open onToggle={() => {}} />)
+    expect(screen.getByText('(3h 30m left today)').className).toContain('text-warn')
+    expect(screen.getByText('(2h left today)').className).toContain('text-danger')
+    expect(screen.queryByText(/6h 40m left today/)).toBeNull()
+  })
+
+  it('previews the same hint while typing an estimate for a new entry', () => {
+    queueState.items = [mk('c', 'calm', 400)]
+    // 3h left today, 1h already queued -> 2h of room for a new entry
+    queueState.summary = { planned_minutes: 60, budget_minutes: 480, unestimated_count: 0, minutes_left_today: 180 }
+    render(<QueueDrawer open onToggle={() => {}} />)
+    fireEvent.click(screen.getByText('+'))
+    fireEvent.click(screen.getByText('15m'))
+    expect(screen.queryByText(/left today/)).toBeNull() // 1h45m of slack: no hint
+    fireEvent.click(screen.getByText('1h'))
+    fireEvent.change(screen.getByPlaceholderText('other'), { target: { value: '90m' } })
+    expect(screen.getByText('(2h left today)').className).toContain('text-warn') // 30m of slack
+    fireEvent.change(screen.getByPlaceholderText('other'), { target: { value: '3h' } })
+    expect(screen.getByText('(2h left today)').className).toContain('text-danger')
+  })
+})
+
 describe('queue mass selection', () => {
   const fresh = new Date().toISOString()
   const mk = (id: string, position: number) => ({ id, title: `task ${id}`, notes: '', priority: 2, estimate_minutes: null, position, urgency_score: 0, created_at: fresh, attention: { level: 'calm' } })
