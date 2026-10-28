@@ -40,6 +40,11 @@ type Config struct {
 	// PasswordAuthDisabled kills email+password auth. It also needs a mail provider to be on at all
 	// (see PasswordAuthEnabled).
 	PasswordAuthDisabled bool `envconfig:"PASSWORD_AUTH_DISABLED" default:"false"`
+
+	// TrustedProxyHops is how many reverse proxies sit in front of the server (Railway: 1). Rate
+	// limits and logs use the client address that many hops from the right of X-Forwarded-For; 0 means
+	// clients connect directly and the socket address is used.
+	TrustedProxyHops int `envconfig:"TRUSTED_PROXY_HOPS" default:"0"`
 }
 
 // IsFeatureEnabled returns true when the feature is not disabled.

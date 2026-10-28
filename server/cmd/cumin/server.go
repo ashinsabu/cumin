@@ -114,6 +114,7 @@ func (s *Server) Run(ctx context.Context) error {
 func (s *Server) Handler() http.Handler {
 	cfg := s.cfg
 	r := chi.NewRouter()
+	r.Use(auth.ClientIP(cfg.TrustedProxyHops))
 	r.Use(applogger.RequestLogger)
 	r.Use(middleware.Recoverer)
 

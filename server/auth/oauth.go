@@ -76,7 +76,7 @@ func (h *Handler) frontendURL() string {
 func (h *Handler) authError(w http.ResponseWriter, r *http.Request, reason string) {
 	applogger.FromContext(r.Context()).Warn("auth: login failed",
 		slog.String("reason", reason),
-		slog.String("ip", r.RemoteAddr),
+		slog.String("ip", clientIP(r)),
 	)
 	http.Redirect(w, r, h.frontendURL()+"/auth-error?reason="+url.QueryEscape(reason), http.StatusTemporaryRedirect)
 }
