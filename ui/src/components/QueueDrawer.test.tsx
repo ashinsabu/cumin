@@ -28,7 +28,11 @@ describe('queue ExpandedEditor', () => {
 
 // The header meter and collapsed-tab badge come from the server's attention model, not a client-side score.
 describe('queue attention', () => {
-  beforeEach(() => { vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => {} }) })
+  beforeEach(() => {
+    queueState.items = []
+    queueState.summary = null
+    vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => {} })
+  })
   const fresh = new Date().toISOString()
   const mk = (id: string, level: string) => ({ id, title: id, notes: '', priority: 2, estimate_minutes: 60, position: 0, urgency_score: 0, created_at: fresh, attention: { level, reason: 'r' } })
 
