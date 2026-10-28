@@ -104,7 +104,8 @@ function SendToBoardForm({ hint, submitting, onCancel, onSubmit }: SendToBoardFo
   const { data: projects = [] } = useProjects()
   const { data: statuses = [] } = useBoardStatuses()
   const { data: epics = [] } = useEpics()
-  const [projectId, setProjectId] = useState(projects[0]?.id ?? '')
+  const [pickedProjectId, setProjectId] = useState('')
+  const projectId = pickedProjectId || projects[0]?.id || '' // projects may still be loading when the form mounts
   const [epicId, setEpicId] = useState('')
   const [sprintId, setSprintId] = useState(NO_SPRINT)
 
@@ -480,7 +481,7 @@ const BeltItem = forwardRef<HTMLDivElement, BeltItemProps>(function BeltItem({ i
               {item.estimate_minutes && (
                 <span className="text-xs font-medium text-dim">est {formatEstimate(item.estimate_minutes)}</span>
               )}
-              {item.attention && item.attention.level !== 'calm' && (
+              {(item.attention?.level === 'watch' || item.attention?.level === 'pulse') && (
                 <span title={item.attention.reason} className="text-xs font-medium text-accent">
                   {item.attention.level === 'pulse' ? '● Won’t fit today' : '● Tight'}
                 </span>

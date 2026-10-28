@@ -56,7 +56,7 @@ function InlineText({ value, display, placeholder, validate, onSave, className }
         if (e.key === 'Enter') commit()
         if (e.key === 'Escape') { setEditing(false); setInvalid(false) }
       }}
-      className={`${className} w-full bg-canvas border rounded px-1 -mx-1 outline-none ${invalid ? 'border-red-500' : 'border-accent/60'}`}
+      className={`${className} w-full bg-canvas border rounded px-1 -mx-1 outline-none ${invalid ? 'border-danger' : 'border-accent/60'}`}
     />
   )
 }

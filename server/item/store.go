@@ -352,7 +352,7 @@ func (s *Store) Transitions(ctx context.Context, itemID string) ([]StatusTransit
 func (s *Store) Restore(ctx context.Context, id, userID string) error {
 	tag, err := s.DB.Exec(ctx, `
 		UPDATE items SET deleted_at = NULL
-		WHERE id = $1 AND project_id IN (SELECT id FROM projects WHERE user_id = $2)
+		WHERE id = $1 AND project_id IN (SELECT id FROM projects WHERE user_id = $2 AND deleted_at IS NULL)
 		AND deleted_at IS NOT NULL
 	`, id, userID)
 	if err != nil {

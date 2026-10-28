@@ -110,6 +110,9 @@ func (h *Handler) Create(ctx context.Context, req CreateRequest) (*QueueItem, er
 	if req.Title == "" {
 		return nil, api.BadRequest("title required")
 	}
+	if req.EstimateMinutes != nil && *req.EstimateMinutes < 0 {
+		return nil, api.BadRequest("estimate_minutes must not be negative")
+	}
 	userID := auth.UserIDFromContext(ctx)
 
 	q, err := h.store.Create(ctx, userID, userID, req.Title, req.Notes, req.Priority, req.EstimateMinutes)
@@ -124,6 +127,9 @@ func (h *Handler) Update(ctx context.Context, req UpdateRequest) (*QueueItem, er
 	userID := auth.UserIDFromContext(ctx)
 	if req.Title == "" {
 		return nil, api.BadRequest("title required")
+	}
+	if req.EstimateMinutes != nil && *req.EstimateMinutes < 0 {
+		return nil, api.BadRequest("estimate_minutes must not be negative")
 	}
 	q, err := h.store.Update(ctx, id, userID, req.Title, req.Notes, req.Priority, req.EstimateMinutes)
 	if err != nil {

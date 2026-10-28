@@ -93,7 +93,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     if (!userId) { setItems([]); setSummary(null); return }
     fetchItems()
     // Attention depends on the clock, so re-ask every minute and whenever the user comes back to the tab.
-    const timer = setInterval(fetchItems, 60_000)
+    const timer = setInterval(() => { if (document.visibilityState === 'visible') fetchItems() }, 60_000)
     const onVisible = () => { if (document.visibilityState === 'visible') fetchItems() }
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('focus', onVisible)
@@ -239,7 +239,8 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     if (!res.ok) throw new Error('Failed to revive queue item')
     const revived: QueueItem = await res.json()
     setItems((prev) => prev.map((i) => i.id === id ? revived : i))
-  }, [])
+    fetchItems() // the revive response carries no attention
+  }, [fetchItems])
 
   const promoteItem = useCallback(async (id: string, payload: PromotePayload) => {
     removing.current.add(id)

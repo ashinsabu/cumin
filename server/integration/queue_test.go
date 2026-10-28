@@ -381,3 +381,19 @@ func TestQueue_Restore_PositionTieBreaksByAge(t *testing.T) {
 		t.Fatalf("tie order = %v, want a (%s) before b (%s)", got, a.ID, b.ID)
 	}
 }
+
+// A negative estimate would shorten the simulated day and hide real overload.
+func TestQueue_NegativeEstimateRejected(t *testing.T) {
+	if !queueEnabled() {
+		t.Skip("queue feature disabled (QUEUE_DISABLED=true)")
+	}
+	resp := mustDo(t, testEnv.Server, "POST", "/api/queue", map[string]any{"title": "neg", "estimate_minutes": -480})
+	assertStatus(t, resp, http.StatusBadRequest)
+	drainClose(resp)
+
+	q := createQueueItem(t, "neg update", 2)
+	t.Cleanup(func() { hardDeleteQueueItem(q.ID) })
+	resp = mustDo(t, testEnv.Server, "PATCH", "/api/queue/"+q.ID, map[string]any{"title": "neg update", "estimate_minutes": -1})
+	assertStatus(t, resp, http.StatusBadRequest)
+	drainClose(resp)
+}
