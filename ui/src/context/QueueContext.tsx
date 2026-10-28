@@ -194,7 +194,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
         })
       },
       onCommit: () => Promise.all([...gone].map(id =>
-        authFetch(`/api/queue/${id}`, { method: 'DELETE' }).then(() => {}).finally(() => { removing.current.delete(id) }),
+        authFetch(`/api/queue/${id}`, { method: 'DELETE', keepalive: true }).then(() => {}).finally(() => { removing.current.delete(id) }), // keepalive: survives a reload during the undo window
       )).then(() => {}),
     })
   }, [pushToast])

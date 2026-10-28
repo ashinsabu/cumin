@@ -83,6 +83,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     return () => { timers.forEach(t => clearTimeout(t)) }
   }, [])
 
+  // Reload/close during an undo window must not silently cancel the action: commit whatever is still pending.
+  const toastsRef = useRef<ToastEntry[]>([])
+  useEffect(() => { toastsRef.current = toasts }, [toasts])
+  useEffect(() => {
+    const flush = () => { toastsRef.current.forEach((entry) => { entry.onCommit?.().catch(() => {}) }); toastsRef.current = [] }
+    window.addEventListener('pagehide', flush)
+    return () => window.removeEventListener('pagehide', flush)
+  }, [])
+
   return (
     <ToastContext.Provider value={{ push, dismiss }}>
       {children}
