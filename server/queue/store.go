@@ -66,7 +66,7 @@ func (s *Store) List(ctx context.Context, userID string) ([]QueueItem, error) {
 		SELECT `+listCols+`
 		FROM queue_items
 		WHERE user_id = $1 AND deleted_at IS NULL AND promoted_item_id IS NULL AND completed_at IS NULL
-		ORDER BY position ASC
+		ORDER BY position ASC, created_at ASC, id ASC
 	`, userID)
 	if err != nil {
 		return nil, err

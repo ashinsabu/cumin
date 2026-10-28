@@ -353,3 +353,31 @@ func TestQueue_Restore(t *testing.T) {
 	t.Cleanup(func() { hardDeleteItems(mustDecodeJSON[promoteResultJSON](t, resp).ItemID) })
 	assertStatus(t, mustDo(t, srv, "POST", "/api/queue/"+promotable.ID+"/restore", nil), http.StatusNotFound)
 }
+
+// Regression: restoring keeps the old position, which a newer entry may have taken; ties break by created_at.
+func TestQueue_Restore_PositionTieBreaksByAge(t *testing.T) {
+	if !queueEnabled() {
+		t.Skip("queue feature disabled (QUEUE_DISABLED=true)")
+	}
+	srv := testEnv.Server
+	a := createQueueItem(t, "tie a", 2)
+	t.Cleanup(func() { hardDeleteQueueItem(a.ID) })
+	drainClose(mustDo(t, srv, "DELETE", "/api/queue/"+a.ID, nil)) // frees a's position for the next create
+	b := createQueueItem(t, "tie b", 2)
+	t.Cleanup(func() { hardDeleteQueueItem(b.ID) })
+	assertStatus(t, mustDo(t, srv, "POST", "/api/queue/"+a.ID+"/restore", nil), http.StatusOK)
+
+	order := func() []string {
+		var ids []string
+		for _, qi := range mustDecodeJSON[queueListJSON](t, mustDo(t, srv, "GET", "/api/queue", nil)).Items {
+			if qi.ID == a.ID || qi.ID == b.ID {
+				ids = append(ids, qi.ID)
+			}
+		}
+		return ids
+	}
+	// a and b share a position; the older entry (a) must come first.
+	if got := order(); len(got) != 2 || got[0] != a.ID {
+		t.Fatalf("tie order = %v, want a (%s) before b (%s)", got, a.ID, b.ID)
+	}
+}

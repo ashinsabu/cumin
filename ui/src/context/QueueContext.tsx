@@ -182,10 +182,14 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     label: (entries) => entries.length === 1 ? 'Removed from queue' : `Removed ${entries.length} from queue`,
     undo: dismiss.undo,
     // removing hides the entries from refetches only while the DELETE is in flight; afterwards the server no longer lists them.
-    run: (entries) => dismiss.run(entries).finally(() => entries.forEach((e) => removing.current.delete(e.id))),
+    run: (entries) => dismiss.run(entries).finally(() => {
+      entries.forEach((e) => removing.current.delete(e.id))
+      fetchSeq.current++ // a list request that started before the DELETE committed may still list the entries; drop it
+    }),
     apply: (entries) => {
       const gone = new Set(entries.map((e) => e.id))
       gone.forEach((id) => removing.current.add(id))
+      fetchSeq.current++
       setItems((prev) => prev.filter((i) => !gone.has(i.id)))
     },
     revert: (entries) => {
