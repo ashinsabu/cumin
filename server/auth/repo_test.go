@@ -301,3 +301,30 @@ func TestRepo_SetPasswordVerified(t *testing.T) {
 		t.Errorf("user = %+v, want new password and verified email", got)
 	}
 }
+
+// Regression: when provisioning failed because the request was cancelled, the claim was released
+// with that same cancelled context, so the release failed too. The user stayed marked provisioned
+// with no default project/statuses and no later login retried.
+func TestEnsureProvisioned_ReleasesClaimEvenWhenRequestIsCancelled(t *testing.T) {
+	repo, email, _ := newRepoEnv(t)
+	user, err := repo.CreatePasswordUser(context.Background(), email, "h", "Cancel Me")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	failing := &Handler{repo: repo, provision: func(ctx context.Context, userID, name string) error {
+		cancel() // the client went away mid-provisioning
+		return ctx.Err()
+	}}
+	if err := failing.ensureProvisioned(ctx, user); err == nil {
+		t.Fatal("expected the provisioning error to be returned")
+	}
+
+	// The next login (fresh context) must win the claim again and provision.
+	claimed, err := repo.ClaimProvisioning(context.Background(), user.ID)
+	if err != nil || !claimed {
+		t.Fatalf("claim after failed provisioning = %v, %v; want true (retry possible)", claimed, err)
+	}
+}
