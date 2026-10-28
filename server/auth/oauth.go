@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -138,6 +139,10 @@ func (h *Handler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, err := h.signInGoogle(r.Context(), userInfo)
+	if errors.Is(err, ErrGoogleConflict) {
+		h.authError(w, r, "account_conflict")
+		return
+	}
 	if err != nil {
 		h.authError(w, r, "server_error")
 		return

@@ -77,3 +77,25 @@ func TestMobileLoginRejectsBeforeTouchingDB(t *testing.T) {
 		})
 	}
 }
+
+// Regression: a different Google identity with the same email as an already-linked account must be
+// refused, not handed the account.
+func TestMobileLoginRefusesAccountLinkedToAnotherIdentity(t *testing.T) {
+	pool := testPool(t)
+	repo := NewRepo(pool)
+	email := uniqueEmail(t, pool)
+	if _, err := repo.UpsertGoogleUser(context.Background(), "owner-sub-"+email, email, "Owner", ""); err != nil {
+		t.Fatal(err)
+	}
+	fakeTokenInfo(t, http.StatusOK, `{"iss":"https://accounts.google.com","aud":"ios-client","sub":"stranger-sub-`+email+`","email":"`+email+`","email_verified":"true","name":"Stranger"}`)
+
+	h := &Handler{cfg: OAuthConfig{AppClientIDs: []string{"ios-client"}, JWTSecret: testJWTSecret}, repo: repo}
+	rec := httptest.NewRecorder()
+	h.HandleMobileLogin(rec, httptest.NewRequest(http.MethodPost, "/api/auth/google/mobile", strings.NewReader(`{"id_token":"x"}`)))
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409 (body %s)", rec.Code, rec.Body)
+	}
+	if strings.Contains(rec.Body.String(), "token") && strings.Contains(rec.Body.String(), "eyJ") {
+		t.Errorf("response contains a JWT: %s", rec.Body)
+	}
+}

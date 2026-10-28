@@ -78,6 +78,45 @@ func TestRepo_UpsertGoogleUser(t *testing.T) {
 			t.Fatalf("err=%v linked=%+v, want link to %s", err, linked, u.ID)
 		}
 	})
+	t.Run("a different google identity cannot take over an already-linked account", func(t *testing.T) {
+		// e.g. a reassigned Workspace address: same verified email, new Google subject.
+		repo, email, ctx := newRepoEnv(t)
+		owner, err := repo.UpsertGoogleUser(ctx, "g1-"+email, email, "Owner", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = repo.UpsertGoogleUser(ctx, "g2-"+email, email, "Stranger", "")
+		if !errors.Is(err, ErrGoogleConflict) {
+			t.Fatalf("err = %v, want ErrGoogleConflict", err)
+		}
+		after, err := repo.GetUserByID(ctx, owner.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if after.GoogleID != "g1-"+email || after.DisplayName != "Owner" {
+			t.Errorf("account changed hands: %+v", after)
+		}
+		// The rightful owner still signs in.
+		if again, err := repo.UpsertGoogleUser(ctx, "g1-"+email, email, "Owner", ""); err != nil || again.ID != owner.ID {
+			t.Errorf("owner locked out: err=%v user=%+v", err, again)
+		}
+	})
+	t.Run("profile refresh survives an email now owned by another account", func(t *testing.T) {
+		// Google reports a changed email that already belongs to somebody else: keep ours, don't 500.
+		repo, email, ctx := newRepoEnv(t)
+		_, otherEmail, _ := newRepoEnv(t)
+		if _, err := repo.CreatePasswordUser(ctx, otherEmail, "h", "Other"); err != nil {
+			t.Fatal(err)
+		}
+		first, _ := repo.UpsertGoogleUser(ctx, "g-"+email, email, "Me", "")
+		again, err := repo.UpsertGoogleUser(ctx, "g-"+email, otherEmail, "Me Renamed", "")
+		if err != nil {
+			t.Fatalf("refresh failed: %v", err)
+		}
+		if again.ID != first.ID || again.Email != email || again.DisplayName != "Me Renamed" {
+			t.Errorf("got %+v, want same account, original email, refreshed name", again)
+		}
+	})
 	t.Run("existing avatar is not overwritten on link", func(t *testing.T) {
 		repo, email, ctx := newRepoEnv(t)
 		u, _ := repo.CreatePasswordUser(ctx, email, "h", "N")
