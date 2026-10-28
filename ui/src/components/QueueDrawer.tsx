@@ -107,28 +107,47 @@ function ConvertSheet({ item, onClose, onConverted }: ConvertSheetProps) {
   }
 
   return (
-    <div className="mt-3 pt-3 border-t border-line space-y-2">
-      <p className="text-xs font-semibold text-dim uppercase tracking-wide">Convert to item</p>
-      <Select
-        value={projectId}
-        onChange={(v) => { setProjectId(v); setSprintId(NO_SPRINT) }}
-        options={projects.map((p) => ({ value: p.id, label: p.name }))}
-      />
-      <Select
-        value={epicId}
-        onChange={setEpicId}
-        options={[{ value: '', label: 'No epic' }, ...epics.map((e) => ({ value: e.id, label: e.name }))]}
-      />
-      {sprintOptions.length > 0 && <Select value={sprintId} onChange={setSprintId} options={sprintOptions} />}
-      {initialStatus && <p className="text-xs text-ghost">Status: {initialStatus.name} · Priority &amp; estimate carried over</p>}
+    <div className="mt-3 pt-3 border-t border-line space-y-2.5">
+      <p className="text-xs font-semibold text-dim uppercase tracking-wide">Send to board</p>
+      <ConvertField label="Project">
+        <Select
+          size="xs"
+          value={projectId}
+          onChange={(v) => { setProjectId(v); setSprintId(NO_SPRINT) }}
+          options={projects.map((p) => ({ value: p.id, label: p.name }))}
+        />
+      </ConvertField>
+      <ConvertField label="Epic">
+        <Select
+          size="xs"
+          value={epicId}
+          onChange={setEpicId}
+          options={[{ value: '', label: 'No epic' }, ...epics.map((e) => ({ value: e.id, label: e.name }))]}
+        />
+      </ConvertField>
+      {sprintOptions.length > 0 && (
+        <ConvertField label="Sprint">
+          <Select size="xs" value={sprintId} onChange={setSprintId} options={sprintOptions} />
+        </ConvertField>
+      )}
+      {initialStatus && <p className="text-xs text-ghost">Starts in {initialStatus.name}; priority and estimate carry over</p>}
       <div className="flex gap-2">
-        <button onClick={onClose} className="flex-1 text-sm py-2 rounded-[var(--c-radius-card)] border border-line text-dim hover:bg-surface">Cancel</button>
+        <button onClick={onClose} className="flex-1 text-xs py-2 rounded-[var(--c-radius-card)] border border-line text-dim hover:bg-surface">Cancel</button>
         <button onClick={submit} disabled={submitting || !projectId}
-          className="flex-1 text-sm py-2 rounded-[var(--c-radius-card)] bg-accent text-white hover:bg-accent/80 disabled:opacity-50 font-medium">
-          {submitting ? '...' : 'Create item ↗'}
+          className="flex-1 text-xs py-2 whitespace-nowrap rounded-[var(--c-radius-card)] bg-accent text-white hover:bg-accent/80 disabled:opacity-50 font-medium">
+          {submitting ? '...' : 'Send to board'}
         </button>
       </div>
     </div>
+  )
+}
+
+function ConvertField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="block text-xs text-dim mb-1">{label}</span>
+      {children}
+    </label>
   )
 }
 
