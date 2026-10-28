@@ -7,8 +7,8 @@ import { itemKeys } from '../hooks/useItems'
 import { epicKeys } from '../hooks/useEpics'
 import { projectKeys } from '../hooks/useProjects'
 import type { Item, Epic } from '../types'
+import { authFetch } from '../lib/auth'
 
-const API = import.meta.env.VITE_API_URL ?? ''
 
 // Re-export payload types so existing import sites don't break
 export type CreateItemPayload = {
@@ -133,7 +133,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       old?.filter((i) => i.id !== id),
     )
 
-    const res = await fetch(`${API}/api/items/${id}`, { method: 'DELETE', credentials: 'include' })
+    const res = await authFetch(`/api/items/${id}`, { method: 'DELETE' })
     if (!res.ok) {
       qc.invalidateQueries({ queryKey: itemKeys.all })
       return
@@ -167,7 +167,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       old?.filter((i) => i.epic_id !== id),
     )
 
-    const res = await fetch(`${API}/api/epics/${id}`, { method: 'DELETE', credentials: 'include' })
+    const res = await authFetch(`/api/epics/${id}`, { method: 'DELETE' })
     if (!res.ok) {
       qc.invalidateQueries({ queryKey: epicKeys.all })
       qc.invalidateQueries({ queryKey: itemKeys.all })
@@ -203,7 +203,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       old?.filter((i) => i.project_id !== id),
     )
 
-    const res = await fetch(`${API}/api/projects/${id}`, { method: 'DELETE', credentials: 'include' })
+    const res = await authFetch(`/api/projects/${id}`, { method: 'DELETE' })
     if (!res.ok) {
       qc.invalidateQueries({ queryKey: projectKeys.all })
       qc.invalidateQueries({ queryKey: itemKeys.all })

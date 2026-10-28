@@ -10,6 +10,7 @@ import { useBoardStatuses, useUpdateStatusColor } from '../hooks/useBoardQueries
 import { ColorPicker, statusDisplayColor } from '../components/ui'
 import type { Preset } from '../themes/types'
 import type { Status } from '../types'
+import { authFetch } from '../lib/auth'
 
 const PRESET_IDS: Preset['id'][] = ['cyber', 'glass', 'minimal']
 
@@ -40,7 +41,7 @@ function RecentlyDeletedSection() {
   async function load() {
     setLoading(true)
     try {
-      const res = await fetch('/api/trash', { credentials: 'include' })
+      const res = await authFetch('/api/trash')
       if (res.ok) {
         const d = await res.json()
         setProjects(d.projects ?? [])
@@ -54,7 +55,7 @@ function RecentlyDeletedSection() {
   async function restore(type: 'projects' | 'epics', id: string) {
     setRestoring(id); setError('')
     try {
-      const res = await fetch(`/api/${type}/${id}/restore`, { method: 'POST', credentials: 'include' })
+      const res = await authFetch(`/api/${type}/${id}/restore`, { method: 'POST' })
       if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || 'Restore failed') }
       else {
         // Invalidate TanStack Query cache so views reflect restored data immediately
@@ -69,7 +70,7 @@ function RecentlyDeletedSection() {
 
   async function emptyTrash() {
     if (!window.confirm('Permanently delete everything in trash? This cannot be undone.')) return
-    await fetch('/api/trash', { method: 'DELETE', credentials: 'include' })
+    await authFetch('/api/trash', { method: 'DELETE' })
     await load()
   }
 

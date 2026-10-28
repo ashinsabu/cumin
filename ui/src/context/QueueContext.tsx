@@ -1,8 +1,8 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
 import type { QueueItem } from '../types'
 import { useToast } from './ToastContext'
+import { authFetch } from '../lib/auth'
 
-const API = import.meta.env.VITE_API_URL ?? ''
 
 // Mirrors server/queue/store.go urgencyScore — keeps optimistic items sorted correctly.
 function computeUrgencyScore(title: string, priority: number, deadline: string | null | undefined): number {
@@ -62,7 +62,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
 
   const fetchItems = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/api/queue`, { credentials: 'include' })
+      const res = await authFetch(`/api/queue`)
       if (res.ok) {
         const data = await res.json()
         setItems(data.items ?? [])
@@ -98,9 +98,8 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     setItems((prev) => [...prev, tempItem].sort((a, b) => b.urgency_score - a.urgency_score))
 
     try {
-      const res = await fetch(`${API}/api/queue`, {
+      const res = await authFetch(`/api/queue`, {
         method: 'POST',
-        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ priority: 2, ...payload }),
       })
@@ -115,9 +114,8 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const updateItem = useCallback(async (id: string, payload: UpdatePayload): Promise<void> => {
-    const res = await fetch(`${API}/api/queue/${id}`, {
+    const res = await authFetch(`/api/queue/${id}`, {
       method: 'PATCH',
-      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })
@@ -134,9 +132,8 @@ export function QueueProvider({ children }: { children: ReactNode }) {
         .map(item => ({ ...item, position: posMap.get(item.id) ?? item.position }))
         .sort((a, b) => a.position - b.position)
     })
-    await fetch(`${API}/api/queue/reorder`, {
+    await authFetch(`/api/queue/reorder`, {
       method: 'PUT',
-      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ order: ids }),
     })
@@ -150,19 +147,19 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       undo: snapshot ? () => {
         setItems(prev => [...prev, snapshot].sort((a, b) => b.urgency_score - a.urgency_score))
       } : undefined,
-      onCommit: () => fetch(`${API}/api/queue/${id}`, { method: 'DELETE', credentials: 'include' }).then(() => {}),
+      onCommit: () => authFetch(`/api/queue/${id}`, { method: 'DELETE' }).then(() => {}),
     })
   }, [pushToast])
 
   const deleteItemSilent = useCallback(async (id: string): Promise<void> => {
     setItems(prev => prev.filter(i => i.id !== id))
-    await fetch(`${API}/api/queue/${id}`, { method: 'DELETE', credentials: 'include' })
+    await authFetch(`/api/queue/${id}`, { method: 'DELETE' })
   }, [])
 
   const completeItem = useCallback(async (id: string): Promise<void> => {
     const snapshot = itemsRef.current.find(i => i.id === id)
     setItems((prev) => prev.filter((i) => i.id !== id))
-    const res = await fetch(`${API}/api/queue/${id}/complete`, { method: 'POST', credentials: 'include' })
+    const res = await authFetch(`/api/queue/${id}/complete`, { method: 'POST' })
     if (!res.ok) {
       if (snapshot) setItems((prev) => [...prev, snapshot].sort((a, b) => b.urgency_score - a.urgency_score))
       throw new Error('Failed to mark queue item done')
@@ -170,16 +167,15 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const reviveItem = useCallback(async (id: string): Promise<void> => {
-    const res = await fetch(`${API}/api/queue/${id}/revive`, { method: 'POST', credentials: 'include' })
+    const res = await authFetch(`/api/queue/${id}/revive`, { method: 'POST' })
     if (!res.ok) throw new Error('Failed to revive queue item')
     const revived: QueueItem = await res.json()
     setItems((prev) => prev.map((i) => i.id === id ? revived : i))
   }, [])
 
   const promoteItem = useCallback(async (id: string, payload: PromotePayload) => {
-    const res = await fetch(`${API}/api/queue/${id}/promote`, {
+    const res = await authFetch(`/api/queue/${id}/promote`, {
       method: 'POST',
-      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })

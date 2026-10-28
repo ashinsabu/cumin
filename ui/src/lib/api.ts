@@ -1,8 +1,7 @@
-const API = import.meta.env.VITE_API_URL ?? ''
+import { authFetch } from './auth'
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API}${path}`, {
-    credentials: 'include',
+  const res = await authFetch(path, {
     headers: init?.body ? { 'Content-Type': 'application/json' } : undefined,
     ...init,
   })

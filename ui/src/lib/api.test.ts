@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { apiFetch } from './api'
 
+// Token handling is covered in auth.test.ts; here authFetch just forwards to the stubbed fetch.
+vi.mock('./auth', () => ({ authFetch: (path: string, init?: RequestInit) => fetch(path, init) }))
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function mockFetch(status: number, body?: unknown): void {
