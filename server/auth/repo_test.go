@@ -61,7 +61,7 @@ func TestRepo_UpsertGoogleUser(t *testing.T) {
 	t.Run("verified password account keeps its password when linked", func(t *testing.T) {
 		repo, email, ctx := newRepoEnv(t)
 		u, _ := repo.CreatePasswordUser(ctx, email, "real-hash", "Owner")
-		repo.MarkEmailVerified(ctx, u.ID)
+		repo.MarkEmailVerified(ctx, u.ID, "real-hash")
 		linked, err := repo.UpsertGoogleUser(ctx, "g-"+email, email, "Owner", "pic")
 		if err != nil {
 			t.Fatal(err)
@@ -157,7 +157,7 @@ func TestRepo_OverwriteUnverifiedPassword(t *testing.T) {
 	if err != nil || !replaced {
 		t.Fatalf("replaced=%v err=%v, want true", replaced, err)
 	}
-	repo.MarkEmailVerified(ctx, u.ID)
+	repo.MarkEmailVerified(ctx, u.ID, "new")
 	replaced, err = repo.OverwriteUnverifiedPassword(ctx, u.ID, "attacker", "Evil")
 	if err != nil || replaced {
 		t.Fatalf("replaced=%v err=%v, want false once verified", replaced, err)
