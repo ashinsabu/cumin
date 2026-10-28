@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
 import type { QueueItem, QueueSummary } from '../types'
-import { useToast } from './ToastContext'
+import { useUndoable, softDelete } from '../hooks/useUndoable'
 import { authFetch } from '../lib/auth'
 import { useAuth } from './AuthContext'
 
@@ -53,7 +53,6 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   const [summary, setSummary] = useState<QueueSummary | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const { push: pushToast } = useToast()
   const itemsRef = useRef<QueueItem[]>([])
   useEffect(() => { itemsRef.current = items }, [items])
 
@@ -177,27 +176,31 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  // Dismiss one or many entries behind a single undo toast; the DELETEs only go out when the window closes.
+  // Dismiss one or many entries behind a single undo toast. The DELETE goes out immediately; undo restores server-side.
+  const dismiss = softDelete<QueueItem[]>((entries) => entries.map((e) => `/api/queue/${e.id}`))
+  const archive = useUndoable<QueueItem[]>({
+    label: (entries) => entries.length === 1 ? 'Removed from queue' : `Removed ${entries.length} from queue`,
+    undo: dismiss.undo,
+    // removing hides the entries from refetches only while the DELETE is in flight; afterwards the server no longer lists them.
+    run: (entries) => dismiss.run(entries).finally(() => entries.forEach((e) => removing.current.delete(e.id))),
+    apply: (entries) => {
+      const gone = new Set(entries.map((e) => e.id))
+      gone.forEach((id) => removing.current.add(id))
+      setItems((prev) => prev.filter((i) => !gone.has(i.id)))
+    },
+    revert: (entries) => {
+      entries.forEach((e) => removing.current.delete(e.id))
+      setItems((prev) => {
+        const present = new Set(prev.map((i) => i.id))
+        return [...prev, ...entries.filter((e) => !present.has(e.id))].sort((a, b) => b.urgency_score - a.urgency_score)
+      })
+      fetchItems()
+    },
+  })
   const archiveItems = useCallback((ids: string[]): void => {
-    const snapshots = itemsRef.current.filter(i => ids.includes(i.id))
-    if (snapshots.length === 0) return
-    const gone = new Set(snapshots.map(i => i.id))
-    gone.forEach(id => removing.current.add(id))
-    setItems(prev => prev.filter(i => !gone.has(i.id)))
-    pushToast({
-      message: snapshots.length === 1 ? 'Removed from queue' : `Removed ${snapshots.length} from queue`,
-      undo: () => {
-        gone.forEach(id => removing.current.delete(id))
-        setItems(prev => {
-          const present = new Set(prev.map(i => i.id))
-          return [...prev, ...snapshots.filter(i => !present.has(i.id))].sort((a, b) => b.urgency_score - a.urgency_score)
-        })
-      },
-      onCommit: () => Promise.all([...gone].map(id =>
-        authFetch(`/api/queue/${id}`, { method: 'DELETE', keepalive: true }).then(() => {}).finally(() => { removing.current.delete(id) }), // keepalive: survives a reload during the undo window
-      )).then(() => {}),
-    })
-  }, [pushToast])
+    const snapshots = itemsRef.current.filter((i) => ids.includes(i.id))
+    if (snapshots.length > 0) void archive(snapshots)
+  }, [archive])
   const archiveItem = useCallback((id: string): void => archiveItems([id]), [archiveItems])
 
   const deleteItemSilent = useCallback(async (id: string): Promise<void> => {

@@ -3,8 +3,6 @@ import { createContext, useContext, useRef, useState, useEffect, useCallback, ty
 export type ToastOptions = {
   message: string
   undo?: () => void | Promise<void>
-  onCommit?: () => Promise<void>
-  onCommitError?: () => void
   duration?: number
 }
 
@@ -29,9 +27,6 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
 
   const commit = useCallback((entry: ToastEntry) => {
-    entry.onCommit?.().catch(() => {
-      entry.onCommitError?.()
-    })
     setToasts(prev => prev.filter(t => t.id !== entry.id))
     timersRef.current.delete(entry.id)
   }, [])
@@ -68,7 +63,6 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           clearTimeout(oldTimer)
           timersRef.current.delete(oldest.id)
         }
-        oldest.onCommit?.().catch(() => oldest.onCommitError?.())
         return [...prev.slice(1), entry]
       }
       return [...prev, entry]
@@ -81,15 +75,6 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const timers = timersRef.current
     return () => { timers.forEach(t => clearTimeout(t)) }
-  }, [])
-
-  // Reload/close during an undo window must not silently cancel the action: commit whatever is still pending.
-  const toastsRef = useRef<ToastEntry[]>([])
-  useEffect(() => { toastsRef.current = toasts }, [toasts])
-  useEffect(() => {
-    const flush = () => { toastsRef.current.forEach((entry) => { entry.onCommit?.().catch(() => {}) }); toastsRef.current = [] }
-    window.addEventListener('pagehide', flush)
-    return () => window.removeEventListener('pagehide', flush)
   }, [])
 
   return (

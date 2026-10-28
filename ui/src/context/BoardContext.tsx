@@ -1,13 +1,11 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useToast } from './ToastContext'
 import { useSearchParams } from 'react-router-dom'
-import { apiFetch } from '../lib/api'
 import { itemKeys } from '../hooks/useItems'
+import { useUndoable, softDelete } from '../hooks/useUndoable'
 import { epicKeys } from '../hooks/useEpics'
 import { projectKeys } from '../hooks/useProjects'
 import type { Item, Epic } from '../types'
-import { authFetch } from '../lib/auth'
 
 
 // Re-export payload types so existing import sites don't break
@@ -63,7 +61,6 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   const [selectedEpic, setSelectedEpic] = useState<Epic | null>(null)
   const [searchParams, setSearchParams] = useSearchParams()
 
-  const { push: pushToast } = useToast()
   const qc = useQueryClient()
 
   // Keep selectedItem in sync with the cache. Runs on mount, when the selected ID
@@ -119,108 +116,46 @@ export function BoardProvider({ children }: { children: ReactNode }) {
 
   // ── Undo-delete wrappers ──────────────────────────────────────────────────
 
-  const deleteItem = useCallback(async (id: string): Promise<void> => {
-    // Snapshot from cache before optimistic removal
-    const allItemQueries = qc.getQueriesData<Item[]>({ queryKey: itemKeys.all })
-    let snapshot: Item | undefined
-    for (const [, data] of allItemQueries) {
-      snapshot = data?.find((i) => i.id === id)
-      if (snapshot) break
+  type Target = { id: string; name?: string }
+
+  // Snapshot from any cached list so the toast can name what was deleted.
+  const nameFromCache = useCallback(<T extends { id: string }>(key: readonly unknown[], id: string, pick: (row: T) => string) => {
+    for (const [, rows] of qc.getQueriesData<T[]>({ queryKey: key })) {
+      const row = rows?.find((r) => r.id === id)
+      if (row) return pick(row)
     }
+  }, [qc])
+  const invalidate = (...keys: readonly (readonly unknown[])[]) => keys.forEach((queryKey) => qc.invalidateQueries({ queryKey }))
+  const deletedLabel = (kind: string) => (t: Target) => t.name ? `"${t.name}" deleted` : `${kind} deleted`
 
-    // Optimistic removal from all item caches
-    qc.setQueriesData<Item[]>({ queryKey: itemKeys.all }, (old) =>
-      old?.filter((i) => i.id !== id),
-    )
+  const removeItem = useUndoable<Target>({
+    label: deletedLabel('Item'),
+    ...softDelete((t) => `/api/items/${t.id}`),
+    apply: (t) => qc.setQueriesData<Item[]>({ queryKey: itemKeys.all }, (old) => old?.filter((i) => i.id !== t.id)),
+    revert: () => invalidate(itemKeys.all),
+  })
+  const removeEpic = useUndoable<Target>({
+    label: deletedLabel('Epic'),
+    ...softDelete((t) => `/api/epics/${t.id}`),
+    apply: (t) => {
+      qc.setQueriesData<Epic[]>({ queryKey: epicKeys.all }, (old) => old?.filter((e) => e.id !== t.id))
+      qc.setQueriesData<Item[]>({ queryKey: itemKeys.all }, (old) => old?.filter((i) => i.epic_id !== t.id))
+    },
+    revert: () => invalidate(epicKeys.all, itemKeys.all),
+  })
+  const removeProject = useUndoable<Target>({
+    label: deletedLabel('Project'),
+    ...softDelete((t) => `/api/projects/${t.id}`),
+    apply: (t) => {
+      qc.setQueriesData<{ id: string }[]>({ queryKey: projectKeys.all }, (old) => old?.filter((p) => p.id !== t.id))
+      qc.setQueriesData<Item[]>({ queryKey: itemKeys.all }, (old) => old?.filter((i) => i.project_id !== t.id))
+    },
+    revert: () => invalidate(projectKeys.all, itemKeys.all),
+  })
 
-    const res = await authFetch(`/api/items/${id}`, { method: 'DELETE' })
-    if (!res.ok) {
-      qc.invalidateQueries({ queryKey: itemKeys.all })
-      return
-    }
-
-    pushToast({
-      message: snapshot?.title ? `"${snapshot.title}" deleted` : 'Item deleted',
-      undo: snapshot
-        ? async () => {
-            await apiFetch(`/api/items/${id}/restore`, { method: 'POST' })
-            qc.invalidateQueries({ queryKey: itemKeys.all })
-          }
-        : undefined,
-    })
-  }, [qc, pushToast])
-
-  const deleteEpic = useCallback(async (id: string): Promise<void> => {
-    // Snapshot from cache
-    const allEpicQueries = qc.getQueriesData<Epic[]>({ queryKey: epicKeys.all })
-    let epicSnap: Epic | undefined
-    for (const [, data] of allEpicQueries) {
-      epicSnap = data?.find((e) => e.id === id)
-      if (epicSnap) break
-    }
-
-    // Optimistic removal
-    qc.setQueriesData<Epic[]>({ queryKey: epicKeys.all }, (old) =>
-      old?.filter((e) => e.id !== id),
-    )
-    qc.setQueriesData<Item[]>({ queryKey: itemKeys.all }, (old) =>
-      old?.filter((i) => i.epic_id !== id),
-    )
-
-    const res = await authFetch(`/api/epics/${id}`, { method: 'DELETE' })
-    if (!res.ok) {
-      qc.invalidateQueries({ queryKey: epicKeys.all })
-      qc.invalidateQueries({ queryKey: itemKeys.all })
-      return
-    }
-
-    pushToast({
-      message: epicSnap?.name ? `"${epicSnap.name}" deleted` : 'Epic deleted',
-      undo: epicSnap
-        ? async () => {
-            await apiFetch(`/api/epics/${id}/restore`, { method: 'POST' })
-            qc.invalidateQueries({ queryKey: epicKeys.all })
-            qc.invalidateQueries({ queryKey: itemKeys.all })
-          }
-        : undefined,
-    })
-  }, [qc, pushToast])
-
-  const deleteProject = useCallback(async (id: string): Promise<void> => {
-    // Snapshot from cache
-    const allProjectQueries = qc.getQueriesData<any[]>({ queryKey: projectKeys.all })
-    let projSnap: any
-    for (const [, data] of allProjectQueries) {
-      projSnap = data?.find((p: any) => p.id === id)
-      if (projSnap) break
-    }
-
-    // Optimistic removal
-    qc.setQueriesData<any[]>({ queryKey: projectKeys.all }, (old) =>
-      old?.filter((p) => p.id !== id),
-    )
-    qc.setQueriesData<Item[]>({ queryKey: itemKeys.all }, (old) =>
-      old?.filter((i) => i.project_id !== id),
-    )
-
-    const res = await authFetch(`/api/projects/${id}`, { method: 'DELETE' })
-    if (!res.ok) {
-      qc.invalidateQueries({ queryKey: projectKeys.all })
-      qc.invalidateQueries({ queryKey: itemKeys.all })
-      return
-    }
-
-    pushToast({
-      message: projSnap?.name ? `"${projSnap.name}" deleted` : 'Project deleted',
-      undo: projSnap
-        ? async () => {
-            await apiFetch(`/api/projects/${id}/restore`, { method: 'POST' })
-            qc.invalidateQueries({ queryKey: projectKeys.all })
-            qc.invalidateQueries({ queryKey: itemKeys.all })
-          }
-        : undefined,
-    })
-  }, [qc, pushToast])
+  const deleteItem = useCallback((id: string) => removeItem({ id, name: nameFromCache<Item>(itemKeys.all, id, (i) => i.title) }), [removeItem, nameFromCache])
+  const deleteEpic = useCallback((id: string) => removeEpic({ id, name: nameFromCache<Epic>(epicKeys.all, id, (e) => e.name) }), [removeEpic, nameFromCache])
+  const deleteProject = useCallback((id: string) => removeProject({ id, name: nameFromCache<{ id: string; name: string }>(projectKeys.all, id, (p) => p.name) }), [removeProject, nameFromCache])
 
   return (
     <BoardContext.Provider
