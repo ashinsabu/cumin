@@ -180,7 +180,7 @@ type ExpandedEditorProps = {
   item: QueueItem
 }
 
-function ExpandedEditor({ item }: ExpandedEditorProps) {
+export function ExpandedEditor({ item }: ExpandedEditorProps) {
   const { updateItem } = useQueue()
   const [draft, setDraft] = useState<CardDraft>(itemToDraft(item))
   const [dueIn, setDueIn] = useState('')
@@ -207,6 +207,13 @@ function ExpandedEditor({ item }: ExpandedEditorProps) {
       originalRef.current = { ...d, title: d.title.trim() }
     } catch { /* silently ignore */ }
   }, [item.id, updateItem])
+
+  // Priority / estimate / due are click-or-type fields with no blur-to-save of their own;
+  // persist them shortly after they change (title and notes still save on blur).
+  useEffect(() => {
+    const t = setTimeout(save, 500)
+    return () => clearTimeout(t)
+  }, [draft.priority, draft.estimate, draft.deadline, save])
 
   if (converted) {
     return (
