@@ -86,6 +86,22 @@ func TestItems_Patch_UpdateEstimate(t *testing.T) {
 	}
 }
 
+// Regression: clearing an estimate (inline table cell, item modal) sent estimate_minutes:null, which the
+// server treated as "unchanged", so the old estimate silently stayed. clear_estimate unsets it.
+func TestItems_Patch_ClearEstimate(t *testing.T) {
+	it := createTestItem(t, "Clear estimate item")
+	t.Cleanup(func() { hardDeleteItems(it.ID) })
+
+	est := 90
+	assertStatus(t, mustDo(t, testEnv.Server, "PATCH", "/api/items/"+it.ID, map[string]any{"estimate_minutes": &est}), http.StatusOK)
+
+	resp := mustDo(t, testEnv.Server, "PATCH", "/api/items/"+it.ID, map[string]any{"clear_estimate": true})
+	assertStatus(t, resp, http.StatusOK)
+	if got := mustDecodeJSON[fullItemJSON](t, resp); got.EstimateMinutes != nil {
+		t.Errorf("expected estimate cleared, got %d", *got.EstimateMinutes)
+	}
+}
+
 // TestItems_Patch_PartialDoesNotClobber verifies that updating only the title
 // leaves epic_id and priority unchanged.
 func TestItems_Patch_PartialDoesNotClobber(t *testing.T) {

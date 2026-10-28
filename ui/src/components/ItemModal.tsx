@@ -76,7 +76,7 @@ export function ItemModal({ item, onClose }: { item: Item; onClose: () => void }
         payload: {
           title: title.trim(),
           priority,
-          estimate_minutes: estimateRaw.trim() ? parseEstimate(estimateRaw) : null,
+          ...(estimateRaw.trim() ? { estimate_minutes: parseEstimate(estimateRaw) } : { clear_estimate: true }),
           ...(epicId === '__none__' ? { clear_epic: true } : { epic_id: epicId }),
           ...(sprintId === NO_SPRINT ? { clear_sprint: true } : { sprint_id: sprintId }),
         },

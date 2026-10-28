@@ -83,7 +83,7 @@ export function EstimateCell({ item }: { item: Item }) {
       placeholder="2h, 30m"
       className="text-sm font-semibold text-ink/80"
       validate={(raw) => raw === '' || parseEstimate(raw) !== null}
-      onSave={(raw) => update.mutate({ id: item.id, payload: { estimate_minutes: raw ? parseEstimate(raw) : null } })}
+      onSave={(raw) => update.mutate({ id: item.id, payload: raw ? { estimate_minutes: parseEstimate(raw) } : { clear_estimate: true } })}
     />
   )
 }

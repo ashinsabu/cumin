@@ -22,6 +22,15 @@ describe('Items table inline cells', () => {
     expect(mutate).toHaveBeenCalledWith({ id: 'i1', payload: { estimate_minutes: 90 } })
   })
 
+  it('clears the estimate with clear_estimate (null is "unchanged" on the server)', () => {
+    render(<EstimateCell item={item} />)
+    fireEvent.click(screen.getByText('1h'))
+    const input = screen.getByRole('textbox')
+    fireEvent.change(input, { target: { value: '' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(mutate).toHaveBeenCalledWith({ id: 'i1', payload: { clear_estimate: true } })
+  })
+
   it('does not save an unparseable estimate', () => {
     render(<EstimateCell item={item} />)
     fireEvent.click(screen.getByText('1h'))
