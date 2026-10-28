@@ -14,14 +14,17 @@ type Props = {
   options: FilterOption[]
   placeholder?: string
   fullWidth?: boolean
+  /** 'cell' = inline table-cell editor: quiet until hovered, never styled as an active filter. */
+  variant?: 'filter' | 'cell'
 }
 
-export function FilterSelect({ value, onChange, options, placeholder, fullWidth }: Props) {
+export function FilterSelect({ value, onChange, options, placeholder, fullWidth, variant = 'filter' }: Props) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   const selected = options.find((o) => o.value === value)
-  const isFiltered = value !== options[0]?.value
+  const isCell = variant === 'cell'
+  const isFiltered = !isCell && value !== options[0]?.value
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -36,16 +39,18 @@ export function FilterSelect({ value, onChange, options, placeholder, fullWidth 
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--c-radius-card)] border text-xs font-medium transition-colors outline-none${fullWidth ? ' w-full justify-between' : ''} ${
-          isFiltered
-            ? 'border-accent text-accent bg-accent/10'
-            : 'border-line text-dim bg-surface hover:border-ghost hover:text-ink'
+        className={`flex items-center gap-1.5 rounded-[var(--c-radius-card)] border text-xs font-medium transition-colors outline-none${fullWidth ? ' w-full justify-between' : ''} ${
+          isCell
+            ? 'px-1.5 py-1 max-w-full whitespace-nowrap border-transparent text-ink hover:border-line hover:bg-surface'
+            : `px-2.5 py-1.5 ${isFiltered
+              ? 'border-accent text-accent bg-accent/10'
+              : 'border-line text-dim bg-surface hover:border-ghost hover:text-ink'}`
         }`}
       >
-        {selected?.color && isFiltered && (
+        {selected?.color && (isFiltered || isCell) && (
           <span className="w-2 h-2 rounded-full shrink-0 inline-block" style={{ backgroundColor: selected.color }} />
         )}
-        {selected?.label ?? placeholder}
+        <span className={isCell ? 'truncate' : ''}>{selected?.label ?? placeholder}</span>
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className={`transition-transform shrink-0 ${open ? 'rotate-180' : ''}`}>
           <path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>

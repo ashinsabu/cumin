@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { useBoard } from '../context/BoardContext'
 import { useItems, useMoveItem } from '../hooks/useItems'
 import { useEpics } from '../hooks/useEpics'
@@ -10,12 +10,12 @@ import { useSelectedProject } from '../hooks/useSelectedProject'
 import { useCreateView, type ViewFilters } from '../hooks/useSavedViews'
 import { SortIcon, PageToolbar, statusDisplayColor, StatusBadge } from '../components/ui'
 import { PRIORITY } from '../constants'
-import { formatEstimate } from '../hooks/useFormat'
 import { StatusDurationBar } from '../components/StatusDurationBar'
 import { FilterSelect } from '../components/FilterSelect'
 import { SearchInput } from '../components/SearchInput'
 import { CreateItemModal } from '../components/CreateItemModal'
 import type { Item, Status } from '../types'
+import { TitleCell, EstimateCell, PriorityCell, EpicCell } from '../components/ItemCells'
 
 function InlineStatusPicker({ item, statuses, middleStatuses }: { item: Item; statuses: Status[]; middleStatuses: Status[] }) {
   const [open, setOpen] = useState(false)
@@ -83,8 +83,7 @@ type ColumnConfig = {
 const DEFAULT_COLUMNS: ColumnConfig[] = [
   { id: 'id',       label: 'ID',        width: 90,  visible: true },
   { id: 'title',    label: 'Work',      width: 300, visible: true },
-  { id: 'project',  label: 'Project',   width: 120, visible: true },
-  { id: 'epic',     label: 'Epic',      width: 140, visible: true },
+  { id: 'epic',     label: 'Epic',      width: 160, visible: true },
   { id: 'estimate', label: 'Estimate',  width: 80,  visible: true },
   { id: 'created',  label: 'Created',   width: 120, visible: true },
   { id: 'status',   label: 'Status',    width: 130, visible: true },
@@ -92,10 +91,12 @@ const DEFAULT_COLUMNS: ColumnConfig[] = [
   { id: 'in_status',label: 'In Status', width: 120, visible: true },
 ]
 
-type SortKey = 'id' | 'title' | 'project' | 'epic' | 'estimate' | 'created' | 'status' | 'priority' | 'in_status'
+type SortKey = 'id' | 'title' | 'epic' | 'estimate' | 'created' | 'status' | 'priority' | 'in_status'
 type SortDir = 'asc' | 'desc'
 
-const SORTABLE_COLS = new Set<string>(['id', 'title', 'project', 'epic', 'estimate', 'created', 'status', 'priority', 'in_status'])
+const SORTABLE_COLS = new Set<string>(['id', 'title', 'epic', 'estimate', 'created', 'status', 'priority', 'in_status'])
+
+const NON_EDITABLE = new Set(['id', 'created', 'in_status'])
 
 function SaveViewModal({ filters, onClose }: { filters: ViewFilters; onClose: () => void }) {
   const [name, setName] = useState('')
@@ -134,8 +135,7 @@ function SaveViewModal({ filters, onClose }: { filters: ViewFilters; onClose: ()
 }
 
 export function ItemsView() {
-  const { selectItem, selectEpic } = useBoard()
-  const navigate = useNavigate()
+  const { selectItem } = useBoard()
   const [searchParams, setSearchParams] = useSearchParams()
   const [selectedProject] = useSelectedProject()
 
@@ -206,8 +206,24 @@ export function ItemsView() {
   const { data: projectList = [] } = useProjects()
   const [search, setSearch] = useState('')
   const [columns, setColumns] = usePersistentState<ColumnConfig[]>('cumin:items:columns', DEFAULT_COLUMNS)
+  // Saved column config can predate removed/added columns (Project was removed): keep the user's
+  // order, widths and visibility for known columns and append any new ones.
+  useEffect(() => {
+    const known = columns.filter((c) => DEFAULT_COLUMNS.some((d) => d.id === c.id))
+    const missing = DEFAULT_COLUMNS.filter((d) => !known.some((c) => c.id === d.id))
+    if (known.length !== columns.length || missing.length > 0) setColumns([...known, ...missing])
+  }, [columns, setColumns])
   const [resizing, setResizing] = useState<{ id: string; startX: number; startWidth: number } | null>(null)
   const [showColumnConfig, setShowColumnConfig] = useState(false)
+  const columnConfigRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!showColumnConfig) return
+    const close = (e: MouseEvent) => { if (!columnConfigRef.current?.contains(e.target as Node)) setShowColumnConfig(false) }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowColumnConfig(false) }
+    document.addEventListener('mousedown', close)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', onKey) }
+  }, [showColumnConfig])
   const [showCreate, setShowCreate] = useState(false)
   const [showSaveModal, setShowSaveModal] = useState(false)
   const [sortKey, setSortKey] = usePersistentState<SortKey>('cumin:items:sortKey', 'created')
@@ -261,7 +277,6 @@ export function ItemsView() {
     switch (key) {
       case 'id':        return item.display_id
       case 'title':     return item.title.toLowerCase()
-      case 'project':   return projectList.find((p) => p.id === item.project_id)?.name ?? ''
       case 'epic':      return item.epic_name ?? ''
       case 'estimate':  return item.estimate_minutes ?? 0
       case 'created':   return item.created_at?.toString() ?? ''
@@ -290,6 +305,14 @@ export function ItemsView() {
     }
   }
 
+  function moveColumn(idx: number, dir: -1 | 1) {
+    setColumns((prev) => {
+      const next = [...prev]
+      ;[next[idx], next[idx + dir]] = [next[idx + dir], next[idx]]
+      return next
+    })
+  }
+
   function handleMouseDown(colId: string, e: React.MouseEvent) {
     e.preventDefault()
     const col = columns.find((c) => c.id === colId)!
@@ -311,47 +334,46 @@ export function ItemsView() {
   }
 
   function renderCell(col: ColumnConfig, item: Item) {
-    const priority = PRIORITY[item.priority] ?? PRIORITY[4]
-    const project = projectList.find((p) => p.id === item.project_id)
-    const epic = item.epic_id ? epicList.find((e) => e.id === item.epic_id) : undefined
-
     switch (col.id) {
       case 'id':
         return <span className="text-sm font-mono font-medium text-accent">{item.display_id}</span>
       case 'title':
-        return <span className="text-sm font-medium text-ink leading-snug">{item.title}</span>
-      case 'project':
-        return project
-          ? <span className="text-xs font-semibold px-2 py-0.5 rounded" style={{ backgroundColor: (project.color ?? '#6b7280') + '18', color: project.color ?? '#6b7280', border: `1px solid ${(project.color ?? '#6b7280')}25` }}>{project.prefix}</span>
-          : <span className="text-ghost text-xs">—</span>
+        return <TitleCell item={item} />
       case 'epic':
-        if (!item.epic_name) return <span className="text-ghost text-xs">—</span>
-        return (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); if (epic) { selectEpic(epic); navigate('/epics') } }}
-            className="flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded hover:opacity-75 transition-opacity cursor-pointer"
-            style={{ backgroundColor: (item.epic_color ?? '#6b7280') + '18', color: item.epic_color ?? '#6b7280', border: `1px solid ${(item.epic_color ?? '#6b7280')}25` }}
-            title={`Go to epic: ${item.epic_name}`}
-          >
-            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: item.epic_color ?? '#6b7280' }} />
-            {item.epic_name}
-          </button>
-        )
+        return <EpicCell item={item} />
       case 'estimate':
-        return <span className="text-sm font-semibold text-ink/80">{item.estimate_minutes ? formatEstimate(item.estimate_minutes) : '—'}</span>
+        return <EstimateCell item={item} />
       case 'created':
         return <span className="text-xs text-dim">{item.created_at ? new Date(item.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—'}</span>
       case 'status':
         return <InlineStatusPicker item={item} statuses={statuses} middleStatuses={middleStatuses} />
       case 'priority':
-        return <span className="text-sm font-bold" style={{ color: priority.color }}>{priority.label}</span>
+        return <PriorityCell item={item} />
       case 'in_status':
         return <div className="w-full"><StatusDurationBar minutes={item.time_in_status_minutes} estimateMinutes={item.estimate_minutes} /></div>
       default:
         return null
     }
   }
+
+  const columnConfigPanel = (
+        <div className="absolute right-0 top-full mt-1 z-40 w-52 rounded-[var(--c-radius-card)] shadow-lg border p-3 bg-raised border-line">
+          <p className="text-xs font-semibold mb-2 text-ink/80">Columns</p>
+          {columns.map((col, idx) => (
+            <label key={col.id} className="flex items-center gap-2 py-1 cursor-pointer text-sm text-ink/80">
+              <input
+                type="checkbox"
+                checked={col.visible}
+                onChange={() => setColumns((prev) => prev.map((c) => c.id === col.id ? { ...c, visible: !c.visible } : c))}
+                className="rounded"
+              />
+              <span className="flex-1">{col.label}</span>
+              <button type="button" disabled={idx === 0} onClick={(e) => { e.preventDefault(); moveColumn(idx, -1) }} className="text-ghost hover:text-ink disabled:opacity-30" aria-label={`Move ${col.label} up`}>↑</button>
+              <button type="button" disabled={idx === columns.length - 1} onClick={(e) => { e.preventDefault(); moveColumn(idx, 1) }} className="text-ghost hover:text-ink disabled:opacity-30" aria-label={`Move ${col.label} down`}>↓</button>
+            </label>
+          ))}
+        </div>
+  )
 
   const visibleCols = columns.filter((c) => c.visible)
   const activeFilterCount = [projectFilter, epicFilter, statusFilter, priorityFilter].filter((v) => v !== 'all').length + (hideDone ? 1 : 0)
@@ -401,13 +423,16 @@ export function ItemsView() {
               Save view
             </button>
           )}
-          <button
-            onClick={() => setShowColumnConfig(!showColumnConfig)}
-            className="p-1.5 rounded-[var(--c-radius-card)] text-sm text-dim hover:bg-line"
-            title="Configure columns"
-          >
-            ⚙
-          </button>
+          <div ref={columnConfigRef} className="relative">
+            <button
+              onClick={() => setShowColumnConfig(!showColumnConfig)}
+              className="p-1.5 rounded-[var(--c-radius-card)] text-sm text-dim hover:bg-line"
+              title="Configure columns"
+            >
+              ⚙
+            </button>
+            {showColumnConfig && columnConfigPanel}
+          </div>
           <button
             onClick={() => setShowCreate(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-[var(--c-radius-card)] bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
@@ -418,22 +443,6 @@ export function ItemsView() {
         </div>
       </PageToolbar>
 
-      {showColumnConfig && (
-        <div className="absolute right-4 top-24 z-30 rounded-[var(--c-radius-card)] shadow-lg border p-3 bg-raised border-line">
-          <p className="text-xs font-semibold mb-2 text-ink/80">Columns</p>
-          {columns.map((col) => (
-            <label key={col.id} className="flex items-center gap-2 py-1 cursor-pointer text-sm text-ink/80">
-              <input
-                type="checkbox"
-                checked={col.visible}
-                onChange={() => setColumns((prev) => prev.map((c) => c.id === col.id ? { ...c, visible: !c.visible } : c))}
-                className="rounded"
-              />
-              {col.label}
-            </label>
-          ))}
-        </div>
-      )}
 
       <div className="flex-1 overflow-auto">
         <table className="w-full border-collapse" style={{ minWidth: visibleCols.reduce((s, c) => s + c.width, 0) }}>
@@ -471,7 +480,7 @@ export function ItemsView() {
                       className={`px-4 py-2.5 transition-colors ${ci === 0 ? 'border-l-2 border-transparent group-hover:border-l-2' : ''}`}
                       style={ci === 0 ? { width: col.width, minWidth: col.width, maxWidth: col.width, borderLeftColor: project?.color ?? 'transparent' } : { width: col.width, minWidth: col.width, maxWidth: col.width }}
                     >
-                      <div className="truncate">{renderCell(col, item)}</div>
+                      <div className={NON_EDITABLE.has(col.id) ? 'truncate' : ''}>{renderCell(col, item)}</div>
                     </td>
                   ))}
                 </tr>
