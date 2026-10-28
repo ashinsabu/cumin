@@ -187,7 +187,6 @@ export function ExpandedEditor({ item }: ExpandedEditorProps) {
       await updateItem(item.id, {
         title: d.title.trim(),
         notes: d.notes,
-        deadline: null, // quick tasks are due today; legacy deadlines are cleared on first save
         priority: d.priority,
         estimate_minutes: d.estimate ? parseEstimate(d.estimate) : null,
       })

@@ -85,7 +85,6 @@ export type QueueItem = {
   created_by: string
   title: string
   notes: string
-  deadline: string | null
   priority: number
   estimate_minutes: number | null
   position: number

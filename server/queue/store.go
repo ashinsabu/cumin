@@ -17,7 +17,6 @@ type QueueItem struct {
 	CreatedBy       string     `json:"created_by"`
 	Title           string     `json:"title"`
 	Notes           string     `json:"notes"`
-	Deadline        *time.Time `json:"deadline"`
 	Priority        int        `json:"priority"`
 	EstimateMinutes *int       `json:"estimate_minutes"`
 	Position        int        `json:"position"`
@@ -34,19 +33,8 @@ type Store struct {
 
 // UrgencyScore computes the sort weight for a queue item.
 // The frontend mirrors this in QueueContext.computeUrgencyScore — keep them in sync.
-func UrgencyScore(title string, createdAt time.Time, deadline *time.Time, priority int) float64 {
+func UrgencyScore(title string, createdAt time.Time, priority int) float64 {
 	ageScore := math.Min(time.Since(createdAt).Hours()/24.0, 10.0)
-
-	deadlineScore := 0.0
-	if deadline != nil {
-		// Quick tasks are all due today: a deadline adds a little weight as it nears (max 3, over the last 12h).
-		hoursLeft := time.Until(*deadline).Hours()
-		if hoursLeft <= 0 {
-			deadlineScore = 3.0
-		} else {
-			deadlineScore = math.Max(0, 3.0*(1-hoursLeft/12.0))
-		}
-	}
 
 	kwScore := 0.0
 	lower := strings.ToLower(title)
@@ -59,17 +47,17 @@ func UrgencyScore(title string, createdAt time.Time, deadline *time.Time, priori
 	// P0=0 → adds 8; P4=4 → adds 0
 	priorityScore := float64(4-priority) * 2.0
 
-	return ageScore + deadlineScore + kwScore + priorityScore
+	return ageScore + kwScore + priorityScore
 }
 
-const listCols = `id, user_id, created_by, title, COALESCE(notes,''), deadline, priority, estimate_minutes, position, promoted_item_id, completed_at, created_at`
+const listCols = `id, user_id, created_by, title, COALESCE(notes,''), priority, estimate_minutes, position, promoted_item_id, completed_at, created_at`
 
 func scanQueueItem(row interface{ Scan(...any) error }) (*QueueItem, error) {
 	var q QueueItem
-	if err := row.Scan(&q.ID, &q.UserID, &q.CreatedBy, &q.Title, &q.Notes, &q.Deadline, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CompletedAt, &q.CreatedAt); err != nil {
+	if err := row.Scan(&q.ID, &q.UserID, &q.CreatedBy, &q.Title, &q.Notes, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CompletedAt, &q.CreatedAt); err != nil {
 		return nil, err
 	}
-	q.UrgencyScore = UrgencyScore(q.Title, q.CreatedAt, q.Deadline, q.Priority)
+	q.UrgencyScore = UrgencyScore(q.Title, q.CreatedAt, q.Priority)
 	return &q, nil
 }
 
@@ -100,34 +88,34 @@ func (s *Store) List(ctx context.Context, userID string) ([]QueueItem, error) {
 	return out, nil
 }
 
-func (s *Store) Create(ctx context.Context, userID, createdBy, title, notes string, deadline *time.Time, priority int, estimateMinutes *int) (*QueueItem, error) {
+func (s *Store) Create(ctx context.Context, userID, createdBy, title, notes string, priority int, estimateMinutes *int) (*QueueItem, error) {
 	var q QueueItem
 	err := s.DB.QueryRow(ctx, `
-		INSERT INTO queue_items (user_id, created_by, title, notes, deadline, priority, estimate_minutes, position)
-		VALUES ($1, $2, $3, $4, $5, $6, $7,
+		INSERT INTO queue_items (user_id, created_by, title, notes, priority, estimate_minutes, position)
+		VALUES ($1, $2, $3, $4, $5, $6,
 		    COALESCE((SELECT MAX(position)+1 FROM queue_items WHERE user_id=$1 AND deleted_at IS NULL), 0))
 		RETURNING `+listCols+`
-	`, userID, createdBy, title, notes, deadline, priority, estimateMinutes).Scan(
-		&q.ID, &q.UserID, &q.CreatedBy, &q.Title, &q.Notes, &q.Deadline, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CompletedAt, &q.CreatedAt)
+	`, userID, createdBy, title, notes, priority, estimateMinutes).Scan(
+		&q.ID, &q.UserID, &q.CreatedBy, &q.Title, &q.Notes, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CompletedAt, &q.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
-	q.UrgencyScore = UrgencyScore(q.Title, q.CreatedAt, q.Deadline, q.Priority)
+	q.UrgencyScore = UrgencyScore(q.Title, q.CreatedAt, q.Priority)
 	return &q, nil
 }
 
-func (s *Store) Update(ctx context.Context, id, userID, title, notes string, deadline *time.Time, priority int, estimateMinutes *int) (*QueueItem, error) {
+func (s *Store) Update(ctx context.Context, id, userID, title, notes string, priority int, estimateMinutes *int) (*QueueItem, error) {
 	var q QueueItem
 	err := s.DB.QueryRow(ctx, `
-		UPDATE queue_items SET title=$3, notes=$4, deadline=$5, priority=$6, estimate_minutes=$7
+		UPDATE queue_items SET title=$3, notes=$4, priority=$5, estimate_minutes=$6
 		WHERE id=$1 AND user_id=$2 AND deleted_at IS NULL AND promoted_item_id IS NULL
 		RETURNING `+listCols+`
-	`, id, userID, title, notes, deadline, priority, estimateMinutes).Scan(
-		&q.ID, &q.UserID, &q.CreatedBy, &q.Title, &q.Notes, &q.Deadline, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CompletedAt, &q.CreatedAt)
+	`, id, userID, title, notes, priority, estimateMinutes).Scan(
+		&q.ID, &q.UserID, &q.CreatedBy, &q.Title, &q.Notes, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CompletedAt, &q.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
-	q.UrgencyScore = UrgencyScore(q.Title, q.CreatedAt, q.Deadline, q.Priority)
+	q.UrgencyScore = UrgencyScore(q.Title, q.CreatedAt, q.Priority)
 	return &q, nil
 }
 
@@ -138,11 +126,11 @@ func (s *Store) Revive(ctx context.Context, id, userID string) (*QueueItem, erro
 		    COALESCE((SELECT MAX(position)+1 FROM queue_items WHERE user_id=$2 AND deleted_at IS NULL), 0)
 		WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
 		RETURNING `+listCols+`
-	`, id, userID).Scan(&q.ID, &q.UserID, &q.CreatedBy, &q.Title, &q.Notes, &q.Deadline, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CompletedAt, &q.CreatedAt)
+	`, id, userID).Scan(&q.ID, &q.UserID, &q.CreatedBy, &q.Title, &q.Notes, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CompletedAt, &q.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
-	q.UrgencyScore = UrgencyScore(q.Title, q.CreatedAt, q.Deadline, q.Priority)
+	q.UrgencyScore = UrgencyScore(q.Title, q.CreatedAt, q.Priority)
 	return &q, nil
 }
 
@@ -152,11 +140,11 @@ func (s *Store) Complete(ctx context.Context, id, userID string) (*QueueItem, er
 		UPDATE queue_items SET completed_at = NOW()
 		WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL AND completed_at IS NULL
 		RETURNING `+listCols+`
-	`, id, userID).Scan(&q.ID, &q.UserID, &q.CreatedBy, &q.Title, &q.Notes, &q.Deadline, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CompletedAt, &q.CreatedAt)
+	`, id, userID).Scan(&q.ID, &q.UserID, &q.CreatedBy, &q.Title, &q.Notes, &q.Priority, &q.EstimateMinutes, &q.Position, &q.PromotedItemID, &q.CompletedAt, &q.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
-	q.UrgencyScore = UrgencyScore(q.Title, q.CreatedAt, q.Deadline, q.Priority)
+	q.UrgencyScore = UrgencyScore(q.Title, q.CreatedAt, q.Priority)
 	return &q, nil
 }
 

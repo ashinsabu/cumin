@@ -6,25 +6,18 @@ import { useAuth } from './AuthContext'
 
 
 // Mirrors server/queue/store.go urgencyScore — keeps optimistic items sorted correctly.
-function computeUrgencyScore(title: string, priority: number, deadline: string | null | undefined): number {
-  let deadlineScore = 0
-  if (deadline) {
-    // Quick tasks are all due today: a deadline only adds a little weight as it nears (max 3, over the last 12h).
-    const hoursLeft = (new Date(deadline).getTime() - Date.now()) / 3_600_000
-    deadlineScore = hoursLeft <= 0 ? 3 : Math.max(0, 3 * (1 - hoursLeft / 12))
-  }
+function computeUrgencyScore(title: string, priority: number): number {
   let kwScore = 0
   const lower = title.toLowerCase()
   for (const kw of ['bug', 'prod', 'blocker', 'critical']) {
     if (lower.includes(kw)) kwScore += 2
   }
-  return deadlineScore + kwScore + (4 - priority) * 2
+  return kwScore + (4 - priority) * 2
 }
 
 type CreatePayload = {
   title: string
   notes?: string
-  deadline?: string | null
   priority?: number
   estimate_minutes?: number | null
 }
@@ -32,7 +25,6 @@ type CreatePayload = {
 type UpdatePayload = {
   title: string
   notes?: string
-  deadline?: string | null
   priority?: number
   estimate_minutes?: number | null
 }
@@ -94,11 +86,10 @@ export function QueueProvider({ children }: { children: ReactNode }) {
       created_by: '',
       title: payload.title,
       notes: payload.notes ?? '',
-      deadline: payload.deadline ?? null,
       priority,
       estimate_minutes: payload.estimate_minutes ?? null,
       position: 999,
-      urgency_score: computeUrgencyScore(payload.title, priority, payload.deadline),
+      urgency_score: computeUrgencyScore(payload.title, priority),
       promoted_item_id: null,
       completed_at: null,
       created_at: now,

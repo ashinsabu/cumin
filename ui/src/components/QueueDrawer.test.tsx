@@ -11,7 +11,7 @@ vi.mock('../lib/auth', () => ({ authFetch: vi.fn() }))
 
 import { ExpandedEditor } from './QueueDrawer'
 
-const item = { id: 'q1', title: 'Feat', notes: '', priority: 2, estimate_minutes: null, deadline: null } as never
+const item = { id: 'q1', title: 'Feat', notes: '', priority: 2, estimate_minutes: null } as never
 
 beforeEach(() => { updateItem.mockClear() })
 

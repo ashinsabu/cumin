@@ -14,19 +14,17 @@ import (
 )
 
 type CreateRequest struct {
-	Title           string     `json:"title"`
-	Notes           string     `json:"notes"`
-	Deadline        *time.Time `json:"deadline"`
-	Priority        int        `json:"priority"`
-	EstimateMinutes *int       `json:"estimate_minutes"`
+	Title           string `json:"title"`
+	Notes           string `json:"notes"`
+	Priority        int    `json:"priority"`
+	EstimateMinutes *int   `json:"estimate_minutes"`
 }
 
 type UpdateRequest struct {
-	Title           string     `json:"title"`
-	Notes           string     `json:"notes"`
-	Deadline        *time.Time `json:"deadline"`
-	Priority        int        `json:"priority"`
-	EstimateMinutes *int       `json:"estimate_minutes"`
+	Title           string `json:"title"`
+	Notes           string `json:"notes"`
+	Priority        int    `json:"priority"`
+	EstimateMinutes *int   `json:"estimate_minutes"`
 }
 
 type PromoteRequest struct {
@@ -113,7 +111,7 @@ func (h *Handler) Create(ctx context.Context, req CreateRequest) (*QueueItem, er
 	}
 	userID := auth.UserIDFromContext(ctx)
 
-	q, err := h.store.Create(ctx, userID, userID, req.Title, req.Notes, req.Deadline, req.Priority, req.EstimateMinutes)
+	q, err := h.store.Create(ctx, userID, userID, req.Title, req.Notes, req.Priority, req.EstimateMinutes)
 	if err != nil {
 		return nil, api.Internal("failed to create queue item")
 	}
@@ -126,7 +124,7 @@ func (h *Handler) Update(ctx context.Context, req UpdateRequest) (*QueueItem, er
 	if req.Title == "" {
 		return nil, api.BadRequest("title required")
 	}
-	q, err := h.store.Update(ctx, id, userID, req.Title, req.Notes, req.Deadline, req.Priority, req.EstimateMinutes)
+	q, err := h.store.Update(ctx, id, userID, req.Title, req.Notes, req.Priority, req.EstimateMinutes)
 	if err != nil {
 		return nil, api.NotFound("queue item not found")
 	}

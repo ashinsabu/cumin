@@ -295,3 +295,22 @@ func TestQueue_List_ReturnsAttentionAndSummary(t *testing.T) {
 		}
 	}
 }
+
+// Quick tasks are all due today, so the queue has no deadline. Older clients (iOS, stale web tabs) may still send
+// one; it must be ignored rather than rejected, and must not come back in the response.
+func TestQueue_Create_LegacyDeadlineIgnored(t *testing.T) {
+	if !queueEnabled() {
+		t.Skip("queue feature disabled (QUEUE_DISABLED=true)")
+	}
+	resp := mustDo(t, testEnv.Server, "POST", "/api/queue", map[string]any{
+		"title":    "legacy client",
+		"priority": 2,
+		"deadline": "2030-01-01T00:00:00Z",
+	})
+	assertStatus(t, resp, http.StatusOK)
+	body := mustDecodeJSON[map[string]any](t, resp)
+	t.Cleanup(func() { hardDeleteQueueItem(body["id"].(string)) })
+	if _, has := body["deadline"]; has {
+		t.Errorf("queue item must not expose a deadline, got %v", body["deadline"])
+	}
+}
