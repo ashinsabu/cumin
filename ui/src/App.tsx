@@ -10,6 +10,8 @@ import { Sidebar, MobileNav } from './components/Sidebar'
 import { ItemModal } from './components/ItemModal'
 import { LoginPage } from './components/LoginPage'
 import { AuthErrorPage } from './components/AuthErrorPage'
+import { VerifyEmailPage } from './components/VerifyEmailPage'
+import { ResetPasswordPage } from './components/ResetPasswordPage'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { BoardView } from './views/BoardView'
 import { ItemsView } from './views/ItemsView'
@@ -125,6 +127,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/auth-error" element={<AuthErrorPage />} />
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="*" element={<AppShell />} />
     </Routes>
   )

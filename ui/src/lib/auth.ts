@@ -99,7 +99,7 @@ export async function authFetch(path: string, init: RequestInit = {}): Promise<R
   return send(accessToken)
 }
 
-async function postAuth(path: string, body?: unknown): Promise<AuthResponse> {
+async function postAuth<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${API}${path}`, {
     method: 'POST',
     credentials: 'include',
@@ -108,11 +108,11 @@ async function postAuth(path: string, body?: unknown): Promise<AuthResponse> {
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) throw new AuthRequestError(res.status, (data as { error?: string }).error ?? `${res.status} ${path}`)
-  return data as AuthResponse
+  return data as T
 }
 
 export async function loginWithPassword(email: string, password: string): Promise<SessionUser> {
-  const body = await postAuth('/api/auth/password/login', { email, password })
+  const body = await postAuth<AuthResponse>('/api/auth/password/login', { email, password })
   accessToken = body.access_token
   return body.user
 }
@@ -126,3 +126,19 @@ export async function logout(): Promise<void> {
     // Offline: the cookie stays until it expires, but this tab is signed out.
   }
 }
+
+// Account lifecycle. Signup, resend and forgot answer identically whether or not the address is
+// registered (the server is enumeration-safe), so callers show one neutral confirmation.
+export const signUp = (email: string, password: string, name: string) =>
+  postAuth<void>('/api/auth/password/signup', { email, password, name })
+
+export const resendVerification = (email: string) =>
+  postAuth<void>('/api/auth/email/resend', { email })
+
+export const verifyEmail = (token: string, password: string) =>
+  postAuth<void>('/api/auth/email/verify', { token, password })
+
+export const requestPasswordReset = (email: string) => postAuth<void>('/api/auth/password/forgot', { email })
+
+export const resetPassword = (token: string, password: string) =>
+  postAuth<void>('/api/auth/password/reset', { token, password })
