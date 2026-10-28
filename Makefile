@@ -1,4 +1,4 @@
-.PHONY: release check check-ui check-server
+.PHONY: release check check-ui check-server e2e
 
 # Run before every commit: make check
 check: check-server check-ui
@@ -12,6 +12,10 @@ check-ui:
 	@cd ui && npx tsc -p tsconfig.app.json --noEmit
 	@echo "→ Vite build"
 	@cd ui && npm run build -- --mode development 2>&1 | tail -5
+
+# End-to-end (Playwright): real server + Postgres + UI. Needs the local DB up. Gates every release.
+e2e:
+	@cd ui && npm run test:e2e
 
 # New release:    make release [BUMP=minor|major]  (default: patch)
 # Non-interactive: make release YES=true

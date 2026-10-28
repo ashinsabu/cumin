@@ -61,6 +61,10 @@ fi
 # Pull latest
 git pull --ff-only origin main
 
+# E2E gate: never tag a build whose sign-in flows don't work end to end
+echo "→ E2E tests"
+make e2e || { echo "error: E2E tests failed — not releasing" && exit 1; }
+
 # Get latest tag (default to v0.0.0 if none)
 LATEST=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
 LATEST="${LATEST:-v0.0.0}"
