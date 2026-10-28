@@ -57,11 +57,12 @@ wipe-user:
 		BEGIN \
 		  SELECT id INTO v_uid FROM users WHERE email = '$(EMAIL)'; \
 		  DELETE FROM status_transitions WHERE item_id IN (SELECT id FROM items WHERE project_id IN (SELECT id FROM projects WHERE user_id = v_uid)); \
-		  DELETE FROM items WHERE project_id IN (SELECT id FROM projects WHERE user_id = v_uid); \
 		  DELETE FROM queue_items WHERE user_id = v_uid; \
+		  DELETE FROM items WHERE project_id IN (SELECT id FROM projects WHERE user_id = v_uid); \
 		  DELETE FROM sprints WHERE project_id IN (SELECT id FROM projects WHERE user_id = v_uid); \
 		  DELETE FROM epics WHERE user_id = v_uid; \
 		  DELETE FROM projects WHERE user_id = v_uid; \
+		  DELETE FROM saved_views WHERE user_id = v_uid; \
 		  DELETE FROM statuses WHERE user_id = v_uid; \
 		  DELETE FROM users WHERE id = v_uid; \
 		END \$\$;"
