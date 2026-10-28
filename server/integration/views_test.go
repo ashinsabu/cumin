@@ -94,3 +94,21 @@ func TestViews_Delete_NotFoundAndRepeat(t *testing.T) {
 	assertStatus(t, resp, http.StatusNotFound)
 	drainClose(resp)
 }
+
+// Regression: two saved views named "x" could be created. Names are unique per user,
+// case- and whitespace-insensitively, so the sidebar never shows two identical entries.
+func TestViews_Create_RejectsDuplicateName(t *testing.T) {
+	createView(t, map[string]any{"name": "Dup view"})
+
+	for _, name := range []string{"Dup view", "  dup VIEW  "} {
+		resp := mustDo(t, testEnv.Server, "POST", "/api/views", map[string]any{"name": name})
+		assertStatus(t, resp, http.StatusConflict)
+		drainClose(resp)
+	}
+}
+
+func TestViews_Create_WhitespaceOnlyNameRejected(t *testing.T) {
+	resp := mustDo(t, testEnv.Server, "POST", "/api/views", map[string]any{"name": "   "})
+	assertStatus(t, resp, http.StatusBadRequest)
+	drainClose(resp)
+}
