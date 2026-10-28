@@ -496,7 +496,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Get board
       tags:
       - board
@@ -522,7 +522,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Update board
       tags:
       - board
@@ -540,7 +540,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: List board statuses
       tags:
       - board
@@ -570,7 +570,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Create board status
       tags:
       - board
@@ -594,7 +594,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Delete board status
       tags:
       - board
@@ -625,7 +625,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Reorder board statuses
       tags:
       - board
@@ -655,7 +655,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: List epics
       tags:
       - epics
@@ -685,7 +685,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Create epic
       tags:
       - epics
@@ -705,7 +705,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Delete epic
       tags:
       - epics
@@ -740,7 +740,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Update epic
       tags:
       - epics
@@ -760,7 +760,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Restore epic
       tags:
       - epics
@@ -797,7 +797,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: List items
       tags:
       - items
@@ -827,7 +827,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Create item
       tags:
       - items
@@ -847,7 +847,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Delete item
       tags:
       - items
@@ -870,7 +870,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Get item
       tags:
       - items
@@ -905,7 +905,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Update item
       tags:
       - items
@@ -941,7 +941,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Move item
       tags:
       - items
@@ -961,7 +961,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Restore item
       tags:
       - items
@@ -985,7 +985,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: List item transitions
       tags:
       - items
@@ -1003,7 +1003,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: List backlog items
       tags:
       - items
@@ -1034,7 +1034,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Reorder items
       tags:
       - items
@@ -1052,7 +1052,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: List projects
       tags:
       - projects
@@ -1086,7 +1086,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Create project
       tags:
       - projects
@@ -1106,7 +1106,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Delete project
       tags:
       - projects
@@ -1141,7 +1141,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Update project
       tags:
       - projects
@@ -1165,7 +1165,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Restore project
       tags:
       - projects
@@ -1183,7 +1183,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: List queue items
       tags:
       - queue
@@ -1213,7 +1213,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Create queue item
       tags:
       - queue
@@ -1233,7 +1233,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Archive queue item
       tags:
       - queue
@@ -1268,7 +1268,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Update queue item
       tags:
       - queue
@@ -1304,7 +1304,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Promote queue item to board item
       tags:
       - queue
@@ -1327,7 +1327,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Reorder queue items
       tags:
       - queue
@@ -1345,7 +1345,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: List sprints
       tags:
       - sprints
@@ -1371,7 +1371,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Create sprint
       tags:
       - sprints
@@ -1399,7 +1399,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Activate sprint
       tags:
       - sprints
@@ -1427,7 +1427,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Close sprint
       tags:
       - sprints
@@ -1451,7 +1451,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Spillover preview
       tags:
       - sprints
@@ -1469,7 +1469,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Get active sprint
       tags:
       - sprints
@@ -1483,7 +1483,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: Empty trash
       tags:
       - trash
@@ -1500,7 +1500,7 @@ paths:
           schema:
             $ref: '#/definitions/api.ErrorResponse'
       security:
-      - CookieAuth: []
+      - BearerAuth: []
       summary: List trash
       tags:
       - trash
@@ -1533,8 +1533,8 @@ paths:
       tags:
       - meta
 securityDefinitions:
-  CookieAuth:
-    in: cookie
-    name: token
+  BearerAuth:
+    in: header
+    name: Authorization
     type: apiKey
 swagger: "2.0"
