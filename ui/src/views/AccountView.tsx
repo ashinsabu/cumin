@@ -17,6 +17,7 @@ const PRESET_IDS: Preset['id'][] = ['cyber', 'glass', 'minimal']
 // ── Trash tab ────────────────────────────────────────────────────────────────
 
 type TrashProject = { id: string; name: string; prefix: string; color: string; deleted_at: string; item_count: number }
+type TrashItem    = { id: string; display_id: string; title: string; project_name: string; deleted_at: string }
 type TrashEpic    = { id: string; name: string; color: string; deleted_at: string; item_count: number }
 
 function timeAgo(iso: string) {
@@ -30,9 +31,10 @@ function daysLeft(iso: string) {
   return Math.max(0, Math.ceil((new Date(iso).getTime() + 30 * 86400000 - Date.now()) / 86400000))
 }
 
-function RecentlyDeletedSection() {
+export function RecentlyDeletedSection() {
   const [projects, setProjects] = useState<TrashProject[]>([])
   const [epics, setEpics]       = useState<TrashEpic[]>([])
+  const [items, setItems]       = useState<TrashItem[]>([])
   const [loading, setLoading]   = useState(true)
   const [restoring, setRestoring] = useState<string | null>(null)
   const [error, setError]       = useState('')
@@ -46,13 +48,14 @@ function RecentlyDeletedSection() {
         const d = await res.json()
         setProjects(d.projects ?? [])
         setEpics(d.epics ?? [])
+        setItems(d.items ?? [])
       }
     } finally { setLoading(false) }
   }
 
   useEffect(() => { load() }, [])
 
-  async function restore(type: 'projects' | 'epics', id: string) {
+  async function restore(type: 'projects' | 'epics' | 'items', id: string) {
     setRestoring(id); setError('')
     try {
       const res = await authFetch(`/api/${type}/${id}/restore`, { method: 'POST' })
@@ -60,7 +63,7 @@ function RecentlyDeletedSection() {
       else {
         // Invalidate TanStack Query cache so views reflect restored data immediately
         if (type === 'epics') qc.invalidateQueries({ queryKey: epicKeys.all })
-        else qc.invalidateQueries({ queryKey: projectKeys.all })
+        else if (type === 'projects') qc.invalidateQueries({ queryKey: projectKeys.all })
         qc.invalidateQueries({ queryKey: itemKeys.all })
         await load()
       }
@@ -76,7 +79,7 @@ function RecentlyDeletedSection() {
 
   if (loading) return <div className="py-8 text-center text-sm text-ghost">Loading…</div>
 
-  const isEmpty = projects.length === 0 && epics.length === 0
+  const isEmpty = projects.length === 0 && epics.length === 0 && items.length === 0
 
   return (
     <div className="space-y-5">
@@ -105,6 +108,26 @@ function RecentlyDeletedSection() {
                     <button onClick={() => restore('projects', p.id)} disabled={restoring === p.id}
                       className="text-xs px-2.5 py-1 rounded-[var(--c-radius-card)] border border-line text-dim hover:text-ink hover:border-ghost disabled:opacity-40 transition-colors">
                       {restoring === p.id ? '…' : 'Restore'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {items.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-ghost mb-2">Items</p>
+              <div className="rounded-[var(--c-radius-card)] border border-line overflow-hidden">
+                {items.map((it) => (
+                  <div key={it.id} className="flex items-center gap-3 px-4 py-3 border-b border-line last:border-0 bg-surface">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-ink truncate"><span className="font-mono text-xs text-ghost mr-2">{it.display_id}</span>{it.title}</div>
+                      <div className="text-xs text-ghost mt-0.5">{it.project_name} · Deleted {timeAgo(it.deleted_at)} · purges in {daysLeft(it.deleted_at)}d</div>
+                    </div>
+                    <button onClick={() => restore('items', it.id)} disabled={restoring === it.id}
+                      className="text-xs px-2.5 py-1 rounded-[var(--c-radius-card)] border border-line text-dim hover:text-ink hover:border-ghost disabled:opacity-40 transition-colors">
+                      {restoring === it.id ? '…' : 'Restore'}
                     </button>
                   </div>
                 ))}
