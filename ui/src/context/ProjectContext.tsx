@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, type ReactNode } from 'react'
 import { useProjects } from '../hooks/useProjects'
+import { useAuth } from './AuthContext'
 import { usePersistentState } from '../hooks/usePersistentState'
 import type { Project } from '../types'
 
@@ -11,7 +12,10 @@ type ProjectContextValue = {
 const ProjectContext = createContext<ProjectContextValue | null>(null)
 
 export function ProjectProvider({ children }: { children: ReactNode }) {
-  const { data: projects = [] } = useProjects()
+  // Mounted above the auth gate: only fetch once signed in, and re-render on identity change so the
+  // query is rebuilt after AuthProvider clears the cache (see AuthContext.applyUser).
+  const { user } = useAuth()
+  const { data: projects = [] } = useProjects({ enabled: !!user })
   const [selectedId, setSelectedId] = usePersistentState<string | null>('cumin.selectedProjectId', null)
 
   const selectedProject =

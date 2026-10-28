@@ -31,29 +31,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Query keys are not user-scoped, so cached data must never survive a change of identity
   // (logout, lost session, or a different account signing in on the same tab).
+  // The clear must happen BEFORE the state change, not in an effect after it: observers mounted
+  // above the auth gate (ProjectProvider) re-resolve their query on the next render, and clearing
+  // after that render leaves them attached to a removed query that never refetches.
   const userIdRef = useRef<string | undefined>(undefined)
-  useEffect(() => {
-    if (userIdRef.current !== user?.id) queryClient.clear()
-    userIdRef.current = user?.id
-  }, [user?.id, queryClient])
+  const applyUser = useCallback((next: SessionUser | null) => {
+    if (userIdRef.current !== next?.id) queryClient.clear()
+    userIdRef.current = next?.id
+    setUser(next)
+  }, [queryClient])
 
   // Boot: the refresh cookie (if any) is exchanged for an access token and the user in one call.
   useEffect(() => {
     refreshSessionWithRetry()
-      .then(setUser)
-      .catch(() => setUser(null))
+      .then(applyUser)
+      .catch(() => applyUser(null))
       .finally(() => setLoading(false))
-    onSessionLost(() => setUser(null))
+    onSessionLost(() => applyUser(null))
     return () => onSessionLost(null)
-  }, [])
+  }, [applyUser])
 
   const login = useCallback(async (email: string, password: string) => {
-    setUser(await loginWithPassword(email, password))
-  }, [])
+    applyUser(await loginWithPassword(email, password))
+  }, [applyUser])
 
   const logout = useCallback(() => {
-    void endSession().finally(() => setUser(null))
-  }, [])
+    void endSession().finally(() => applyUser(null))
+  }, [applyUser])
 
   return (
     <AuthContext.Provider value={{ user, loading, login, logout }}>
