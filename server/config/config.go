@@ -85,6 +85,9 @@ func Load() Config {
 	if cfg.AllowedOrigins == "" {
 		fatal("ALLOWED_ORIGINS must be set", "example", "http://localhost:3000,https://cumin.ashinsabu.com")
 	}
+	if err := cfg.validateOrigins(); err != nil {
+		fatal("invalid ALLOWED_ORIGINS", "err", err)
+	}
 	if err := cfg.validateSessions(); err != nil {
 		fatal("invalid session config", "err", err)
 	}
@@ -121,11 +124,25 @@ func (c Config) AllowedOriginsList() []string {
 	return out
 }
 
-// SecureCookies reports whether the frontend is served over https (first allowed origin),
-// which decides the session cookie's Secure attribute.
+// validateOrigins requires https for every origin outside development. Deployment decisions (Secure
+// cookies, the mail provider requirement) hang off ENV, so a stray http origin in production would
+// otherwise silently weaken them.
+func (c Config) validateOrigins() error {
+	if c.IsDev() {
+		return nil
+	}
+	for _, o := range c.AllowedOriginsList() {
+		if !strings.HasPrefix(o, "https://") {
+			return errors.New("ALLOWED_ORIGINS must all be https outside ENV=development, got " + o)
+		}
+	}
+	return nil
+}
+
+// SecureCookies reports whether auth cookies carry the Secure attribute: everywhere except local
+// development (plain http).
 func (c Config) SecureCookies() bool {
-	origins := c.AllowedOriginsList()
-	return len(origins) > 0 && strings.HasPrefix(origins[0], "https://")
+	return !c.IsDev()
 }
 
 // MailerConfigured reports whether a real mail provider is set up.
@@ -135,8 +152,8 @@ func (c Config) MailerConfigured() bool {
 
 // PasswordAuthEnabled is the single source of truth for email+password auth, used both for the
 // /api/flags value and for registering the routes. It needs email delivery: without a provider it is
-// only on for local http development, where emails are logged. Never on an https origin, because the
+// only on in local development, where emails are logged. Never outside ENV=development, because the
 // log mailer prints live tokens.
 func (c Config) PasswordAuthEnabled() bool {
-	return !c.PasswordAuthDisabled && (c.MailerConfigured() || !c.SecureCookies())
+	return !c.PasswordAuthDisabled && (c.MailerConfigured() || c.IsDev())
 }

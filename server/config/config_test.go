@@ -14,6 +14,7 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("GOOGLE_CLIENT_ID", "id")
 	t.Setenv("GOOGLE_CLIENT_SECRET", "secret")
 	t.Setenv("ALLOWED_ORIGINS", "http://localhost:3000")
+	t.Setenv("ENV", "development")
 	// Hermetic: ignore any session policy exported in the developer's shell. t.Setenv registers the
 	// restore, then Unsetenv leaves the variable truly absent for this test.
 	for _, k := range []string{"SESSION_IDLE_TIMEOUT", "SESSION_MAX_LIFETIME"} {
@@ -62,6 +63,62 @@ func TestValidateSessions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := Config{SessionIdleTimeout: tt.idle, SessionMaxLifetime: tt.max}.validateSessions()
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("err = %v, want containing %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// Regression: cookie Secure and the log-mailer decision used to depend on the position of the first
+// ALLOWED_ORIGINS entry. A production list like "http://localhost:3000,https://app" turned the
+// cookie insecure and, with no Resend key, logged live verification/reset tokens.
+func TestDeploymentDecisionsFollowEnv(t *testing.T) {
+	mailer := func(c Config) Config { c.ResendAPIKey, c.MailFrom = "key", "from@x.co"; return c }
+	prod := Config{Env: "production", AllowedOrigins: "http://localhost:3000,https://cumin.example"}
+	dev := Config{Env: "development", AllowedOrigins: "http://localhost:3000"}
+
+	if !prod.SecureCookies() {
+		t.Error("production cookies must be Secure whatever the origin order")
+	}
+	if dev.SecureCookies() {
+		t.Error("development cookies must work over plain http")
+	}
+	if prod.PasswordAuthEnabled() {
+		t.Error("production without a mail provider must not enable password auth (log mailer prints tokens)")
+	}
+	if !mailer(prod).PasswordAuthEnabled() {
+		t.Error("production with a mail provider should enable password auth")
+	}
+	if !dev.PasswordAuthEnabled() {
+		t.Error("development without a provider should enable password auth via the log mailer")
+	}
+	killed := dev
+	killed.PasswordAuthDisabled = true
+	if killed.PasswordAuthEnabled() || mailer(killed).PasswordAuthEnabled() {
+		t.Error("PASSWORD_AUTH_DISABLED must win")
+	}
+}
+
+func TestValidateOrigins(t *testing.T) {
+	tests := []struct {
+		name, env, origins, wantErr string
+	}{
+		{"production https", "production", "https://a.example,https://b.example", ""},
+		{"production with an http origin", "production", "https://a.example,http://localhost:3000", "http://localhost:3000"},
+		{"production http only", "production", "http://a.example", "http://a.example"},
+		{"development allows http", "development", "http://localhost:3000", ""},
+		{"spaces around entries", "production", " https://a.example , https://b.example ", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := Config{Env: tt.env, AllowedOrigins: tt.origins}.validateOrigins()
 			if tt.wantErr == "" {
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)
