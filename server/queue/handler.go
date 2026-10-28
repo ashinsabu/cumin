@@ -2,6 +2,7 @@ package queue
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/ashinsabu/cumin/server/api"
@@ -30,6 +31,7 @@ type PromoteRequest struct {
 	ProjectID string  `json:"project_id"`
 	StatusID  string  `json:"status_id"`
 	EpicID    *string `json:"epic_id"`
+	SprintID  *string `json:"sprint_id"`
 }
 
 type ListResponse struct {
@@ -153,8 +155,11 @@ func (h *Handler) Promote(ctx context.Context, req PromoteRequest) (*PromoteResu
 	}
 	userID := auth.UserIDFromContext(ctx)
 
-	result, err := h.store.Promote(ctx, id, userID, req.ProjectID, req.StatusID, req.EpicID)
+	result, err := h.store.Promote(ctx, id, userID, req.ProjectID, req.StatusID, req.EpicID, req.SprintID)
 	if err != nil {
+		if errors.Is(err, ErrInvalidSprint) {
+			return nil, api.BadRequest("sprint_id is invalid")
+		}
 		return nil, api.Internal("failed to promote queue item")
 	}
 	return result, nil

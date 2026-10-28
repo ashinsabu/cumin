@@ -2,6 +2,7 @@ package queue
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -209,12 +210,27 @@ type PromoteResult struct {
 	ItemDisplay string `json:"item_display_id"`
 }
 
-func (s *Store) Promote(ctx context.Context, queueID, userID, projectID, statusID string, epicID *string) (*PromoteResult, error) {
+// ErrInvalidSprint means the requested sprint does not exist in the target project.
+var ErrInvalidSprint = errors.New("sprint does not belong to project")
+
+func (s *Store) Promote(ctx context.Context, queueID, userID, projectID, statusID string, epicID, sprintID *string) (*PromoteResult, error) {
 	tx, err := s.DB.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
+
+	if sprintID != nil {
+		var ok bool
+		if err := tx.QueryRow(ctx,
+			`SELECT EXISTS(SELECT 1 FROM sprints WHERE id = $1 AND project_id = $2)`, *sprintID, projectID,
+		).Scan(&ok); err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, ErrInvalidSprint
+		}
+	}
 
 	var title string
 	var priority int
@@ -242,11 +258,11 @@ func (s *Store) Promote(ctx context.Context, queueID, userID, projectID, statusI
 
 	var itemID string
 	err = tx.QueryRow(ctx, `
-		INSERT INTO items (project_id, epic_id, status_id, display_id, title, description, priority, estimate_minutes, position)
-		VALUES ($1, $2, $3, $4, $5, '', $6, $7,
+		INSERT INTO items (project_id, epic_id, sprint_id, status_id, display_id, title, description, priority, estimate_minutes, position)
+		VALUES ($1, $2, $8, $3, $4, $5, '', $6, $7,
 		    COALESCE((SELECT MAX(position)+1 FROM items WHERE project_id=$1 AND status_id=$3), 0))
 		RETURNING id
-	`, projectID, epicID, statusID, displayID, title, priority, estimateMinutes).Scan(&itemID)
+	`, projectID, epicID, statusID, displayID, title, priority, estimateMinutes, sprintID).Scan(&itemID)
 	if err != nil {
 		return nil, err
 	}

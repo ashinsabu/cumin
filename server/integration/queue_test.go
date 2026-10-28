@@ -206,3 +206,58 @@ func TestQueue_List_Empty(t *testing.T) {
 		t.Errorf("expected items array (possibly empty), got nil")
 	}
 }
+
+// ─── Promote into a sprint ────────────────────────────────────────────────────
+
+// Capture-to-plan loop (user feedback 2026-10-28): a captured thought could be promoted to an item but
+// never into a sprint, so planning always meant a second manual step per item.
+func TestQueue_Promote_IntoSprint(t *testing.T) {
+	if !queueEnabled() {
+		t.Skip("queue feature flag not set")
+	}
+	sp := createSprint(t)
+	t.Cleanup(func() { hardDeleteSprint(sp.ID) })
+	q := createQueueItem(t, "Plan me", 2)
+	t.Cleanup(func() { hardDeleteQueueItem(q.ID) })
+
+	resp := mustDo(t, testEnv.Server, "POST", "/api/queue/"+q.ID+"/promote", map[string]any{
+		"project_id": testEnv.ProjectID,
+		"status_id":  testEnv.TodoStatusID,
+		"sprint_id":  sp.ID,
+	})
+	assertStatus(t, resp, http.StatusOK)
+	promoted := mustDecodeJSON[promoteResultJSON](t, resp)
+	t.Cleanup(func() { hardDeleteItems(promoted.ItemID) })
+
+	resp = mustDo(t, testEnv.Server, "GET", "/api/items/"+promoted.ItemID, nil)
+	assertStatus(t, resp, http.StatusOK)
+	got := mustDecodeJSON[struct {
+		SprintID *string `json:"sprint_id"`
+	}](t, resp)
+	if got.SprintID == nil || *got.SprintID != sp.ID {
+		t.Errorf("promoted item sprint_id = %v, want %s", got.SprintID, sp.ID)
+	}
+}
+
+func TestQueue_Promote_RejectsUnknownSprint(t *testing.T) {
+	if !queueEnabled() {
+		t.Skip("queue feature flag not set")
+	}
+	q := createQueueItem(t, "Bad sprint", 2)
+	t.Cleanup(func() { hardDeleteQueueItem(q.ID) })
+
+	resp := mustDo(t, testEnv.Server, "POST", "/api/queue/"+q.ID+"/promote", map[string]any{
+		"project_id": testEnv.ProjectID,
+		"status_id":  testEnv.TodoStatusID,
+		"sprint_id":  "00000000-0000-0000-0000-000000000000",
+	})
+	assertStatus(t, resp, http.StatusBadRequest)
+	drainClose(resp)
+
+	// The queue item must survive a rejected promote.
+	var promoted *string
+	testEnv.DB.QueryRow(context.Background(), `SELECT promoted_item_id::text FROM queue_items WHERE id = $1`, q.ID).Scan(&promoted)
+	if promoted != nil {
+		t.Errorf("queue item was promoted despite 400")
+	}
+}
