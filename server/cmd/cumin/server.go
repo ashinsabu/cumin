@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -73,20 +72,15 @@ type Server struct {
 	pool     *pgxpool.Pool
 	authRepo *auth.Repo
 	http     *http.Server
-	// streamCtx is the base context of every request. Cancelling it ends long-lived SSE streams,
-	// which http.Server.Shutdown would otherwise wait on until the timeout.
-	streamCtx    context.Context
-	cancelStream context.CancelFunc
+	// streamShutdown is closed when shutdown begins, ending long-lived SSE streams that
+	// http.Server.Shutdown would otherwise wait on until the timeout. Other in-flight requests keep
+	// their contexts and finish normally.
+	streamShutdown chan struct{}
 }
 
 func NewServer(cfg config.Config, pool *pgxpool.Pool) *Server {
-	s := &Server{cfg: cfg, pool: pool, authRepo: auth.NewRepo(pool)}
-	s.streamCtx, s.cancelStream = context.WithCancel(context.Background())
-	s.http = &http.Server{
-		Addr:        ":" + cfg.Port,
-		Handler:     s.Handler(),
-		BaseContext: func(net.Listener) context.Context { return s.streamCtx },
-	}
+	s := &Server{cfg: cfg, pool: pool, authRepo: auth.NewRepo(pool), streamShutdown: make(chan struct{})}
+	s.http = &http.Server{Addr: ":" + cfg.Port, Handler: s.Handler()}
 	return s
 }
 
@@ -107,7 +101,7 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 
 	slog.Info("cumin server shutting down")
-	s.cancelStream()
+	close(s.streamShutdown)
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 	if err := s.http.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -157,7 +151,7 @@ func (s *Server) Handler() http.Handler {
 			r.Get("/api/auth/me", authHandler.HandleMe)
 			r.Post("/api/auth/logout", authHandler.HandleLogout)
 
-			registerDomainRoutes(r, s.pool, cfg)
+			registerDomainRoutes(r, s.pool, cfg, s.streamShutdown)
 		})
 	})
 	return r
@@ -182,7 +176,7 @@ func swaggerJSONHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(swaggerDocs.JSON)
 }
 
-func registerDomainRoutes(r chi.Router, pool *pgxpool.Pool, cfg config.Config) {
+func registerDomainRoutes(r chi.Router, pool *pgxpool.Pool, cfg config.Config, streamShutdown <-chan struct{}) {
 	boardStore := &board.Store{DB: pool}
 	projectStore := &project.Store{DB: pool}
 	epicStore := &epic.Store{DB: pool}
@@ -202,7 +196,7 @@ func registerDomainRoutes(r chi.Router, pool *pgxpool.Pool, cfg config.Config) {
 		trash.NewHandler(projectStore, epicStore).Routes(r)
 		queue.NewHandler(&queue.Store{DB: pool}, projectStore).Routes(r)
 		views.NewHandler(&views.Store{DB: pool}, projectStore).Routes(r)
-		r.Get("/api/events", hub.NewHandler(h, cfg.IsFeatureEnabled("realtime")).Events)
+		r.Get("/api/events", hub.NewHandler(h, cfg.IsFeatureEnabled("realtime")).WithShutdown(streamShutdown).Events)
 	})
 }
 
