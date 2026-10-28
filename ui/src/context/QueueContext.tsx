@@ -38,6 +38,7 @@ type QueueContextValue = {
   createItem: (p: CreatePayload) => Promise<QueueItem>
   updateItem: (id: string, p: UpdatePayload) => Promise<void>
   archiveItem: (id: string) => void
+  archiveItems: (ids: string[]) => void
   deleteItemSilent: (id: string) => Promise<void>
   completeItem: (id: string) => Promise<void>
   reviveItem: (id: string) => Promise<void>
@@ -176,19 +177,28 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const archiveItem = useCallback((id: string): void => {
-    const snapshot = itemsRef.current.find(i => i.id === id)
-    removing.current.add(id)
-    setItems(prev => prev.filter(i => i.id !== id))
+  // Dismiss one or many entries behind a single undo toast; the DELETEs only go out when the window closes.
+  const archiveItems = useCallback((ids: string[]): void => {
+    const snapshots = itemsRef.current.filter(i => ids.includes(i.id))
+    if (snapshots.length === 0) return
+    const gone = new Set(snapshots.map(i => i.id))
+    gone.forEach(id => removing.current.add(id))
+    setItems(prev => prev.filter(i => !gone.has(i.id)))
     pushToast({
-      message: 'Removed from queue',
-      undo: snapshot ? () => {
-        removing.current.delete(id)
-        setItems(prev => prev.some(i => i.id === id) ? prev : [...prev, snapshot].sort((a, b) => b.urgency_score - a.urgency_score))
-      } : undefined,
-      onCommit: () => authFetch(`/api/queue/${id}`, { method: 'DELETE' }).then(() => {}).finally(() => { removing.current.delete(id) }),
+      message: snapshots.length === 1 ? 'Removed from queue' : `Removed ${snapshots.length} from queue`,
+      undo: () => {
+        gone.forEach(id => removing.current.delete(id))
+        setItems(prev => {
+          const present = new Set(prev.map(i => i.id))
+          return [...prev, ...snapshots.filter(i => !present.has(i.id))].sort((a, b) => b.urgency_score - a.urgency_score)
+        })
+      },
+      onCommit: () => Promise.all([...gone].map(id =>
+        authFetch(`/api/queue/${id}`, { method: 'DELETE' }).then(() => {}).finally(() => { removing.current.delete(id) }),
+      )).then(() => {}),
     })
   }, [pushToast])
+  const archiveItem = useCallback((id: string): void => archiveItems([id]), [archiveItems])
 
   const deleteItemSilent = useCallback(async (id: string): Promise<void> => {
     const snapshot = itemsRef.current.find(i => i.id === id)
@@ -239,7 +249,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
   }, [fetchItems])
 
   return (
-    <QueueContext.Provider value={{ items, summary, loading, createItem, updateItem, archiveItem, deleteItemSilent, completeItem, reviveItem, reorderItems, promoteItem }}>
+    <QueueContext.Provider value={{ items, summary, loading, createItem, updateItem, archiveItem, archiveItems, deleteItemSilent, completeItem, reviveItem, reorderItems, promoteItem }}>
       {children}
     </QueueContext.Provider>
   )

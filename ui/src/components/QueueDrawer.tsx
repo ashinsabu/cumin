@@ -529,7 +529,7 @@ function StaleSection({ items }: { items: QueueItem[] }) {
   const [open, setOpen] = useState(false)
   const [convertingId, setConvertingId] = useState<string | null>(null)
   const [convertedIds, setConvertedIds] = useState<Set<string>>(new Set())
-  const { reviveItem, archiveItem, deleteItemSilent, completeItem, promoteItem } = useQueue()
+  const { reviveItem, archiveItem, archiveItems, completeItem, promoteItem } = useQueue()
 
   const visibleItems = items.filter((i) => !convertedIds.has(i.id))
   const sel = useBulkSelection(visibleItems.map((i) => i.id))
@@ -645,7 +645,7 @@ function StaleSection({ items }: { items: QueueItem[] }) {
                 actions={[
                   { label: '↩ Revive', onClick: () => sel.run((id) => reviveItem(id)) },
                   { label: '✓ Done', onClick: () => sel.run((id) => completeItem(id)), tone: 'done' },
-                  { label: '× Delete', onClick: () => sel.run((id) => deleteItemSilent(id)), tone: 'danger' },
+                  { label: '× Dismiss', onClick: () => { archiveItems([...sel.selected]); sel.exit() }, tone: 'danger' },
                 ]}
                 onSendToBoard={(payload) => sel.run(async (id) => {
                   await promoteItem(id, payload)
@@ -766,7 +766,7 @@ type QueueContentProps = {
 }
 
 function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: QueueContentProps) {
-  const { items, summary, loading, createItem, archiveItem, completeItem, deleteItemSilent, promoteItem, reorderItems } = useQueue()
+  const { items, summary, loading, createItem, archiveItem, completeItem, archiveItems, promoteItem, reorderItems } = useQueue()
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [showNew, setShowNew] = useState(false)
   const [draggingId, setDraggingId] = useState<string | null>(null)
@@ -915,7 +915,7 @@ function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: Qu
             busy={sel.busy}
             actions={[
               { label: '✓ Done', onClick: () => sel.run((id) => completeItem(id)), tone: 'done' },
-              { label: '× Dismiss', onClick: () => sel.run((id) => deleteItemSilent(id)), tone: 'danger' },
+              { label: '× Dismiss', onClick: () => { archiveItems([...sel.selected]); sel.exit() }, tone: 'danger' },
             ]}
             onSendToBoard={(payload) => sel.run((id) => promoteItem(id, payload))}
           />

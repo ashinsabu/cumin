@@ -3,8 +3,9 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 
 const updateItem = vi.fn(async () => {})
 const completeItem = vi.fn(async (_id: string) => {})
+const archiveItems = vi.fn()
 const queueState = vi.hoisted(() => ({ items: [] as unknown[], summary: null as unknown }))
-vi.mock('../context/QueueContext', () => ({ useQueue: () => ({ updateItem, completeItem, promoteItem: vi.fn(), loading: false, ...queueState }) }))
+vi.mock('../context/QueueContext', () => ({ useQueue: () => ({ updateItem, completeItem, archiveItems, promoteItem: vi.fn(), loading: false, ...queueState }) }))
 vi.mock('../hooks/useProjects', () => ({ useProjects: () => ({ data: [] }) }))
 vi.mock('../hooks/useBoardQueries', () => ({ useBoardStatuses: () => ({ data: [] }) }))
 vi.mock('../hooks/useEpics', () => ({ useEpics: () => ({ data: [] }) }))
@@ -81,6 +82,15 @@ describe('queue mass selection', () => {
     fireEvent.click(screen.getByText('Select'))
     fireEvent.click(screen.getAllByRole('checkbox')[1].parentElement!)
     expect(screen.getByText('1 selected')).toBeTruthy()
+  })
+
+  it('bulk Dismiss goes through the undoable path in one call', () => {
+    render(<QueueDrawer open onToggle={() => {}} />)
+    fireEvent.click(screen.getByText('Select'))
+    fireEvent.click(screen.getByText('task a'))
+    fireEvent.click(screen.getByText('task b'))
+    fireEvent.click(screen.getByText('× Dismiss'))
+    expect(archiveItems).toHaveBeenCalledWith(['a', 'b'])
   })
 
   it('keeps failed entries selected so they can be retried', async () => {
