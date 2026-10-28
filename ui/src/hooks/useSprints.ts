@@ -2,8 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '../lib/api'
 import { itemKeys } from './useItems'
 import type { Sprint } from '../types'
+import { authFetch } from '../lib/auth'
 
-const API = import.meta.env.VITE_API_URL ?? ''
 
 export const sprintKeys = {
   all: ['sprints'] as const,
@@ -23,7 +23,7 @@ export function useActiveSprint() {
   return useQuery({
     queryKey: sprintKeys.active,
     queryFn: async (): Promise<Sprint | null> => {
-      const res = await fetch(`${API}/api/sprints/active`, { credentials: 'include' })
+      const res = await authFetch(`/api/sprints/active`)
       if (res.status === 404) return null
       if (!res.ok) throw new Error(`${res.status} /api/sprints/active`)
       return res.json()

@@ -10,6 +10,7 @@ import { parseEstimate, formatEstimate } from '../hooks/useFormat'
 import { PRIORITY } from '../constants'
 import { Select } from './ui'
 import type { QueueItem } from '../types'
+import { authFetch } from '../lib/auth'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -882,10 +883,9 @@ function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: Qu
 function HistorySection() {
   const [open, setOpen] = useState(false)
   const [history, setHistory] = useState<QueueItem[]>([])
-  const API = import.meta.env.VITE_API_URL ?? ''
 
   const load = async () => {
-    const res = await fetch(`${API}/api/queue/history`, { credentials: 'include' })
+    const res = await authFetch(`/api/queue/history`)
     if (res.ok) {
       const data = await res.json()
       setHistory(data.items ?? [])
