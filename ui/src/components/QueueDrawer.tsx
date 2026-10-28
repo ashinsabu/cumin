@@ -67,7 +67,7 @@ function formatDeadline(iso: string): string {
   const d = new Date(iso)
   const diff = Math.ceil((d.getTime() - Date.now()) / 86400000)
   if (diff < 0) return 'overdue'
-  if (diff === 0) return 'due today'
+  if (diff === 0) return ''
   if (diff === 1) return 'due tomorrow'
   return `due in ${diff}d`
 }
@@ -157,23 +157,31 @@ function itemToDraft(item: QueueItem): CardDraft {
     title: item.title,
     priority: item.priority,
     estimate: item.estimate_minutes ? formatEstimate(item.estimate_minutes) : '',
-    deadline: item.deadline ? item.deadline.slice(0, 10) : '',
+    deadline: item.deadline ?? '',
     notes: item.notes,
   }
 }
 
-// Parse "2d", "1w", "3h", "1m" → ISO date string. m = months (not minutes, deadlines context).
-function parseDueIn(text: string): string {
+// Parse "2d", "1w", "1m" → ISO timestamp. m = months (not minutes, deadlines context).
+// Queue items are all "due today" by default (they auto-archive after 24h), so hours or anything
+// under a day is not a deadline: returns ''.
+export function parseDueIn(text: string): string {
   const s = text.trim().toLowerCase()
   const n = parseFloat(s)
   if (!n || n <= 0) return ''
   const d = new Date()
-  if (s.endsWith('h'))  d.setHours(d.getHours() + n)
-  else if (s.endsWith('d')) d.setDate(d.getDate() + n)
+  if (s.endsWith('d')) d.setDate(d.getDate() + n)
   else if (s.endsWith('w')) d.setDate(d.getDate() + n * 7)
   else if (s.endsWith('m')) d.setMonth(d.getMonth() + n)
   else return ''
-  return d.toISOString().slice(0, 10)
+  return d.toISOString()
+}
+
+// Inverse of parseDueIn for prefilling the field from a saved deadline.
+export function deadlineToDueIn(iso: string): string {
+  if (!iso) return ''
+  const days = Math.round((new Date(iso).getTime() - Date.now()) / 86400000)
+  return days >= 1 ? `${days}d` : ''
 }
 
 type ExpandedEditorProps = {
@@ -183,7 +191,8 @@ type ExpandedEditorProps = {
 export function ExpandedEditor({ item }: ExpandedEditorProps) {
   const { updateItem } = useQueue()
   const [draft, setDraft] = useState<CardDraft>(itemToDraft(item))
-  const [dueIn, setDueIn] = useState('')
+  const [dueIn, setDueIn] = useState(() => deadlineToDueIn(item.deadline ?? ''))
+  const appliedDueIn = useRef(dueIn) // re-parsing the prefilled text would shift a saved deadline
   const [converting, setConverting] = useState(false)
   const [converted, setConverted] = useState<string | null>(null)
   const originalRef = useRef<CardDraft>(itemToDraft(item))
@@ -200,7 +209,7 @@ export function ExpandedEditor({ item }: ExpandedEditorProps) {
       await updateItem(item.id, {
         title: d.title.trim(),
         notes: d.notes,
-        deadline: d.deadline ? `${d.deadline}T00:00:00Z` : null,
+        deadline: d.deadline || null,
         priority: d.priority,
         estimate_minutes: d.estimate ? parseEstimate(d.estimate) : null,
       })
@@ -214,6 +223,12 @@ export function ExpandedEditor({ item }: ExpandedEditorProps) {
     const t = setTimeout(save, 500)
     return () => clearTimeout(t)
   }, [draft.priority, draft.estimate, draft.deadline, save])
+
+  const applyDueIn = () => {
+    if (dueIn === appliedDueIn.current) return
+    appliedDueIn.current = dueIn
+    setDraft((prev) => ({ ...prev, deadline: parseDueIn(dueIn) }))
+  }
 
   if (converted) {
     return (
@@ -264,33 +279,23 @@ export function ExpandedEditor({ item }: ExpandedEditorProps) {
                 {t}
               </button>
             ))}
-            <span className="text-ghost/30 mx-0.5 text-xs">|</span>
             <input value={['15m','30m','1h','2h'].includes(draft.estimate) ? '' : draft.estimate}
               onChange={(e) => setDraft((d) => ({ ...d, estimate: e.target.value }))}
-              placeholder="4h"
-              className="w-10 text-xs bg-transparent border-b border-line text-ink focus:outline-none focus:border-accent/50 placeholder:text-ghost" />
+              placeholder="custom, e.g. 4h"
+              className="flex-1 min-w-0 ml-1 text-xs bg-surface border border-line rounded-[var(--c-radius-card)] px-2 py-0.5 text-ink focus:outline-none focus:border-accent/50 placeholder:text-ghost" />
           </div>
         </div>
         {/* Due in row */}
         <div className="space-y-1">
-          <p className="text-[10px] font-medium text-ghost uppercase tracking-wide">Due in</p>
+          <p className="text-[10px] font-medium text-ghost uppercase tracking-wide">Due in <span className="normal-case text-ghost/70">(days / weeks — queue items are due today by default)</span></p>
           <div className="flex items-center gap-2">
             <input
               value={dueIn}
               onChange={(e) => setDueIn(e.target.value)}
-              onBlur={() => {
-                if (!dueIn.trim()) return
-                const d = parseDueIn(dueIn)
-                if (d) setDraft((prev) => ({ ...prev, deadline: d }))
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  const d = parseDueIn(dueIn)
-                  if (d) setDraft((prev) => ({ ...prev, deadline: d }))
-                }
-              }}
-              placeholder="2d, 1w, 3h, 1m…"
-              className="flex-1 text-xs bg-surface border border-line rounded-[var(--c-radius-card)] px-2 py-1 text-ink focus:outline-none focus:border-accent/50 placeholder:text-ghost"
+              onBlur={applyDueIn}
+              onKeyDown={(e) => { if (e.key === 'Enter') applyDueIn() }}
+              placeholder="2d, 1w, 1m…"
+              className="flex-1 min-w-0 text-xs bg-surface border border-line rounded-[var(--c-radius-card)] px-2 py-1 text-ink focus:outline-none focus:border-accent/50 placeholder:text-ghost"
             />
             {draft.deadline && (
               <>
@@ -298,7 +303,7 @@ export function ExpandedEditor({ item }: ExpandedEditorProps) {
                   {new Date(draft.deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                 </span>
                 <button type="button"
-                  onClick={() => { setDueIn(''); setDraft((d) => ({ ...d, deadline: '' })) }}
+                  onClick={() => { setDueIn(''); appliedDueIn.current = ''; setDraft((d) => ({ ...d, deadline: '' })) }}
                   className="text-ghost/40 hover:text-ghost transition-colors text-sm shrink-0">
                   ×
                 </button>
@@ -388,9 +393,9 @@ const BeltItem = forwardRef<HTMLDivElement, BeltItemProps>(function BeltItem({ i
             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
               <PriorityBadge p={item.priority} />
               {item.estimate_minutes && (
-                <span className="text-xs font-medium text-dim">{formatEstimate(item.estimate_minutes)}</span>
+                <span className="text-xs font-medium text-dim">est {formatEstimate(item.estimate_minutes)}</span>
               )}
-              {item.deadline && (
+              {item.deadline && formatDeadline(item.deadline) && (
                 <span className={`text-xs font-medium ${new Date(item.deadline) < new Date() ? 'text-accent' : 'text-dim'}`}>
                   {formatDeadline(item.deadline)}
                 </span>
