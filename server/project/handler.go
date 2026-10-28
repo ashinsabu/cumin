@@ -2,11 +2,13 @@ package project
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/ashinsabu/cumin/server/api"
 	"github.com/ashinsabu/cumin/server/auth"
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 )
 
 type CreateRequest struct {
@@ -124,6 +126,9 @@ func (h *Handler) Restore(ctx context.Context) error {
 	if err := h.store.RestoreProject(ctx, id, userID); err != nil {
 		if msg, ok := IsPrefixConflict(err); ok {
 			return api.Conflict(msg)
+		}
+		if errors.Is(err, pgx.ErrNoRows) {
+			return api.NotFound("project not found")
 		}
 		return api.Internal("failed to restore project")
 	}
