@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// setRequiredEnv sets the env that Load insists on, so tests can vary only the session settings.
+// setRequiredEnv sets the env that Load insists on, so tests can vary only the refresh settings.
 func setRequiredEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv("JWT_SECRET", strings.Repeat("s", 32))
@@ -15,36 +15,36 @@ func setRequiredEnv(t *testing.T) {
 	t.Setenv("GOOGLE_CLIENT_SECRET", "secret")
 	t.Setenv("ALLOWED_ORIGINS", "http://localhost:3000")
 	t.Setenv("ENV", "development")
-	// Hermetic: ignore any session policy exported in the developer's shell. t.Setenv registers the
+	// Hermetic: ignore any refresh policy exported in the developer's shell. t.Setenv registers the
 	// restore, then Unsetenv leaves the variable truly absent for this test.
-	for _, k := range []string{"SESSION_IDLE_TIMEOUT", "SESSION_MAX_LIFETIME"} {
+	for _, k := range []string{"REFRESH_IDLE_TIMEOUT", "REFRESH_MAX_LIFETIME"} {
 		t.Setenv(k, "")
 		os.Unsetenv(k)
 	}
 }
 
-func TestLoad_SessionDefaults(t *testing.T) {
+func TestLoad_RefreshDefaults(t *testing.T) {
 	setRequiredEnv(t)
 	cfg := Load()
-	if cfg.SessionIdleTimeout != 7*24*time.Hour {
-		t.Errorf("idle default = %v, want 168h", cfg.SessionIdleTimeout)
+	if cfg.RefreshIdleTimeout != 7*24*time.Hour {
+		t.Errorf("idle default = %v, want 168h", cfg.RefreshIdleTimeout)
 	}
-	if cfg.SessionMaxLifetime != 30*24*time.Hour {
-		t.Errorf("max default = %v, want 720h", cfg.SessionMaxLifetime)
+	if cfg.RefreshMaxLifetime != 30*24*time.Hour {
+		t.Errorf("max default = %v, want 720h", cfg.RefreshMaxLifetime)
 	}
 }
 
-func TestLoad_SessionOverrides(t *testing.T) {
+func TestLoad_RefreshOverrides(t *testing.T) {
 	setRequiredEnv(t)
-	t.Setenv("SESSION_IDLE_TIMEOUT", "24h")
-	t.Setenv("SESSION_MAX_LIFETIME", "48h")
+	t.Setenv("REFRESH_IDLE_TIMEOUT", "24h")
+	t.Setenv("REFRESH_MAX_LIFETIME", "48h")
 	cfg := Load()
-	if cfg.SessionIdleTimeout != 24*time.Hour || cfg.SessionMaxLifetime != 48*time.Hour {
-		t.Errorf("got idle=%v max=%v, want 24h/48h", cfg.SessionIdleTimeout, cfg.SessionMaxLifetime)
+	if cfg.RefreshIdleTimeout != 24*time.Hour || cfg.RefreshMaxLifetime != 48*time.Hour {
+		t.Errorf("got idle=%v max=%v, want 24h/48h", cfg.RefreshIdleTimeout, cfg.RefreshMaxLifetime)
 	}
 }
 
-func TestValidateSessions(t *testing.T) {
+func TestValidateRefresh(t *testing.T) {
 	tests := []struct {
 		name    string
 		idle    time.Duration
@@ -53,16 +53,16 @@ func TestValidateSessions(t *testing.T) {
 	}{
 		{"defaults", 168 * time.Hour, 720 * time.Hour, ""},
 		{"idle equals max", 24 * time.Hour, 24 * time.Hour, ""},
-		{"idle at minimum", minSessionIdle, 24 * time.Hour, ""},
-		{"idle below minimum", time.Hour, 24 * time.Hour, "SESSION_IDLE_TIMEOUT"},
-		{"zero idle", 0, 24 * time.Hour, "SESSION_IDLE_TIMEOUT"},
-		{"negative idle", -time.Hour, 24 * time.Hour, "SESSION_IDLE_TIMEOUT"},
-		{"max below idle", 48 * time.Hour, 24 * time.Hour, "SESSION_MAX_LIFETIME"},
-		{"zero max", 24 * time.Hour, 0, "SESSION_MAX_LIFETIME"},
+		{"idle at minimum", minRefreshIdle, 24 * time.Hour, ""},
+		{"idle below minimum", time.Minute, 24 * time.Hour, "REFRESH_IDLE_TIMEOUT"},
+		{"zero idle", 0, 24 * time.Hour, "REFRESH_IDLE_TIMEOUT"},
+		{"negative idle", -time.Hour, 24 * time.Hour, "REFRESH_IDLE_TIMEOUT"},
+		{"max below idle", 48 * time.Hour, 24 * time.Hour, "REFRESH_MAX_LIFETIME"},
+		{"zero max", 24 * time.Hour, 0, "REFRESH_MAX_LIFETIME"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := Config{SessionIdleTimeout: tt.idle, SessionMaxLifetime: tt.max}.validateSessions()
+			err := Config{RefreshIdleTimeout: tt.idle, RefreshMaxLifetime: tt.max}.validateRefresh()
 			if tt.wantErr == "" {
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)

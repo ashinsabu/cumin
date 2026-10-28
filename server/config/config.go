@@ -24,9 +24,9 @@ type Config struct {
 	AllowedOrigins string `envconfig:"ALLOWED_ORIGINS"`
 	Env            string `envconfig:"ENV" default:"production"`
 
-	// Web session policy (Go durations, e.g. 168h). Idle slides with activity; max is the hard cap from login.
-	SessionIdleTimeout time.Duration `envconfig:"SESSION_IDLE_TIMEOUT" default:"168h"`
-	SessionMaxLifetime time.Duration `envconfig:"SESSION_MAX_LIFETIME" default:"720h"`
+	// Refresh-token (login) policy (Go durations, e.g. 168h). Idle slides with activity; max is the hard cap from login.
+	RefreshIdleTimeout time.Duration `envconfig:"REFRESH_IDLE_TIMEOUT" default:"168h"`
+	RefreshMaxLifetime time.Duration `envconfig:"REFRESH_MAX_LIFETIME" default:"720h"`
 
 	// Email+password auth needs a mailer. RESEND_API_KEY + MAIL_FROM enable it in production;
 	// in local dev (http origin) emails are logged instead.
@@ -93,23 +93,23 @@ func Load() Config {
 	if err := cfg.validateOrigins(); err != nil {
 		fatal("invalid ALLOWED_ORIGINS", "err", err)
 	}
-	if err := cfg.validateSessions(); err != nil {
-		fatal("invalid session config", "err", err)
+	if err := cfg.validateRefresh(); err != nil {
+		fatal("invalid refresh config", "err", err)
 	}
 
 	return cfg
 }
 
-// minSessionIdle keeps the idle timeout well above the hourly activity-touch throttle in the auth
-// package, otherwise an active session could expire between touches.
-const minSessionIdle = 2 * time.Hour
+// minRefreshIdle keeps a login alive across the ordinary gaps between visits; anything shorter would
+// make the sliding window useless.
+const minRefreshIdle = 1 * time.Hour
 
-func (c Config) validateSessions() error {
-	if c.SessionIdleTimeout < minSessionIdle {
-		return errors.New("SESSION_IDLE_TIMEOUT must be at least " + minSessionIdle.String())
+func (c Config) validateRefresh() error {
+	if c.RefreshIdleTimeout < minRefreshIdle {
+		return errors.New("REFRESH_IDLE_TIMEOUT must be at least " + minRefreshIdle.String())
 	}
-	if c.SessionMaxLifetime < c.SessionIdleTimeout {
-		return errors.New("SESSION_MAX_LIFETIME must be >= SESSION_IDLE_TIMEOUT")
+	if c.RefreshMaxLifetime < c.RefreshIdleTimeout {
+		return errors.New("REFRESH_MAX_LIFETIME must be >= REFRESH_IDLE_TIMEOUT")
 	}
 	return nil
 }

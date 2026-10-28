@@ -3,49 +3,30 @@ package auth
 import (
 	"context"
 	"net/http"
-	"time"
-
-	"github.com/alexedwards/scs/v2"
 )
 
 type contextKey string
 
 const userIDKey contextKey = "userID"
 
-// Middleware authenticates a request. A Bearer header (mobile) is validated as a JWT and never
-// falls back to the session cookie; otherwise the web session must hold a user_id.
-// It must run after sm.LoadAndSave.
-func Middleware(secret string, sm *scs.SessionManager) func(http.Handler) http.Handler {
+// Middleware authenticates a request by its Bearer access token (web and native alike). Access
+// tokens are short-lived and stateless; revoking a login takes effect when the current one expires.
+func Middleware(secret string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			var userID string
-			if tokenStr := bearerToken(r); tokenStr != "" {
-				claims, err := ValidateToken(secret, tokenStr)
-				if err != nil {
-					http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
-					return
-				}
-				userID = claims.UserID
-			} else {
-				userID = sm.GetString(r.Context(), sessionUserKey)
-				if userID == "" {
-					http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
-					return
-				}
-				touchSession(r.Context(), sm)
+			tokenStr := bearerToken(r)
+			if tokenStr == "" {
+				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+				return
 			}
-			ctx := context.WithValue(r.Context(), userIDKey, userID)
+			claims, err := ValidateToken(secret, tokenStr)
+			if err != nil {
+				http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
+				return
+			}
+			ctx := context.WithValue(r.Context(), userIDKey, claims.UserID)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
-	}
-}
-
-// touchSession slides the idle deadline: writing marks the session modified so scs persists the
-// new expiry and re-sends the cookie. Throttled to one write per sessionTouchGap.
-func touchSession(ctx context.Context, sm *scs.SessionManager) {
-	now := time.Now()
-	if now.Unix()-sm.GetInt64(ctx, sessionTouchKey) > int64(sessionTouchGap/time.Second) {
-		sm.Put(ctx, sessionTouchKey, now.Unix())
 	}
 }
 

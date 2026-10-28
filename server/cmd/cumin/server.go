@@ -13,7 +13,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/alexedwards/scs/v2"
 	"github.com/ashinsabu/cumin/server/auth"
 	"github.com/ashinsabu/cumin/server/board"
 	"github.com/ashinsabu/cumin/server/config"
@@ -118,20 +117,19 @@ func (s *Server) Handler() http.Handler {
 	r.Use(applogger.RequestLogger)
 	r.Use(middleware.Recoverer)
 
-	sm := auth.NewSessionManager(s.pool, cfg.SecureCookies(), cfg.SessionIdleTimeout, cfg.SessionMaxLifetime)
-	authHandler := newAuthHandler(cfg, s.authRepo, s.pool, sm)
+	authHandler := newAuthHandler(cfg, s.authRepo, s.pool)
 
 	r.Get("/healthz", s.healthz)
 	r.Get("/api/version", versionHandler)
 	r.Get("/api/docs/swagger.json", swaggerJSONHandler)
 	r.Get("/api/auth/google/login", authHandler.HandleLogin)
-	r.With(sm.LoadAndSave).Get("/api/auth/google/callback", authHandler.HandleCallback)
+	r.Get("/api/auth/google/callback", authHandler.HandleCallback)
 
 	r.Group(func(r chi.Router) {
 		r.Use(cors.Handler(cors.Options{
 			AllowedOrigins:   cfg.AllowedOriginsList(),
 			AllowedMethods:   []string{"GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"},
-			AllowedHeaders:   []string{"Content-Type", "Authorization", "sentry-trace", "baggage"},
+			AllowedHeaders:   []string{"Content-Type", "Authorization", "X-Requested-With", "sentry-trace", "baggage"},
 			AllowCredentials: true,
 		}))
 		r.Options("/*", func(w http.ResponseWriter, r *http.Request) {})
@@ -139,18 +137,14 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/api/auth/google/mobile", authHandler.HandleMobileLogin)
 		r.Get("/api/flags", flags.NewHandler(cfg).ServeHTTP)
 
-		// Password endpoints create sessions, so they need the session middleware too.
-		r.Group(func(r chi.Router) {
-			r.Use(sm.LoadAndSave)
-			authHandler.PasswordRoutes(r)
-		})
+		// Public: these authenticate by credentials or by the refresh token, not by an access token.
+		authHandler.PasswordRoutes(r)
+		authHandler.SessionRoutes(r)
 
 		r.Group(func(r chi.Router) {
-			r.Use(sm.LoadAndSave)
-			r.Use(auth.Middleware(cfg.JWTSecret, sm))
+			r.Use(auth.Middleware(cfg.JWTSecret))
 
 			r.Get("/api/auth/me", authHandler.HandleMe)
-			r.Post("/api/auth/logout", authHandler.HandleLogout)
 
 			registerDomainRoutes(r, s.pool, cfg, s.streamShutdown)
 		})
@@ -227,11 +221,14 @@ func (s *Server) runPurgeWorker(ctx context.Context) {
 		if err := s.authRepo.PurgeExpiredTokens(tokenCtx); err != nil {
 			slog.Error("purge worker failed", "err", err)
 		}
+		if err := s.authRepo.PurgeExpiredRefresh(tokenCtx); err != nil {
+			slog.Error("purge worker failed", "err", err)
+		}
 		cancel()
 	}
 }
 
-func newAuthHandler(cfg config.Config, repo *auth.Repo, pool *pgxpool.Pool, sm *scs.SessionManager) *auth.Handler {
+func newAuthHandler(cfg config.Config, repo *auth.Repo, pool *pgxpool.Pool) *auth.Handler {
 	h := auth.NewHandler(auth.OAuthConfig{
 		ClientID:       cfg.GoogleClientID,
 		ClientSecret:   cfg.GoogleClientSecret,
@@ -239,7 +236,12 @@ func newAuthHandler(cfg config.Config, repo *auth.Repo, pool *pgxpool.Pool, sm *
 		AllowedOrigins: cfg.AllowedOriginsList(),
 		JWTSecret:      cfg.JWTSecret,
 		AppClientIDs:   cfg.GoogleAppClientIDs,
-	}, repo, sm, auth.NewProvisioner(pool).ProvisionNewUser)
+		SecureCookies:  cfg.SecureCookies(),
+		Refresh: auth.RefreshPolicy{
+			Idle:        cfg.RefreshIdleTimeout,
+			MaxLifetime: cfg.RefreshMaxLifetime,
+		},
+	}, repo, auth.NewProvisioner(pool).ProvisionNewUser)
 
 	if cfg.PasswordAuthEnabled() {
 		if cfg.MailerConfigured() {

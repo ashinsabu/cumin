@@ -12,7 +12,6 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/alexedwards/scs/v2"
 	applogger "github.com/ashinsabu/cumin/server/logger"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -24,6 +23,10 @@ type OAuthConfig struct {
 	RedirectURL    string
 	AllowedOrigins []string
 	JWTSecret      string
+	// Refresh bounds each login; zero fields take the package defaults.
+	Refresh RefreshPolicy
+	// SecureCookies sets the Secure flag on the refresh cookie (everything except local http dev).
+	SecureCookies bool
 	// AppClientIDs are the native app OAuth client IDs accepted as ID token audiences.
 	AppClientIDs []string
 }
@@ -41,7 +44,6 @@ type Handler struct {
 	repo      *Repo
 	cfg       OAuthConfig
 	provision func(ctx context.Context, userID, name string) error
-	sessions  *scs.SessionManager
 
 	// Email+password auth; nil mailer means the feature is off (see EnablePassword).
 	mailer Mailer
@@ -50,7 +52,7 @@ type Handler struct {
 	async func(func())
 }
 
-func NewHandler(cfg OAuthConfig, repo *Repo, sessions *scs.SessionManager, provision func(ctx context.Context, userID, name string) error) *Handler {
+func NewHandler(cfg OAuthConfig, repo *Repo, provision func(ctx context.Context, userID, name string) error) *Handler {
 	return &Handler{
 		oauth: &oauth2.Config{
 			ClientID:     cfg.ClientID,
@@ -62,7 +64,6 @@ func NewHandler(cfg OAuthConfig, repo *Repo, sessions *scs.SessionManager, provi
 		repo:      repo,
 		cfg:       cfg,
 		provision: provision,
-		sessions:  sessions,
 	}
 }
 
@@ -148,8 +149,8 @@ func (h *Handler) HandleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.startSession(r.Context(), user); err != nil {
-		l.Error("auth: start session failed", slog.String("user_id", user.ID), slog.Any("err", err))
+	if _, err := h.startWebLogin(w, r, user); err != nil {
+		l.Error("auth: start login failed", slog.String("user_id", user.ID), slog.Any("err", err))
 		h.authError(w, r, "server_error")
 		return
 	}
@@ -205,17 +206,6 @@ func (h *Handler) ensureProvisioned(ctx context.Context, user *User) error {
 	return nil
 }
 
-// startSession binds the web session to the user. RenewToken rotates the session ID so a token
-// planted before login (session fixation) is useless afterwards.
-func (h *Handler) startSession(ctx context.Context, user *User) error {
-	if err := h.sessions.RenewToken(ctx); err != nil {
-		return err
-	}
-	h.sessions.Put(ctx, sessionUserKey, user.ID)
-	h.sessions.Put(ctx, sessionTouchKey, time.Now().Unix())
-	return nil
-}
-
 func (h *Handler) HandleMe(w http.ResponseWriter, r *http.Request) {
 	userID := UserIDFromContext(r.Context())
 	if userID == "" {
@@ -231,16 +221,6 @@ func (h *Handler) HandleMe(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(user)
-}
-
-func (h *Handler) HandleLogout(w http.ResponseWriter, r *http.Request) {
-	if err := h.sessions.Destroy(r.Context()); err != nil {
-		applogger.FromContext(r.Context()).Error("auth: session destroy failed", slog.Any("err", err))
-		http.Error(w, `{"error":"internal error"}`, http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"status":"logged out"}`))
 }
 
 func fetchGoogleUserInfo(ctx context.Context, accessToken string) (*GoogleUserInfo, error) {
