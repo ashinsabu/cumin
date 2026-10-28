@@ -9,9 +9,9 @@ import { useEpics } from '../hooks/useEpics'
 import { parseEstimate, formatEstimate } from '../hooks/useFormat'
 import { PRIORITY } from '../constants'
 import { Select } from './ui'
-import { NO_SPRINT, sprintOptions, useSprintOptions } from './SprintSelect'
-import { useSprints } from '../hooks/useSprints'
+import { NO_SPRINT, useSprintOptions } from './SprintSelect'
 import type { QueueItem } from '../types'
+import type { PromotePayload } from '../context/QueueContext'
 import { authFetch } from '../lib/auth'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -92,30 +92,27 @@ function AgeBar({ createdAt }: { createdAt: string }) {
 
 // ─── Convert sheet ─────────────────────────────────────────────────────────────
 
-type ConvertSheetProps = { item: QueueItem; onClose: () => void; onConverted: (id: string) => void }
+type SendToBoardFormProps = {
+  hint?: string
+  submitting: boolean
+  onCancel: () => void
+  onSubmit: (payload: PromotePayload) => void
+}
 
-function ConvertSheet({ item, onClose, onConverted }: ConvertSheetProps) {
+// One form for sending a single entry or a whole selection to the board: Project / Epic / Sprint chosen once.
+function SendToBoardForm({ hint, submitting, onCancel, onSubmit }: SendToBoardFormProps) {
   const { data: projects = [] } = useProjects()
   const { data: statuses = [] } = useBoardStatuses()
   const { data: epics = [] } = useEpics()
-  const { promoteItem } = useQueue()
   const [projectId, setProjectId] = useState(projects[0]?.id ?? '')
   const [epicId, setEpicId] = useState('')
   const [sprintId, setSprintId] = useState(NO_SPRINT)
-  const [submitting, setSubmitting] = useState(false)
 
-  const sprintOptions = useSprintOptions(projectId, sprintId)
-  const initialStatus = statuses.find((s) => s.is_initial) ?? statuses[0]
-
-  const submit = async () => {
+  const sprintChoices = useSprintOptions(projectId, sprintId)
+  const initialStatus = statuses.find((st) => st.is_initial) ?? statuses[0]
+  const submit = () => {
     if (!projectId || !initialStatus) return
-    setSubmitting(true)
-    try {
-      const result = await promoteItem(item.id, { project_id: projectId, status_id: initialStatus.id, epic_id: epicId || null, sprint_id: sprintId === NO_SPRINT ? null : sprintId })
-      onConverted(result.item_display_id)
-    } catch {
-      setSubmitting(false)
-    }
+    onSubmit({ project_id: projectId, status_id: initialStatus.id, epic_id: epicId || null, sprint_id: sprintId === NO_SPRINT ? null : sprintId })
   }
 
   return (
@@ -126,7 +123,7 @@ function ConvertSheet({ item, onClose, onConverted }: ConvertSheetProps) {
           size="xs"
           value={projectId}
           onChange={(v) => { setProjectId(v); setSprintId(NO_SPRINT) }}
-          options={projects.map((p) => ({ value: p.id, label: p.name }))}
+          options={projects.map((pr) => ({ value: pr.id, label: pr.name }))}
         />
       </ConvertField>
       <ConvertField label="Epic">
@@ -137,19 +134,138 @@ function ConvertSheet({ item, onClose, onConverted }: ConvertSheetProps) {
           options={[{ value: '', label: 'No epic' }, ...epics.map((e) => ({ value: e.id, label: e.name }))]}
         />
       </ConvertField>
-      {sprintOptions.length > 0 && (
+      {sprintChoices.length > 0 && (
         <ConvertField label="Sprint">
-          <Select size="xs" value={sprintId} onChange={setSprintId} options={sprintOptions} />
+          <Select size="xs" value={sprintId} onChange={setSprintId} options={sprintChoices} />
         </ConvertField>
       )}
-      {initialStatus && <p className="text-xs text-ghost">Starts in {initialStatus.name}; priority and estimate carry over</p>}
+      {initialStatus && <p className="text-xs text-ghost">{hint ?? `Starts in ${initialStatus.name}; priority and estimate carry over`}</p>}
       <div className="flex gap-2">
-        <button onClick={onClose} className="flex-1 text-xs py-2 rounded-[var(--c-radius-card)] border border-line text-dim hover:bg-surface">Cancel</button>
+        <button onClick={onCancel} className="flex-1 text-xs py-2 rounded-[var(--c-radius-card)] border border-line text-dim hover:bg-surface">Cancel</button>
         <button onClick={submit} disabled={submitting || !projectId}
           className="flex-1 text-xs py-2 whitespace-nowrap rounded-[var(--c-radius-card)] bg-accent text-white hover:bg-accent/80 disabled:opacity-50 font-medium">
           {submitting ? '...' : 'Send to board'}
         </button>
       </div>
+    </div>
+  )
+}
+
+type ConvertSheetProps = { item: QueueItem; onClose: () => void; onConverted: (id: string) => void }
+
+function ConvertSheet({ item, onClose, onConverted }: ConvertSheetProps) {
+  const { promoteItem } = useQueue()
+  const [submitting, setSubmitting] = useState(false)
+  const submit = async (payload: PromotePayload) => {
+    setSubmitting(true)
+    try {
+      const result = await promoteItem(item.id, payload)
+      onConverted(result.item_display_id)
+    } catch {
+      setSubmitting(false)
+    }
+  }
+  return <SendToBoardForm submitting={submitting} onCancel={onClose} onSubmit={submit} />
+}
+
+// ─── Bulk selection ────────────────────────────────────────────────────────────
+
+// Select mode shared by the active belt and the "Yesterday" section: checkboxes, shift-click ranges, select all,
+// and a sequential runner that keeps failed entries selected so the user can retry them.
+function useBulkSelection(orderedIds: string[]) {
+  const [selectMode, setSelectMode] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [busy, setBusy] = useState(false)
+  const lastClicked = useRef<string | null>(null)
+
+  const exit = () => { setSelectMode(false); setSelected(new Set()); lastClicked.current = null }
+
+  const toggle = (id: string, shift = false) => {
+    const anchor = lastClicked.current // read now: the updater below runs later, after lastClicked moves on
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (shift && anchor && anchor !== id) {
+        const from = orderedIds.indexOf(anchor)
+        const to = orderedIds.indexOf(id)
+        if (from >= 0 && to >= 0) {
+          const adding = !prev.has(id)
+          for (const rangeId of orderedIds.slice(Math.min(from, to), Math.max(from, to) + 1)) {
+            adding ? next.add(rangeId) : next.delete(rangeId)
+          }
+          return next
+        }
+      }
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+    lastClicked.current = id
+  }
+
+  // Entries can vanish under us (a refetch, another tab); never count or act on ids that are no longer listed.
+  const live = new Set(orderedIds.filter((id) => selected.has(id)))
+  const allSelected = orderedIds.length > 0 && live.size === orderedIds.length
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(orderedIds))
+
+  // Entries are processed one at a time (order matters for positions, and the server numbers items atomically).
+  // Returns true when everything succeeded.
+  const run = async (action: (id: string) => Promise<unknown> | void): Promise<boolean> => {
+    if (!live.size || busy) return false
+    setBusy(true)
+    const failed = new Set<string>()
+    for (const id of live) {
+      try { await action(id) } catch { failed.add(id) }
+    }
+    setBusy(false)
+    setSelected(failed)
+    if (failed.size === 0) exit()
+    return failed.size === 0
+  }
+
+  return { selectMode, enter: () => setSelectMode(true), exit, selected: live, toggle, allSelected, toggleAll, busy, run }
+}
+
+type BulkAction = { label: string; onClick: () => void; tone?: 'done' | 'danger' }
+
+// Action bar for a selection. "Send to board" swaps the bar for the shared form so project/epic/sprint are chosen once.
+function BulkBar({ count, busy, actions, onSendToBoard }: {
+  count: number
+  busy: boolean
+  actions: BulkAction[]
+  onSendToBoard: (payload: PromotePayload) => void
+}) {
+  const [sending, setSending] = useState(false)
+  if (count === 0) return null
+  if (sending) {
+    return (
+      <div className="px-3 pb-3 border-t border-accent/20 bg-raised">
+        <SendToBoardForm
+          hint={`${count} ${count === 1 ? 'entry starts' : 'entries start'} in the first status; priority and estimate carry over`}
+          submitting={busy}
+          onCancel={() => setSending(false)}
+          onSubmit={(payload) => { setSending(false); onSendToBoard(payload) }}
+        />
+      </div>
+    )
+  }
+  const tone = (t?: BulkAction['tone']) =>
+    t === 'done' ? 'border-green-500/30 text-green-500/70 hover:bg-green-500/10 hover:text-green-500'
+    : t === 'danger' ? 'border-line text-ghost hover:text-accent hover:border-accent/30'
+    : 'border-line text-dim hover:text-ink hover:border-accent/40'
+  return (
+    <div className="flex items-center gap-1.5 px-3 py-2.5 border-t border-accent/20 bg-raised">
+      <span className="text-xs text-ghost shrink-0 mr-0.5">{count}</span>
+      {actions.slice(0, -1).map((a) => (
+        <button key={a.label} onClick={a.onClick} disabled={busy}
+          className={`flex-1 text-xs py-1.5 rounded border transition-colors disabled:opacity-40 font-medium ${tone(a.tone)}`}>{a.label}</button>
+      ))}
+      <button onClick={() => setSending(true)} disabled={busy}
+        className="flex-1 text-xs py-1.5 rounded border border-line text-dim hover:text-ink hover:border-accent/40 transition-colors disabled:opacity-40 font-medium">
+        Send to board
+      </button>
+      {actions.slice(-1).map((a) => (
+        <button key={a.label} onClick={a.onClick} disabled={busy}
+          className={`flex-1 text-xs py-1.5 rounded border transition-colors disabled:opacity-40 font-medium ${tone(a.tone)}`}>{a.label}</button>
+      ))}
     </div>
   )
 }
@@ -306,9 +422,11 @@ type BeltItemProps = {
   onDragOver: (e: React.DragEvent) => void
   onDrop: (e: React.DragEvent) => void
   onDragEnd: () => void
+  // Present while selecting: the row toggles a checkbox instead of expanding, and cannot be dragged.
+  select?: { checked: boolean; onToggle: (shift: boolean) => void }
 }
 
-const BeltItem = forwardRef<HTMLDivElement, BeltItemProps>(function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchive, onComplete, isDragOver, dragging, onDragStart, onDragOver, onDrop, onDragEnd }, ref) {
+const BeltItem = forwardRef<HTMLDivElement, BeltItemProps>(function BeltItem({ item, index, total, expanded, onExpand, onCollapse, onArchive, onComplete, isDragOver, dragging, onDragStart, onDragOver, onDrop, onDragEnd, select }, ref) {
   const isFirst = index === 0
   const [done, setDone] = useState(false)
 
@@ -322,7 +440,7 @@ const BeltItem = forwardRef<HTMLDivElement, BeltItemProps>(function BeltItem({ i
     <div
       ref={ref}
       className={`relative group/belt transition-opacity ${dragging ? 'opacity-40' : 'opacity-100'}`}
-      draggable
+      draggable={!select}
       onDragStart={onDragStart}
       onDragOver={onDragOver}
       onDrop={onDrop}
@@ -335,15 +453,22 @@ const BeltItem = forwardRef<HTMLDivElement, BeltItemProps>(function BeltItem({ i
         item.attention?.level === 'pulse' ? 'queue-pulse' : item.attention?.level === 'watch' ? 'bg-accent/5' : ''
       }`}>
         <div className={`w-1 shrink-0 ${railClass(index, total)}`} />
-        <div className="flex flex-col items-center justify-start pt-3.5 px-2 shrink-0 cursor-grab active:cursor-grabbing select-none">
-          <span className="text-[9px] font-mono text-ghost/50 leading-none">{String(index + 1).padStart(2, '0')}</span>
-          <span className="text-ghost/30 text-[13px] mt-1 leading-none">⠿</span>
-        </div>
+        {select ? (
+          <div className="flex items-start pt-3.5 px-2.5 shrink-0">
+            <input type="checkbox" checked={select.checked} readOnly
+              className="accent-[color:var(--c-accent)] w-3.5 h-3.5 pointer-events-none" />
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-start pt-3.5 px-2 shrink-0 cursor-grab active:cursor-grabbing select-none">
+            <span className="text-[9px] font-mono text-ghost/50 leading-none">{String(index + 1).padStart(2, '0')}</span>
+            <span className="text-ghost/30 text-[13px] mt-1 leading-none">⠿</span>
+          </div>
+        )}
         <div className="flex-1 min-w-0">
           {/* Clickable header — collapses/expands */}
           <div
             className="pt-3 pb-2 pl-0 pr-2 cursor-pointer"
-            onClick={expanded ? onCollapse : onExpand}
+            onClick={(e) => select ? select.onToggle(e.shiftKey) : expanded ? onCollapse() : onExpand()}
           >
             {isFirst && !expanded && (
               <span className="inline-block text-[10px] font-bold text-accent uppercase tracking-widest mb-1">Next up</span>
@@ -371,6 +496,7 @@ const BeltItem = forwardRef<HTMLDivElement, BeltItemProps>(function BeltItem({ i
             )}
           </AnimatePresence>
         </div>
+        {!select && <>
         {/* ✓ / × — always rendered; fade in on hover when collapsed, always visible when expanded */}
         <button
           onClick={handleDone}
@@ -390,6 +516,7 @@ const BeltItem = forwardRef<HTMLDivElement, BeltItemProps>(function BeltItem({ i
         >
           ×
         </button>
+        </>}
       </div>
     </div>
   )
@@ -399,52 +526,14 @@ const BeltItem = forwardRef<HTMLDivElement, BeltItemProps>(function BeltItem({ i
 
 function StaleSection({ items }: { items: QueueItem[] }) {
   const [open, setOpen] = useState(false)
-  const [selectMode, setSelectMode] = useState(false)
-  const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [busy, setBusy] = useState(false)
-  const { reviveItem, archiveItem, deleteItemSilent, completeItem, promoteItem } = useQueue()
-  const { data: projects = [] } = useProjects()
-  const { data: statuses = [] } = useBoardStatuses()
-  const { data: epics = [] } = useEpics()
   const [convertingId, setConvertingId] = useState<string | null>(null)
   const [convertedIds, setConvertedIds] = useState<Set<string>>(new Set())
-  const [convertingProjectId, setConvertingProjectId] = useState('')
-  const [convertingEpicId, setConvertingEpicId] = useState('')
-  const [convertingSprintId, setConvertingSprintId] = useState(NO_SPRINT)
-  const { data: allSprints = [] } = useSprints()
-
-  if (items.length === 0) return null
+  const { reviveItem, archiveItem, deleteItemSilent, completeItem, promoteItem } = useQueue()
 
   const visibleItems = items.filter((i) => !convertedIds.has(i.id))
-  const allSelected = visibleItems.length > 0 && visibleItems.every((i) => selected.has(i.id))
-  const initialStatus = statuses.find((s) => s.is_initial) ?? statuses[0]
+  const sel = useBulkSelection(visibleItems.map((i) => i.id))
 
-  const toggleSelect = (id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
-  }
-
-  const toggleAll = () => {
-    setSelected(allSelected ? new Set() : new Set(visibleItems.map((i) => i.id)))
-  }
-
-  const exitSelectMode = () => { setSelectMode(false); setSelected(new Set()) }
-
-  const runBulk = async (action: (id: string) => Promise<void> | void) => {
-    if (!selected.size || busy) return
-    setBusy(true)
-    await Promise.all([...selected].map((id) => action(id)))
-    setSelected(new Set())
-    setBusy(false)
-    if (visibleItems.filter((i) => !selected.has(i.id)).length === 0) exitSelectMode()
-  }
-
-  const bulkRevive  = () => runBulk((id) => reviveItem(id))
-  const bulkDelete  = () => runBulk((id) => deleteItemSilent(id))
-  const bulkDone    = () => runBulk((id) => completeItem(id))
+  if (items.length === 0) return null
 
   return (
     <div className="border-t border-line/30 mt-auto shrink-0">
@@ -459,16 +548,16 @@ function StaleSection({ items }: { items: QueueItem[] }) {
           </span>
           <span className="text-ghost/40">auto-archived</span>
         </button>
-        {open && !selectMode && (
+        {open && !sel.selectMode && (
           <button
-            onClick={() => setSelectMode(true)}
+            onClick={sel.enter}
             className="text-[10px] px-1.5 py-0.5 rounded border border-line/40 text-ghost/50 hover:text-dim hover:border-line transition-colors shrink-0"
           >
             Select
           </button>
         )}
-        {open && selectMode && (
-          <button onClick={exitSelectMode} className="text-[10px] text-ghost/50 hover:text-dim transition-colors shrink-0">
+        {open && sel.selectMode && (
+          <button onClick={sel.exit} className="text-[10px] text-ghost/50 hover:text-dim transition-colors shrink-0">
             Cancel
           </button>
         )}
@@ -483,79 +572,45 @@ function StaleSection({ items }: { items: QueueItem[] }) {
             transition={{ ...beltSpring, damping: 35 }}
             className="overflow-hidden"
           >
-            {/* Select-all row */}
-            {selectMode && (
+            {sel.selectMode && (
               <div className="flex items-center gap-2 px-3 py-1.5 border-b border-line/10 bg-raised/20">
-                <input type="checkbox" checked={allSelected} onChange={toggleAll}
+                <input type="checkbox" checked={sel.allSelected} onChange={sel.toggleAll}
                   className="accent-[color:var(--c-accent)] w-3.5 h-3.5 cursor-pointer" />
                 <span className="text-[10px] text-ghost">
-                  {selected.size > 0 ? `${selected.size} selected` : 'Select all'}
+                  {sel.selected.size > 0 ? `${sel.selected.size} selected` : 'Select all'}
                 </span>
               </div>
             )}
 
             {visibleItems.map((item) => {
-              const isConverting = convertingId === item.id
-              const isSelected = selected.has(item.id)
-
+              const isSelected = sel.selected.has(item.id)
               return (
                 <div
                   key={item.id}
                   className={`flex items-stretch border-b border-line/10 last:border-0 transition-opacity ${
-                    selectMode && isSelected ? 'opacity-100 bg-accent/5' : 'opacity-50 hover:opacity-70'
+                    sel.selectMode && isSelected ? 'opacity-100 bg-accent/5' : 'opacity-50 hover:opacity-70'
                   }`}
-                  onClick={selectMode ? () => toggleSelect(item.id) : undefined}
-                  style={selectMode ? { cursor: 'pointer' } : undefined}
+                  onClick={sel.selectMode ? (e) => sel.toggle(item.id, e.shiftKey) : undefined}
+                  style={sel.selectMode ? { cursor: 'pointer' } : undefined}
                 >
-                  {selectMode && (
+                  {sel.selectMode && (
                     <div className="flex items-center pl-3 pr-1 shrink-0">
-                      <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(item.id)}
-                        onClick={(e) => e.stopPropagation()}
-                        className="accent-[color:var(--c-accent)] w-3.5 h-3.5 cursor-pointer" />
+                      <input type="checkbox" checked={isSelected} readOnly
+                        className="accent-[color:var(--c-accent)] w-3.5 h-3.5 cursor-pointer pointer-events-none" />
                     </div>
                   )}
-                  {!selectMode && <div className="w-1 shrink-0 bg-line/30" />}
+                  {!sel.selectMode && <div className="w-1 shrink-0 bg-line/30" />}
                   <div className="flex-1 min-w-0 px-3 py-2.5">
                     <p className="text-xs text-dim leading-snug truncate">{item.title}</p>
                     <p className="text-[10px] text-ghost mt-0.5">{relativeTime(item.created_at)}</p>
 
-                    {!selectMode && isConverting ? (
-                      <div className="mt-2 space-y-1.5">
-                        <Select
-                          size="xs"
-                          value={convertingProjectId || projects[0]?.id || ''}
-                          onChange={(v) => { setConvertingProjectId(v); setConvertingSprintId(NO_SPRINT) }}
-                          options={projects.map((p) => ({ value: p.id, label: p.name }))}
-                        />
-                        <Select
-                          size="xs"
-                          value={convertingEpicId}
-                          onChange={setConvertingEpicId}
-                          options={[{ value: '', label: 'No epic' }, ...epics.map((e) => ({ value: e.id, label: e.name }))]}
-                        />
-                        {(() => {
-                          const options = sprintOptions(allSprints, convertingProjectId || projects[0]?.id, convertingSprintId)
-                          return options.length > 0 && <Select size="xs" value={convertingSprintId} onChange={setConvertingSprintId} options={options} />
-                        })()}
-                        <div className="flex gap-1.5">
-                          <button onClick={() => setConvertingId(null)}
-                            className="flex-1 text-xs py-1.5 rounded border border-line text-ghost hover:text-dim">
-                            Cancel
-                          </button>
-                          <button
-                            onClick={async () => {
-                              const projectId = convertingProjectId || projects[0]?.id
-                              if (!projectId || !initialStatus) return
-                              await promoteItem(item.id, { project_id: projectId, status_id: initialStatus.id, epic_id: convertingEpicId || null, sprint_id: convertingSprintId === NO_SPRINT ? null : convertingSprintId })
-                              setConvertedIds((s) => new Set([...s, item.id]))
-                              setConvertingId(null)
-                            }}
-                            className="flex-1 text-xs py-1.5 rounded bg-accent/10 text-accent hover:bg-accent/20 font-medium">
-                            Create ↗
-                          </button>
-                        </div>
-                      </div>
-                    ) : !selectMode && (
+                    {!sel.selectMode && convertingId === item.id ? (
+                      <ConvertSheet
+                        item={item}
+                        onClose={() => setConvertingId(null)}
+                        onConverted={() => { setConvertedIds((ids) => new Set([...ids, item.id])); setConvertingId(null) }}
+                      />
+                    ) : !sel.selectMode && (
                       <div className="flex items-center gap-1.5 mt-1.5">
                         <button
                           onClick={() => reviveItem(item.id)}
@@ -564,7 +619,7 @@ function StaleSection({ items }: { items: QueueItem[] }) {
                           ↩ Revive
                         </button>
                         <button
-                          onClick={() => { setConvertingProjectId(''); setConvertingEpicId(''); setConvertingSprintId(NO_SPRINT); setConvertingId(item.id) }}
+                          onClick={() => setConvertingId(item.id)}
                           className="text-[10px] px-2 py-0.5 rounded border border-line/50 text-ghost hover:text-accent hover:border-accent/40 transition-colors"
                         >
                           → Send to board
@@ -582,41 +637,21 @@ function StaleSection({ items }: { items: QueueItem[] }) {
               )
             })}
 
-            {/* Floating bulk action bar */}
-            <AnimatePresence>
-              {selectMode && selected.size > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 6 }}
-                  transition={{ duration: 0.15 }}
-                  className="flex items-center gap-1.5 px-3 py-2.5 border-t border-accent/20 bg-raised"
-                >
-                  <span className="text-[10px] text-ghost shrink-0 mr-0.5">{selected.size}</span>
-                  <button
-                    onClick={bulkRevive}
-                    disabled={busy}
-                    className="flex-1 text-[10px] py-1.5 rounded border border-line text-dim hover:text-ink hover:border-accent/40 transition-colors disabled:opacity-40 font-medium"
-                  >
-                    ↩ Revive
-                  </button>
-                  <button
-                    onClick={bulkDone}
-                    disabled={busy}
-                    className="flex-1 text-[10px] py-1.5 rounded border border-green-500/30 text-green-500/70 hover:bg-green-500/10 hover:text-green-500 transition-colors disabled:opacity-40 font-medium"
-                  >
-                    ✓ Done
-                  </button>
-                  <button
-                    onClick={bulkDelete}
-                    disabled={busy}
-                    className="flex-1 text-[10px] py-1.5 rounded border border-line text-ghost hover:text-accent hover:border-accent/30 transition-colors disabled:opacity-40"
-                  >
-                    × Delete
-                  </button>
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {sel.selectMode && (
+              <BulkBar
+                count={sel.selected.size}
+                busy={sel.busy}
+                actions={[
+                  { label: '↩ Revive', onClick: () => sel.run((id) => reviveItem(id)) },
+                  { label: '✓ Done', onClick: () => sel.run((id) => completeItem(id)), tone: 'done' },
+                  { label: '× Delete', onClick: () => sel.run((id) => deleteItemSilent(id)), tone: 'danger' },
+                ]}
+                onSendToBoard={(payload) => sel.run(async (id) => {
+                  await promoteItem(id, payload)
+                  setConvertedIds((ids) => new Set([...ids, id]))
+                })}
+              />
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -730,7 +765,7 @@ type QueueContentProps = {
 }
 
 function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: QueueContentProps) {
-  const { items, summary, loading, createItem, archiveItem, completeItem, reorderItems } = useQueue()
+  const { items, summary, loading, createItem, archiveItem, completeItem, deleteItemSilent, promoteItem, reorderItems } = useQueue()
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [showNew, setShowNew] = useState(false)
   const [draggingId, setDraggingId] = useState<string | null>(null)
@@ -739,6 +774,7 @@ function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: Qu
   const activeItems = items.filter((i) => !isStale(i))
   const staleItems = items.filter((i) => isStale(i))
   const sortedActive = sortItems(activeItems, sortAlgo)
+  const sel = useBulkSelection(sortedActive.map((i) => i.id))
 
   const handleAddNew = (title: string, priority: number, estimate: string) => {
     const estimateMinutes = estimate ? parseEstimate(estimate) : null
@@ -801,8 +837,16 @@ function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: Qu
             ]}
             className="w-24"
           />
+          {sortedActive.length > 1 && (
+            <button
+              onClick={sel.selectMode ? sel.exit : () => { sel.enter(); setExpandedId(null); setShowNew(false) }}
+              className="text-xs px-1.5 py-0.5 rounded border border-line/40 text-ghost hover:text-dim hover:border-line transition-colors shrink-0"
+            >
+              {sel.selectMode ? 'Cancel' : 'Select'}
+            </button>
+          )}
           <button
-            onClick={() => { setShowNew(true); setExpandedId(null) }}
+            onClick={() => { setShowNew(true); setExpandedId(null); sel.exit() }}
             title="Add to queue"
             className="w-7 h-7 flex items-center justify-center rounded-[var(--c-radius-card)] bg-accent text-white hover:bg-accent/80 font-bold text-sm shrink-0"
           >
@@ -844,6 +888,7 @@ function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: Qu
                   onCollapse={() => setExpandedId(null)}
                   onArchive={() => { archiveItem(item.id); if (expandedId === item.id) setExpandedId(null) }}
                   onComplete={() => { completeItem(item.id); if (expandedId === item.id) setExpandedId(null) }}
+                  select={sel.selectMode ? { checked: sel.selected.has(item.id), onToggle: (shift) => sel.toggle(item.id, shift) } : undefined}
                   isDragOver={dropTargetId === item.id && draggingId !== item.id}
                   dragging={draggingId === item.id}
                   onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; setDraggingId(item.id) }}
@@ -856,6 +901,25 @@ function QueueContent({ sortAlgo, onSortChange, onClose, headerSize = 'sm' }: Qu
           </AnimatePresence>
         )}
       </div>
+
+      {sel.selectMode && (
+        <div className="shrink-0">
+          <div className="flex items-center gap-2 px-3 py-1.5 border-t border-line/30 bg-raised/20">
+            <input type="checkbox" checked={sel.allSelected} onChange={sel.toggleAll}
+              className="accent-[color:var(--c-accent)] w-3.5 h-3.5 cursor-pointer" />
+            <span className="text-xs text-ghost">{sel.selected.size > 0 ? `${sel.selected.size} selected` : 'Select all'}</span>
+          </div>
+          <BulkBar
+            count={sel.selected.size}
+            busy={sel.busy}
+            actions={[
+              { label: '✓ Done', onClick: () => sel.run((id) => completeItem(id)), tone: 'done' },
+              { label: '× Dismiss', onClick: () => sel.run((id) => deleteItemSilent(id)), tone: 'danger' },
+            ]}
+            onSendToBoard={(payload) => sel.run((id) => promoteItem(id, payload))}
+          />
+        </div>
+      )}
 
       {/* Stale section always at bottom */}
       <StaleSection items={staleItems} />

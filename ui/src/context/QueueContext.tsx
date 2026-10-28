@@ -29,7 +29,7 @@ type UpdatePayload = {
   estimate_minutes?: number | null
 }
 
-type PromotePayload = { project_id: string; status_id: string; epic_id?: string | null; sprint_id?: string | null }
+export type PromotePayload = { project_id: string; status_id: string; epic_id?: string | null; sprint_id?: string | null }
 
 type QueueContextValue = {
   items: QueueItem[]

@@ -2,8 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 
 const updateItem = vi.fn(async () => {})
+const completeItem = vi.fn(async (_id: string) => {})
 const queueState = vi.hoisted(() => ({ items: [] as unknown[], summary: null as unknown }))
-vi.mock('../context/QueueContext', () => ({ useQueue: () => ({ updateItem, promoteItem: vi.fn(), loading: false, ...queueState }) }))
+vi.mock('../context/QueueContext', () => ({ useQueue: () => ({ updateItem, completeItem, promoteItem: vi.fn(), loading: false, ...queueState }) }))
 vi.mock('../hooks/useProjects', () => ({ useProjects: () => ({ data: [] }) }))
 vi.mock('../hooks/useBoardQueries', () => ({ useBoardStatuses: () => ({ data: [] }) }))
 vi.mock('../hooks/useEpics', () => ({ useEpics: () => ({ data: [] }) }))
@@ -47,5 +48,41 @@ describe('queue attention', () => {
     queueState.summary = { planned_minutes: 330, budget_minutes: 480, unestimated_count: 2, minutes_left_today: 600 }
     render(<QueueDrawer open onToggle={() => {}} />)
     expect(screen.getByText('5h 30m / 8h +2?')).toBeTruthy()
+  })
+})
+
+describe('queue mass selection', () => {
+  const fresh = new Date().toISOString()
+  const mk = (id: string, position: number) => ({ id, title: `task ${id}`, notes: '', priority: 2, estimate_minutes: null, position, urgency_score: 0, created_at: fresh, attention: { level: 'calm' } })
+
+  beforeEach(() => {
+    completeItem.mockReset()
+    completeItem.mockResolvedValue(undefined)
+    queueState.items = ['a', 'b', 'c', 'd'].map(mk)
+    queueState.summary = null
+    vi.stubGlobal('localStorage', { getItem: () => 'custom', setItem: () => {} })
+  })
+
+  it('shift-click selects the range, and Done completes exactly those entries then leaves select mode', async () => {
+    render(<QueueDrawer open onToggle={() => {}} />)
+    fireEvent.click(screen.getByText('Select'))
+    fireEvent.click(screen.getByText('task a'))
+    fireEvent.click(screen.getByText('task c'), { shiftKey: true })
+    expect(screen.getByText('3 selected')).toBeTruthy()
+
+    fireEvent.click(screen.getByText('✓ Done'))
+    await waitFor(() => expect(completeItem).toHaveBeenCalledTimes(3))
+    expect(completeItem.mock.calls.map((c) => c[0]).sort()).toEqual(['a', 'b', 'c'])
+    await waitFor(() => expect(screen.queryByText('3 selected')).toBeNull())
+  })
+
+  it('keeps failed entries selected so they can be retried', async () => {
+    completeItem.mockImplementation(async (id: string) => { if (id === 'b') throw new Error('nope') })
+    render(<QueueDrawer open onToggle={() => {}} />)
+    fireEvent.click(screen.getByText('Select'))
+    fireEvent.click(screen.getByText('task a'))
+    fireEvent.click(screen.getByText('task b'))
+    fireEvent.click(screen.getByText('✓ Done'))
+    await waitFor(() => expect(screen.getByText('1 selected')).toBeTruthy())
   })
 })
