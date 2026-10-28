@@ -17,6 +17,8 @@ type sprintListJSON struct {
 
 type spilloverPreviewJSON struct {
 	Count int `json:"count"`
+	Total int `json:"total"`
+	Done  int `json:"done"`
 }
 
 type closeResponseJSON struct {
@@ -95,6 +97,9 @@ func TestSprints_CoreFlow(t *testing.T) {
 	preview := mustDecodeJSON[spilloverPreviewJSON](t, resp)
 	if preview.Count != 2 {
 		t.Errorf("expected spillover count=2, got %d", preview.Count)
+	}
+	if preview.Total != 3 || preview.Done != 1 {
+		t.Errorf("expected total=3 done=1, got total=%d done=%d", preview.Total, preview.Done)
 	}
 
 	// Step 7: close the sprint.
@@ -243,4 +248,19 @@ func TestSprints_SpilloverPreview_NotFound(t *testing.T) {
 	resp := mustDo(t, testEnv.Server, "GET", "/api/sprints/00000000-0000-0000-0000-000000000000/spillover-preview", nil)
 	assertStatus(t, resp, http.StatusNotFound)
 	drainClose(resp)
+}
+
+// Regression (user feedback 2026-10-28): the close dialog said "All items are done" for a sprint with
+// no items at all, because count==0 was the only signal. The preview must expose total/done so the UI
+// can tell "nothing was planned" apart from "everything finished".
+func TestSprints_SpilloverPreview_EmptySprintReportsZeroTotal(t *testing.T) {
+	sp := createSprint(t)
+	t.Cleanup(func() { hardDeleteSprint(sp.ID) })
+
+	resp := mustDo(t, testEnv.Server, "GET", "/api/sprints/"+sp.ID+"/spillover-preview", nil)
+	assertStatus(t, resp, http.StatusOK)
+	preview := mustDecodeJSON[spilloverPreviewJSON](t, resp)
+	if preview.Count != 0 || preview.Total != 0 || preview.Done != 0 {
+		t.Errorf("empty sprint: expected all zero, got %+v", preview)
+	}
 }

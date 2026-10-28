@@ -20,8 +20,12 @@ type CloseResponse struct {
 	NextSprint   *Sprint `json:"next_sprint"`
 }
 
+// Count is what would carry over (kept for the pinned mobile contract); Done and Total let clients
+// distinguish "everything finished" from "nothing was planned".
 type SpilloverPreviewResponse struct {
 	Count int `json:"count"`
+	Done  int `json:"done"`
+	Total int `json:"total"`
 }
 
 type ListResponse struct {
@@ -183,9 +187,9 @@ func (h *Handler) SpilloverPreview(ctx context.Context) (*SpilloverPreviewRespon
 		return nil, api.Internal("failed to resolve done statuses")
 	}
 
-	count, err := h.store.SpilloverPreview(ctx, id, doneIDs)
+	counts, err := h.store.SpilloverPreview(ctx, id, doneIDs)
 	if err != nil {
 		return nil, api.Internal("preview failed")
 	}
-	return &SpilloverPreviewResponse{Count: count}, nil
+	return &SpilloverPreviewResponse{Count: counts.Spill, Done: counts.Done, Total: counts.Total}, nil
 }
