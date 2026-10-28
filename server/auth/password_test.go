@@ -45,7 +45,7 @@ func TestPassword_SignupVerifyLoginLogout(t *testing.T) {
 		t.Errorf("/me before login = %d, want 401", status)
 	}
 
-	status, body = c.post("/api/auth/email/verify", map[string]string{"token": tokenFrom(t, mails[0])})
+	status, body = c.post("/api/auth/email/verify", map[string]string{"token": tokenFrom(t, mails[0]), "password": goodPassword})
 	wantStatus(t, status, http.StatusOK, body)
 
 	// Login (email typed in different case) returns the user, never credential fields.
@@ -180,6 +180,33 @@ func TestPassword_SignupOverVerifiedAccountIsSilentNoOp(t *testing.T) {
 	}
 }
 
+// Regression (pre-registration hijack): an attacker registers the victim's address with a password of
+// their choosing; if the victim clicks the emailed link, the account must NOT become verified for
+// the attacker's password. Verification therefore requires the signup password, and a wrong one must
+// not burn the link.
+func TestPassword_VerifyRequiresSignupPassword(t *testing.T) {
+	e := newAuthEnv(t)
+	email := uniqueEmail(t, e.pool)
+	attacker := e.newClient(t)
+	attacker.post("/api/auth/password/signup", map[string]string{"email": email, "password": "attacker-password"})
+	mail, _ := e.mail.last(email)
+	token := tokenFrom(t, mail)
+
+	victim := e.newClient(t)
+	for _, wrong := range []string{"", goodPassword} {
+		if status, _ := victim.post("/api/auth/email/verify", map[string]string{"token": token, "password": wrong}); status != http.StatusUnauthorized {
+			t.Fatalf("verify with password %q = %d, want 401", wrong, status)
+		}
+	}
+	if status, _ := e.newClient(t).login(email, "attacker-password"); status != http.StatusForbidden {
+		t.Errorf("attacker login after victim's click = %d, want 403 (still unverified)", status)
+	}
+	// The link survived the failed attempts; the person who knows the password can still use it.
+	if status, body := attacker.post("/api/auth/email/verify", map[string]string{"token": token, "password": "attacker-password"}); status != http.StatusOK {
+		t.Errorf("verify with the right password = %d %v, want 200 (wrong attempts must not burn the link)", status, body)
+	}
+}
+
 // Whoever signs up last for an unverified address wins: a squatter cannot keep the real owner out
 // or keep a working password.
 func TestPassword_SignupOverUnverifiedReplacesCredentials(t *testing.T) {
@@ -198,10 +225,10 @@ func TestPassword_SignupOverUnverifiedReplacesCredentials(t *testing.T) {
 	}
 
 	// The squatter's link is dead; the owner's works.
-	if status, _ := owner.post("/api/auth/email/verify", map[string]string{"token": tokenFrom(t, oldMail)}); status != http.StatusBadRequest {
+	if status, _ := owner.post("/api/auth/email/verify", map[string]string{"token": tokenFrom(t, oldMail), "password": goodPassword}); status != http.StatusBadRequest {
 		t.Errorf("old verification link = %d, want 400", status)
 	}
-	if status, body := owner.post("/api/auth/email/verify", map[string]string{"token": tokenFrom(t, newMail)}); status != http.StatusOK {
+	if status, body := owner.post("/api/auth/email/verify", map[string]string{"token": tokenFrom(t, newMail), "password": goodPassword}); status != http.StatusOK {
 		t.Fatalf("new verification link = %d %v", status, body)
 	}
 	if status, _ := e.newClient(t).login(email, "squatter-password"); status != http.StatusUnauthorized {
@@ -263,7 +290,7 @@ func TestPassword_VerifyTokenRules(t *testing.T) {
 		return email, tokenFrom(t, m)
 	}
 	verify := func(token string) int {
-		status, _ := e.newClient(t).post("/api/auth/email/verify", map[string]string{"token": token})
+		status, _ := e.newClient(t).post("/api/auth/email/verify", map[string]string{"token": token, "password": goodPassword})
 		return status
 	}
 
@@ -337,10 +364,10 @@ func TestPassword_ResendVerification(t *testing.T) {
 		if first.Body == second.Body {
 			t.Fatal("no new link issued")
 		}
-		if got, _ := e.newClient(t).post("/api/auth/email/verify", map[string]string{"token": tokenFrom(t, first)}); got != http.StatusBadRequest {
+		if got, _ := e.newClient(t).post("/api/auth/email/verify", map[string]string{"token": tokenFrom(t, first), "password": goodPassword}); got != http.StatusBadRequest {
 			t.Errorf("superseded link = %d, want 400", got)
 		}
-		if got, _ := e.newClient(t).post("/api/auth/email/verify", map[string]string{"token": tokenFrom(t, second)}); got != http.StatusOK {
+		if got, _ := e.newClient(t).post("/api/auth/email/verify", map[string]string{"token": tokenFrom(t, second), "password": goodPassword}); got != http.StatusOK {
 			t.Errorf("new link = %d, want 200", got)
 		}
 	})

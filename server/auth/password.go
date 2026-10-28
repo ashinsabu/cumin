@@ -224,24 +224,46 @@ type tokenRequest struct {
 }
 
 // HandleVerifyEmail consumes a verification token. It is a POST (not a GET link handler) so mail
-// scanners that prefetch links cannot burn the token.
+// scanners that prefetch links cannot burn the token. The caller must also prove knowledge of the
+// signup password: otherwise someone could register a victim's address with their own password and
+// wait for the victim to click the emailed link, ending up with a verified account they control.
+// The password is checked before the token is consumed, so a typo does not burn the link.
 func (h *Handler) HandleVerifyEmail(w http.ResponseWriter, r *http.Request) {
 	var req tokenRequest
 	if !decodeJSON(w, r, &req) {
 		return
 	}
 	ctx := r.Context()
-	userID, err := h.repo.ConsumeToken(ctx, req.Token, purposeVerifyEmail)
+	user, err := h.repo.PeekToken(ctx, req.Token, purposeVerifyEmail)
 	if errors.Is(err, ErrInvalidToken) {
 		writeError(w, http.StatusBadRequest, "invalid or expired link")
 		return
 	}
+	if err != nil {
+		applogger.FromContext(ctx).Error("auth: verify email failed", slog.Any("err", err))
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	match, cmpErr := argon2id.ComparePasswordAndHash(req.Password, user.PasswordHash)
+	if cmpErr != nil || !match {
+		writeError(w, http.StatusUnauthorized, "incorrect password")
+		return
+	}
+	if _, err = h.repo.ConsumeToken(ctx, req.Token, purposeVerifyEmail); errors.Is(err, ErrInvalidToken) {
+		writeError(w, http.StatusBadRequest, "invalid or expired link")
+		return
+	}
+	verified := false
 	if err == nil {
-		err = h.repo.MarkEmailVerified(ctx, userID)
+		verified, err = h.repo.MarkEmailVerified(ctx, user.ID, user.PasswordHash)
 	}
 	if err != nil {
 		applogger.FromContext(ctx).Error("auth: verify email failed", slog.Any("err", err))
 		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if !verified {
+		writeError(w, http.StatusBadRequest, "invalid or expired link")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "verified"})

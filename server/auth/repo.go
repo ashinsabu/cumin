@@ -162,11 +162,17 @@ func (r *Repo) OverwriteUnverifiedPassword(ctx context.Context, userID, password
 	return tag.RowsAffected() == 1, nil
 }
 
-func (r *Repo) MarkEmailVerified(ctx context.Context, userID string) error {
-	_, err := r.db.Exec(ctx, `
+// MarkEmailVerified verifies the account only if it still holds the password hash the caller
+// checked, so a concurrent re-signup (which overwrites the hash) cannot be verified by a link
+// issued for the previous password. Returns false if nothing changed.
+func (r *Repo) MarkEmailVerified(ctx context.Context, userID, passwordHash string) (bool, error) {
+	tag, err := r.db.Exec(ctx, `
 		UPDATE users SET email_verified_at = COALESCE(email_verified_at, NOW()), updated_at = NOW()
-		WHERE id = $1`, userID)
-	return err
+		WHERE id = $1 AND password_hash = $2`, userID, passwordHash)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, nil
 }
 
 // SetPasswordVerified stores a new password after a successful reset. Possessing the reset link
@@ -233,6 +239,19 @@ func (r *Repo) ConsumeToken(ctx context.Context, raw string, purpose tokenPurpos
 		return "", ErrInvalidToken
 	}
 	return userID, err
+}
+
+// PeekToken returns the user a live token belongs to without consuming it.
+func (r *Repo) PeekToken(ctx context.Context, raw string, purpose tokenPurpose) (*User, error) {
+	u, err := scanUser(r.db.QueryRow(ctx, `
+		SELECT `+userColumns+` FROM users WHERE id = (
+			SELECT user_id FROM auth_tokens
+			WHERE token_hash = $1 AND purpose = $2 AND used_at IS NULL AND expires_at > NOW())`,
+		hashToken(raw), string(purpose)))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrInvalidToken
+	}
+	return u, err
 }
 
 // PurgeExpiredTokens deletes tokens that can no longer be used.

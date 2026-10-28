@@ -278,7 +278,7 @@ func (e *authEnv) signupAndVerify(t *testing.T, password string) string {
 	if !ok {
 		t.Fatal("no verification mail sent")
 	}
-	if status, body := c.post("/api/auth/email/verify", map[string]string{"token": tokenFrom(t, mail)}); status != http.StatusOK {
+	if status, body := c.post("/api/auth/email/verify", map[string]string{"token": tokenFrom(t, mail), "password": password}); status != http.StatusOK {
 		t.Fatalf("verify = %d %v", status, body)
 	}
 	return email
