@@ -12,10 +12,19 @@ import (
 type Handler struct {
 	hub     Notifier
 	enabled bool
+	// shutdown, once closed, ends open streams so a graceful server shutdown does not wait on them.
+	// It is deliberately not tied to request contexts: ordinary in-flight requests must finish.
+	shutdown <-chan struct{}
 }
 
 func NewHandler(n Notifier, enabled bool) *Handler {
 	return &Handler{hub: n, enabled: enabled}
+}
+
+// WithShutdown makes open streams end when ch is closed.
+func (h *Handler) WithShutdown(ch <-chan struct{}) *Handler {
+	h.shutdown = ch
+	return h
 }
 
 // Events streams change notifications to a connected client.
@@ -55,6 +64,8 @@ func (h *Handler) Events(w http.ResponseWriter, r *http.Request) {
 	for {
 		select {
 		case <-r.Context().Done():
+			return
+		case <-h.shutdown: // nil (never ready) unless WithShutdown was used
 			return
 		case <-ch:
 			if _, err := fmt.Fprintf(w, "data: ping\n\n"); err != nil {

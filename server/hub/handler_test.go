@@ -3,6 +3,7 @@ package hub_test
 import (
 	"bufio"
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -106,6 +107,39 @@ func TestHandler_EventsStreamsThroughWrappedWriter(t *testing.T) {
 		}
 	}()
 	wantLine("data: ping")
+}
+
+// Graceful shutdown must be able to end open streams (http.Server.Shutdown waits on them), but only
+// through the dedicated shutdown channel: request contexts are left alone so that ordinary
+// in-flight requests are not aborted.
+func TestHandler_EventsEndsWhenShutdownIsSignalled(t *testing.T) {
+	shutdown := make(chan struct{})
+	events := hub.NewHandler(hub.New(), true).WithShutdown(shutdown).Events
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth.DevBypass("user-1")(http.HandlerFunc(events)).ServeHTTP(w, r)
+	}))
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	bodyEnded := make(chan struct{})
+	go func() { io.Copy(io.Discard, resp.Body); close(bodyEnded) }()
+
+	select {
+	case <-bodyEnded:
+		t.Fatal("stream ended before shutdown was signalled")
+	case <-time.After(200 * time.Millisecond):
+	}
+	close(shutdown)
+	select {
+	case <-bodyEnded:
+	case <-time.After(3 * time.Second):
+		t.Fatal("stream still open after shutdown was signalled")
+	}
 }
 
 // A writer with no flush support at any layer must not hang or panic the handler: the first flush
