@@ -193,7 +193,11 @@ func (h *Handler) ensureProvisioned(ctx context.Context, user *User) error {
 	}
 	if err := h.provision(ctx, user.ID, user.DisplayName); err != nil {
 		l.Error("auth: provision failed", slog.String("user_id", user.ID), slog.Any("err", err))
-		if relErr := h.repo.ReleaseProvisioning(ctx, user.ID); relErr != nil {
+		// Detached from the request: the usual reason provisioning fails is that ctx was cancelled,
+		// and a release on the same ctx would fail too, leaving the user permanently "provisioned".
+		relCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		if relErr := h.repo.ReleaseProvisioning(relCtx, user.ID); relErr != nil {
 			l.Error("auth: release provisioning failed", slog.String("user_id", user.ID), slog.Any("err", relErr))
 		}
 		return err
