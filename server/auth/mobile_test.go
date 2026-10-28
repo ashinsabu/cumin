@@ -145,3 +145,20 @@ func TestMobileLogin_ResponseContract(t *testing.T) {
 		t.Errorf("refresh response = %v, want rotated tokens", refreshed)
 	}
 }
+
+// Regression: a transport failure's *url.Error embeds the request URL, which carries the id_token
+// as a query parameter. It was logged verbatim, writing a replayable ~1h credential to the logs.
+func TestVerifyGoogleIDToken_TransportErrorDoesNotLeakToken(t *testing.T) {
+	old := tokenInfoURL
+	tokenInfoURL = "http://127.0.0.1:1/tokeninfo" // nothing listens on port 1
+	t.Cleanup(func() { tokenInfoURL = old })
+
+	const secret = "eyJ.SECRET-ID-TOKEN.sig"
+	_, err := verifyGoogleIDToken(context.Background(), secret, []string{"aud"})
+	if err == nil {
+		t.Fatal("expected a transport error")
+	}
+	if strings.Contains(err.Error(), secret) {
+		t.Fatalf("error leaks the id token: %v", err)
+	}
+}

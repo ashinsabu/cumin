@@ -75,7 +75,12 @@ func verifyGoogleIDToken(ctx context.Context, rawToken string, audiences []strin
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, err
+		// *url.Error embeds the request URL, whose query holds the id_token; keep only the cause.
+		var urlErr *url.Error
+		if errors.As(err, &urlErr) {
+			err = urlErr.Err
+		}
+		return nil, fmt.Errorf("google tokeninfo request: %w", err)
 	}
 	defer resp.Body.Close()
 
