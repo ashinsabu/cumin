@@ -2,12 +2,14 @@ package epic
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/ashinsabu/cumin/server/api"
 	"github.com/ashinsabu/cumin/server/auth"
 	"github.com/ashinsabu/cumin/server/project"
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 )
 
 type CreateRequest struct {
@@ -138,6 +140,10 @@ func (h *Handler) Restore(ctx context.Context) error {
 	userID := auth.UserIDFromContext(ctx)
 
 	if err := h.store.RestoreEpic(ctx, id, userID); err != nil {
+		// RestoreEpic only finds soft-deleted epics owned by the caller: anything else is a 404.
+		if errors.Is(err, pgx.ErrNoRows) {
+			return api.NotFound("epic not found")
+		}
 		return api.Internal("failed to restore epic")
 	}
 	return nil
