@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useCallback, useEffect, useRef, ty
 import type { QueueItem } from '../types'
 import { useToast } from './ToastContext'
 import { authFetch } from '../lib/auth'
+import { useAuth } from './AuthContext'
 
 
 // Mirrors server/queue/store.go urgencyScore — keeps optimistic items sorted correctly.
@@ -74,7 +75,13 @@ export function QueueProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  useEffect(() => { fetchItems() }, [fetchItems])
+  // Refetch per identity: a signed-out boot gets a 401, and another account must not see this queue.
+  const { user } = useAuth()
+  const userId = user?.id
+  useEffect(() => {
+    if (!userId) { setItems([]); return }
+    fetchItems()
+  }, [userId, fetchItems])
 
   const createItem = useCallback(async (payload: CreatePayload): Promise<QueueItem> => {
     const tempId = crypto.randomUUID()
