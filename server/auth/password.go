@@ -74,13 +74,13 @@ func (h *Handler) EnablePassword(m Mailer) {
 func (h *Handler) PasswordEnabled() bool { return h.mailer != nil }
 
 // PasswordRoutes registers the password endpoints. A coarse per-IP backstop sits in front of the
-// per-email limits (keyed on the socket address; client IP headers are spoofable and not trusted).
+// per-email limits (keyed on the address resolved by ClientIP, which only trusts the configured proxy hops).
 func (h *Handler) PasswordRoutes(r chi.Router) {
 	if !h.PasswordEnabled() {
 		return
 	}
 	r.Group(func(r chi.Router) {
-		r.Use(httprate.LimitBy(120, time.Minute, httprate.KeyByIP))
+		r.Use(httprate.LimitBy(120, time.Minute, func(r *http.Request) (string, error) { return clientIP(r), nil }))
 		r.Post("/api/auth/password/signup", h.HandleSignup)
 		r.Post("/api/auth/password/login", h.HandlePasswordLogin)
 		r.Post("/api/auth/password/forgot", h.HandleForgot)
