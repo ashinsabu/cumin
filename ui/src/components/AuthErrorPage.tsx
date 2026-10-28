@@ -4,6 +4,8 @@ const REASON_LABELS: Record<string, string> = {
   invalid_state: 'Login session expired or was tampered with.',
   missing_code: 'Google did not return an authorization code.',
   token_exchange_failed: 'Could not complete sign-in with Google.',
+  account_conflict: 'This email belongs to an account linked to a different Google identity, so we cannot sign you in with this one.',
+  email_not_verified: 'Google could not confirm your email address, so we cannot sign you in with it.',
   server_error: 'An internal error occurred during sign-in.',
 }
 
